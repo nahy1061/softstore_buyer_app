@@ -197,7 +197,7 @@ class _HomeScreenState extends State<HomeScreen> {
             items: const [
               BottomNavigationBarItem(
                 icon: Icon(Icons.inventory_2),
-                label: 'Inventory',
+                label: 'Marketplace',
               ),
               BottomNavigationBarItem(
                 icon: Icon(Icons.receipt_long),
@@ -210,6 +210,10 @@ class _HomeScreenState extends State<HomeScreen> {
               BottomNavigationBarItem(
                 icon: Icon(Icons.analytics),
                 label: 'Reports',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.person),
+                label: 'Profile',
               ),
             ],
             currentIndex: 0,
