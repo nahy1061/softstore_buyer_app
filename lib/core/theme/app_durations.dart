@@ -18,6 +18,6 @@ class AppDurations {
   static const Duration tooltipWait = Duration(milliseconds: 500);
   static const Duration longPress = Duration(milliseconds: 500);
 
-  // Batch Operations
+  // Batch Operation
   static const Duration staggered = Duration(milliseconds: 50);
 }
