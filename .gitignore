@@ -73,3 +73,6 @@ yarn-error.log
 # OS files
 Thumbs.db
 .DS_Store
+
+# Naheed private docs (personal report — NOT for team/repo)
+docs/naheed-private/
