@@ -8,6 +8,7 @@ import '../features/profile/screens/settings_screen.dart';
 import '../features/profile/screens/addresses_screen.dart';
 import '../features/profile/screens/address_form_screen.dart';
 import '../features/support/presentation/screens/faq_screen.dart';
+import '../features/support/presentation/screens/support_hub_screen.dart';
 
 // Placeholder screens (will be replaced with actual screens)
 class PlaceholderScreen extends StatelessWidget {
@@ -218,7 +219,7 @@ final GoRouter goRouter = GoRouter(
     // Support
     GoRoute(
       path: AppRoutes.support,
-      builder: (context, state) => const PlaceholderScreen(label: 'Support'),
+      builder: (context, state) => const SupportHubScreen(),
       routes: [
         GoRoute(
           path: 'faq',
