@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../features/home/screens/home_screen.dart';
+import '../features/cart/screens/cart_screen.dart';
+import '../features/shell/app_shell.dart';
 
-// Placeholder screens (will be replaced with actual screens)
+
+// Placeholder screen body — no Scaffold (shell provides it)
 class PlaceholderScreen extends StatelessWidget {
   final String label;
 
@@ -10,21 +13,18 @@ class PlaceholderScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(label)),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.construction, size: 64, color: Colors.grey),
-            const SizedBox(height: 16),
-            Text(
-              '$label\n(Placeholder)',
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 18),
-            ),
-          ],
-        ),
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.construction, size: 64, color: Colors.grey),
+          const SizedBox(height: 16),
+          Text(
+            '$label\n(Placeholder)',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 18),
+          ),
+        ],
       ),
     );
   }
@@ -64,137 +64,146 @@ abstract final class AppRoutes {
 final GoRouter goRouter = GoRouter(
   initialLocation: AppRoutes.home,
   routes: [
-    // Home & Browsing
-    GoRoute(
-      path: AppRoutes.home,
-      builder: (context, state) => const HomeScreen(),
-    ),
-    GoRoute(
-      path: AppRoutes.categories,
-      builder: (context, state) => const PlaceholderScreen(label: 'Categories'),
-    ),
-    GoRoute(
-      path: AppRoutes.categoryProducts,
-      builder: (context, state) {
-        final slug = state.pathParameters['slug'] ?? '';
-        return PlaceholderScreen(label: 'Category: $slug');
-      },
-    ),
-    GoRoute(
-      path: AppRoutes.productDetail,
-      builder: (context, state) {
-        final slug = state.pathParameters['slug'] ?? '';
-        return PlaceholderScreen(label: 'Product: $slug');
-      },
-    ),
-    GoRoute(
-      path: AppRoutes.search,
-      builder: (context, state) => const PlaceholderScreen(label: 'Search'),
-    ),
-    GoRoute(
-      path: AppRoutes.seller,
-      builder: (context, state) {
-        final slug = state.pathParameters['slug'] ?? '';
-        return PlaceholderScreen(label: 'Seller: $slug');
-      },
-    ),
-
-    // Cart & Checkout
-    GoRoute(
-      path: AppRoutes.cart,
-      builder: (context, state) => const PlaceholderScreen(label: 'Cart'),
-    ),
-    GoRoute(
-      path: AppRoutes.wishlist,
-      builder: (context, state) => const PlaceholderScreen(label: 'Wishlist'),
-    ),
-    GoRoute(
-      path: AppRoutes.checkout,
-      builder: (context, state) => const PlaceholderScreen(label: 'Checkout'),
+    ShellRoute(
+      builder: (context, state, child) => AppShell(child: child),
       routes: [
+        // Home & Browsing
         GoRoute(
-          path: 'delivery',
-          builder: (context, state) => const PlaceholderScreen(label: 'Delivery Address'),
+          path: AppRoutes.home,
+          builder: (context, state) => const HomeScreen(),
         ),
         GoRoute(
-          path: 'otp',
-          builder: (context, state) => const PlaceholderScreen(label: 'OTP Verification'),
+          path: AppRoutes.categories,
+          builder: (context, state) => const PlaceholderScreen(label: 'Categories'),
         ),
         GoRoute(
-          path: 'review',
-          builder: (context, state) => const PlaceholderScreen(label: 'Order Review'),
+          path: AppRoutes.categoryProducts,
+          builder: (context, state) {
+            final slug = state.pathParameters['slug'] ?? '';
+            return PlaceholderScreen(label: 'Category: $slug');
+          },
+        ),
+        GoRoute(
+          path: AppRoutes.productDetail,
+          builder: (context, state) {
+            final slug = state.pathParameters['slug'] ?? '';
+            return PlaceholderScreen(label: 'Product: $slug');
+          },
+        ),
+        GoRoute(
+          path: AppRoutes.search,
+          builder: (context, state) => const PlaceholderScreen(label: 'Search'),
+        ),
+        GoRoute(
+          path: AppRoutes.seller,
+          builder: (context, state) {
+            final slug = state.pathParameters['slug'] ?? '';
+            return PlaceholderScreen(label: 'Seller: $slug');
+          },
+        ),
+
+        // Cart & Checkout
+        GoRoute(
+          path: AppRoutes.cart,
+          builder: (context, state) => const CartScreen(),
+        ),
+        GoRoute(
+          path: AppRoutes.wishlist,
+          builder: (context, state) => const PlaceholderScreen(label: 'Wishlist'),
+        ),
+        GoRoute(
+          path: AppRoutes.checkout,
+          builder: (context, state) => const PlaceholderScreen(label: 'Checkout'),
+          routes: [
+            GoRoute(
+              path: 'delivery',
+              builder: (context, state) => const PlaceholderScreen(label: 'Delivery Address'),
+            ),
+            GoRoute(
+              path: 'otp',
+              builder: (context, state) => const PlaceholderScreen(label: 'OTP Verification'),
+            ),
+            GoRoute(
+              path: 'review',
+              builder: (context, state) => const PlaceholderScreen(label: 'Order Review'),
+            ),
+          ],
+        ),
+        GoRoute(
+          path: AppRoutes.orderConfirmation,
+          builder: (context, state) {
+            final ref = state.pathParameters['ref'] ?? '';
+            return PlaceholderScreen(label: 'Order Confirmation: $ref');
+          },
+        ),
+
+        // Orders & Returns
+        GoRoute(
+          path: AppRoutes.orders,
+          builder: (context, state) => const PlaceholderScreen(label: 'Orders'),
+        ),
+        GoRoute(
+          path: AppRoutes.orderDetail,
+          builder: (context, state) {
+            final id = state.pathParameters['id'] ?? '';
+            return PlaceholderScreen(label: 'Order Detail: $id');
+          },
+        ),
+        GoRoute(
+          path: AppRoutes.returns,
+          builder: (context, state) => const PlaceholderScreen(label: 'Returns'),
+        ),
+
+        // Profile & Account
+        GoRoute(
+          path: AppRoutes.profile,
+          builder: (context, state) => const PlaceholderScreen(label: 'Profile'),
+        ),
+        GoRoute(
+          path: AppRoutes.addresses,
+          builder: (context, state) => const PlaceholderScreen(label: 'Addresses'),
+        ),
+
+        // Notifications
+        GoRoute(
+          path: AppRoutes.notifications,
+          builder: (context, state) => const PlaceholderScreen(label: 'Notifications'),
+        ),
+
+        // Support
+        GoRoute(
+          path: AppRoutes.support,
+          builder: (context, state) => const PlaceholderScreen(label: 'Support'),
+          routes: [
+            GoRoute(
+              path: 'faq',
+              builder: (context, state) => const PlaceholderScreen(label: 'FAQ'),
+            ),
+            GoRoute(
+              path: 'contact',
+              builder: (context, state) => const PlaceholderScreen(label: 'Contact Us'),
+            ),
+            GoRoute(
+              path: 'tickets',
+              builder: (context, state) => const PlaceholderScreen(label: 'Support Tickets'),
+            ),
+          ],
         ),
       ],
     ),
-    GoRoute(
-      path: AppRoutes.orderConfirmation,
-      builder: (context, state) {
-        final ref = state.pathParameters['ref'] ?? '';
-        return PlaceholderScreen(label: 'Order Confirmation: $ref');
-      },
-    ),
 
-    // Orders & Returns
-    GoRoute(
-      path: AppRoutes.orders,
-      builder: (context, state) => const PlaceholderScreen(label: 'Orders'),
-    ),
-    GoRoute(
-      path: AppRoutes.orderDetail,
-      builder: (context, state) {
-        final id = state.pathParameters['id'] ?? '';
-        return PlaceholderScreen(label: 'Order Detail: $id');
-      },
-    ),
-    GoRoute(
-      path: AppRoutes.returns,
-      builder: (context, state) => const PlaceholderScreen(label: 'Returns'),
-    ),
-
-    // Auth
+    // Auth routes — outside the shell (no header/footer)
     GoRoute(
       path: AppRoutes.login,
-      builder: (context, state) => const PlaceholderScreen(label: 'Login'),
+      builder: (context, state) => const Scaffold(
+        body: Center(child: PlaceholderScreen(label: 'Login')),
+      ),
     ),
     GoRoute(
       path: AppRoutes.register,
-      builder: (context, state) => const PlaceholderScreen(label: 'Register'),
-    ),
-
-    // Profile
-    GoRoute(
-      path: AppRoutes.profile,
-      builder: (context, state) => const PlaceholderScreen(label: 'Profile'),
-    ),
-    GoRoute(
-      path: AppRoutes.addresses,
-      builder: (context, state) => const PlaceholderScreen(label: 'Addresses'),
-    ),
-
-    // Notifications
-    GoRoute(
-      path: AppRoutes.notifications,
-      builder: (context, state) => const PlaceholderScreen(label: 'Notifications'),
-    ),
-
-    // Support
-    GoRoute(
-      path: AppRoutes.support,
-      builder: (context, state) => const PlaceholderScreen(label: 'Support'),
-      routes: [
-        GoRoute(
-          path: 'faq',
-          builder: (context, state) => const PlaceholderScreen(label: 'FAQ'),
-        ),
-        GoRoute(
-          path: 'contact',
-          builder: (context, state) => const PlaceholderScreen(label: 'Contact Us'),
-        ),
-        GoRoute(
-          path: 'tickets',
-          builder: (context, state) => const PlaceholderScreen(label: 'Support Tickets'),
-        ),
-      ],
+      builder: (context, state) => const Scaffold(
+        body: Center(child: PlaceholderScreen(label: 'Register')),
+      ),
     ),
   ],
 );
