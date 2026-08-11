@@ -116,7 +116,7 @@ class _ProfileHeader extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 40,
-            backgroundColor: AppColors.primary.withOpacity(0.1),
+            backgroundColor: AppColors.primary.withValues(alpha:0.1),
             child: const Icon(Icons.person, size: 40, color: AppColors.primary),
           ),
           const SizedBox(height: AppSpacing.md),
@@ -211,7 +211,7 @@ class _MenuItem extends StatelessWidget {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.08),
+                color: AppColors.primary.withValues(alpha:0.08),
                 borderRadius: AppDimensions.radiusSm,
               ),
               child: Icon(icon, color: AppColors.primary, size: 20),

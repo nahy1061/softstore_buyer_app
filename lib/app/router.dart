@@ -7,6 +7,7 @@ import '../features/profile/screens/change_password_screen.dart';
 import '../features/profile/screens/settings_screen.dart';
 import '../features/profile/screens/addresses_screen.dart';
 import '../features/profile/screens/address_form_screen.dart';
+import '../features/support/presentation/screens/faq_screen.dart';
 
 // Placeholder screens (will be replaced with actual screens)
 class PlaceholderScreen extends StatelessWidget {
@@ -221,7 +222,7 @@ final GoRouter goRouter = GoRouter(
       routes: [
         GoRoute(
           path: 'faq',
-          builder: (context, state) => const PlaceholderScreen(label: 'FAQ'),
+          builder: (context, state) => const FaqScreen(),
         ),
         GoRoute(
           path: 'contact',

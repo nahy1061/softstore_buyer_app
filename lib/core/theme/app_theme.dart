@@ -22,7 +22,10 @@ abstract final class AppTheme {
       scaffoldBackgroundColor: AppColors.background,
       appBarTheme: AppBarTheme(
         backgroundColor: AppColors.surface,
-        elevation: AppDimensions.elevationCard,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: AppColors.divider,
+        elevation: 0,
+        scrolledUnderElevation: 1,
         centerTitle: true,
         iconTheme: const IconThemeData(color: AppColors.textPrimary),
         titleTextStyle: AppTypography.screenTitle.copyWith(
