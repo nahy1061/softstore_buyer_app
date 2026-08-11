@@ -115,7 +115,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 productName: product['name'],
                 price: product['price'],
                 icon: product['icon'],
-                onTap: () => context.go('/product/${product['name'].toLowerCase().replaceAll(' ', '-')}'),
+                onTap: () => context.push(
+                  '/product/${(product['name'] as String).toLowerCase().replaceAll(' ', '-')}',
+                  extra: {
+                    'name': product['name'] as String,
+                    'price': product['price'] as int,
+                    'iconCodePoint': (product['icon'] as IconData).codePoint,
+                  },
+                ),
               );
             },
           ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../features/home/screens/home_screen.dart';
 import '../features/cart/screens/cart_screen.dart';
+import '../features/product/screens/product_detail_screen.dart';
 import '../features/shell/app_shell.dart';
 
 
@@ -87,7 +88,13 @@ final GoRouter goRouter = GoRouter(
           path: AppRoutes.productDetail,
           builder: (context, state) {
             final slug = state.pathParameters['slug'] ?? '';
-            return PlaceholderScreen(label: 'Product: $slug');
+            final extra = state.extra as Map<String, dynamic>? ?? {};
+            return ProductDetailScreen(
+              slug: slug,
+              name: extra['name'] as String? ?? slug,
+              price: extra['price'] as int? ?? 0,
+              iconCodePoint: extra['iconCodePoint'] as int? ?? 0xe59c,
+            );
           },
         ),
         GoRoute(
