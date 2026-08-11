@@ -66,12 +66,22 @@ class CartScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<CartCubit, CartState>(
-      builder: (context, state) {
-        return state.items.isEmpty
-            ? _buildEmptyView(context)
-            : _buildCartView(context, state);
-      },
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        title: const Text('My Cart'),
+        backgroundColor: Colors.white,
+        foregroundColor: AppColors.textPrimary,
+        elevation: 0,
+        centerTitle: false,
+      ),
+      body: BlocBuilder<CartCubit, CartState>(
+        builder: (context, state) {
+          return state.items.isEmpty
+              ? _buildEmptyView(context)
+              : _buildCartView(context, state);
+        },
+      ),
     );
   }
 

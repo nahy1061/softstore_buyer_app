@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../features/home/screens/home_screen.dart';
+import '../features/cart/screens/cart_screen.dart';
+import '../features/product/screens/product_detail_screen.dart';
 import '../features/orders/cubit/order_cubit.dart';
 import '../features/orders/screens/orders_screen.dart';
 import '../features/orders/screens/order_detail_screen.dart';
@@ -104,7 +106,13 @@ final GoRouter goRouter = GoRouter(
       path: AppRoutes.productDetail,
       builder: (context, state) {
         final slug = state.pathParameters['slug'] ?? '';
-        return PlaceholderScreen(label: 'Product: $slug');
+        final extra = state.extra as Map<String, dynamic>? ?? {};
+        return ProductDetailScreen(
+          slug: slug,
+          name: extra['name'] as String? ?? slug,
+          price: extra['price'] as int? ?? 0,
+          iconCodePoint: extra['iconCodePoint'] as int? ?? 0xe59c,
+        );
       },
     ),
     GoRoute(
@@ -122,7 +130,7 @@ final GoRouter goRouter = GoRouter(
     // Cart & Checkout
     GoRoute(
       path: AppRoutes.cart,
-      builder: (context, state) => const PlaceholderScreen(label: 'Cart'),
+      builder: (context, state) => const CartScreen(),
     ),
     GoRoute(
       path: AppRoutes.wishlist,
@@ -160,7 +168,10 @@ final GoRouter goRouter = GoRouter(
     // Orders & Returns
     GoRoute(
       path: AppRoutes.orders,
-      builder: (context, state) => const OrdersScreen(),
+      builder: (context, state) => BlocProvider(
+        create: (_) => OrderCubit(),
+        child: const OrdersScreen(),
+      ),
     ),
     GoRoute(
       path: AppRoutes.orderDetail,
