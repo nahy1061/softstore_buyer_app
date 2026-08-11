@@ -8,6 +8,14 @@ import '../features/orders/screens/order_detail_screen.dart';
 import '../features/orders/screens/order_confirmation_screen.dart';
 import '../features/orders/screens/order_lookup_screen.dart';
 import '../features/orders/models/order_model.dart';
+import '../features/profile/screens/profile_hub_screen.dart';
+import '../features/profile/screens/edit_profile_screen.dart';
+import '../features/profile/screens/change_password_screen.dart';
+import '../features/profile/screens/settings_screen.dart';
+import '../features/profile/screens/addresses_screen.dart';
+import '../features/profile/screens/address_form_screen.dart';
+import '../features/support/presentation/screens/faq_screen.dart';
+import '../features/support/presentation/screens/support_hub_screen.dart';
 
 // Placeholder screens (will be replaced with actual screens)
 class PlaceholderScreen extends StatelessWidget {
@@ -23,7 +31,7 @@ class PlaceholderScreen extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.construction, size: 64, color: Colors.grey),
+            const Icon(Icons.construction, size: 64, color: Colors.grey),
             const SizedBox(height: 16),
             Text(
               '$label\n(Placeholder)',
@@ -61,7 +69,11 @@ abstract final class AppRoutes {
   static const String orderLookup = '/track-order';
   static const String returns = '/returns';
   static const String profile = '/profile';
+  static const String editProfile = '/profile/edit';
+  static const String changePassword = '/profile/change-password';
+  static const String settingsScreen = '/profile/settings';
   static const String addresses = '/addresses';
+  static const String addressAdd = '/addresses/add';
   static const String notifications = '/notifications';
   static const String support = '/support';
   static const String supportFaq = '/support/faq';
@@ -122,15 +134,18 @@ final GoRouter goRouter = GoRouter(
       routes: [
         GoRoute(
           path: 'delivery',
-          builder: (context, state) => const PlaceholderScreen(label: 'Delivery Address'),
+          builder: (context, state) =>
+              const PlaceholderScreen(label: 'Delivery Address'),
         ),
         GoRoute(
           path: 'otp',
-          builder: (context, state) => const PlaceholderScreen(label: 'OTP Verification'),
+          builder: (context, state) =>
+              const PlaceholderScreen(label: 'OTP Verification'),
         ),
         GoRoute(
           path: 'review',
-          builder: (context, state) => const PlaceholderScreen(label: 'Order Review'),
+          builder: (context, state) =>
+              const PlaceholderScreen(label: 'Order Review'),
         ),
       ],
     ),
@@ -160,8 +175,6 @@ final GoRouter goRouter = GoRouter(
     ),
     GoRoute(
       path: AppRoutes.orderLookup,
-      // Give the lookup screen its own isolated OrderCubit so
-      // lookup state doesn't bleed into the orders list
       builder: (context, state) => BlocProvider(
         create: (_) => OrderCubit(),
         child: const OrderLookupScreen(),
@@ -182,38 +195,69 @@ final GoRouter goRouter = GoRouter(
       builder: (context, state) => const PlaceholderScreen(label: 'Register'),
     ),
 
-    // Profile
+    // Profile — Arwah's screens
     GoRoute(
       path: AppRoutes.profile,
-      builder: (context, state) => const PlaceholderScreen(label: 'Profile'),
+      builder: (context, state) => const ProfileHubScreen(),
+      routes: [
+        GoRoute(
+          path: 'edit',
+          builder: (context, state) => const EditProfileScreen(),
+        ),
+        GoRoute(
+          path: 'change-password',
+          builder: (context, state) => const ChangePasswordScreen(),
+        ),
+        GoRoute(
+          path: 'settings',
+          builder: (context, state) => const SettingsScreen(),
+        ),
+      ],
     ),
     GoRoute(
       path: AppRoutes.addresses,
-      builder: (context, state) => const PlaceholderScreen(label: 'Addresses'),
+      builder: (context, state) => const AddressesScreen(),
+      routes: [
+        GoRoute(
+          path: 'add',
+          builder: (context, state) =>
+              const AddressFormScreen(isEditing: false),
+        ),
+        GoRoute(
+          path: 'edit/:id',
+          builder: (context, state) {
+            final id = state.pathParameters['id'] ?? '';
+            return AddressFormScreen(isEditing: true, addressId: id);
+          },
+        ),
+      ],
     ),
 
     // Notifications
     GoRoute(
       path: AppRoutes.notifications,
-      builder: (context, state) => const PlaceholderScreen(label: 'Notifications'),
+      builder: (context, state) =>
+          const PlaceholderScreen(label: 'Notifications'),
     ),
 
-    // Support
+    // Support — Naheed's screens
     GoRoute(
       path: AppRoutes.support,
-      builder: (context, state) => const PlaceholderScreen(label: 'Support'),
+      builder: (context, state) => const SupportHubScreen(),
       routes: [
         GoRoute(
           path: 'faq',
-          builder: (context, state) => const PlaceholderScreen(label: 'FAQ'),
+          builder: (context, state) => const FaqScreen(),
         ),
         GoRoute(
           path: 'contact',
-          builder: (context, state) => const PlaceholderScreen(label: 'Contact Us'),
+          builder: (context, state) =>
+              const PlaceholderScreen(label: 'Contact Us'),
         ),
         GoRoute(
           path: 'tickets',
-          builder: (context, state) => const PlaceholderScreen(label: 'Support Tickets'),
+          builder: (context, state) =>
+              const PlaceholderScreen(label: 'Support Tickets'),
         ),
       ],
     ),

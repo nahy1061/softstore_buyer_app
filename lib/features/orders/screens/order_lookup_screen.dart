@@ -282,7 +282,7 @@ class _NotFoundCard extends StatelessWidget {
         color: AppColors.surface,
         borderRadius: AppDimensions.radiusMd,
         border: Border.all(
-            color: AppColors.statusCancelled.withOpacity(0.3)),
+            color: AppColors.statusCancelled.withValues(alpha:0.3)),
         boxShadow: AppDimensions.cardShadow,
       ),
       child: Column(

@@ -222,6 +222,6 @@ class OrderCard extends StatelessWidget {
             : dt.hour;
     final ampm = dt.hour >= 12 ? 'PM' : 'AM';
     final min = dt.minute.toString().padLeft(2, '0');
-    return '${months[dt.month]} ${dt.day}, ${dt.year} ${hour}:$min $ampm';
+    return '${months[dt.month]} ${dt.day}, ${dt.year} $hour:$min $ampm';
   }
 }

@@ -61,8 +61,8 @@ extension OrderStatusExtension on OrderStatus {
     }
   }
 
-  Color get bgColor => color.withOpacity(0.10);
-  Color get borderColor => color.withOpacity(0.30);
+  Color get bgColor => color.withValues(alpha:0.10);
+  Color get borderColor => color.withValues(alpha:0.30);
 
   IconData get icon {
     switch (this) {

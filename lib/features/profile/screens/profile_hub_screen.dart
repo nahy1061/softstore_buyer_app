@@ -84,7 +84,7 @@ class ProfileHubScreen extends StatelessWidget {
                   icon: Icons.help_outline,
                   label: 'Help & Support',
                   subtitle: 'FAQs, contact us, tickets',
-                  onTap: () => context.go(AppRoutes.support),
+                  onTap: () => context.push(AppRoutes.support),
                 ),
                 _MenuItem(
                   icon: Icons.settings_outlined,

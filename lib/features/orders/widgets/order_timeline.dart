@@ -112,7 +112,7 @@ class _StepDot extends StatelessWidget {
           shape: BoxShape.circle,
           boxShadow: [
             BoxShadow(
-              color: AppColors.primary.withOpacity(0.35),
+              color: AppColors.primary.withValues(alpha:0.35),
               blurRadius: 8,
               spreadRadius: 2,
             ),
