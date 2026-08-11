@@ -1,6 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../features/home/screens/home_screen.dart';
+import '../features/orders/cubit/order_cubit.dart';
+import '../features/orders/screens/orders_screen.dart';
+import '../features/orders/screens/order_detail_screen.dart';
+import '../features/orders/screens/order_confirmation_screen.dart';
+import '../features/orders/screens/order_lookup_screen.dart';
+import '../features/orders/models/order_model.dart';
 
 // Placeholder screens (will be replaced with actual screens)
 class PlaceholderScreen extends StatelessWidget {
@@ -51,6 +58,7 @@ abstract final class AppRoutes {
   static const String orderConfirmation = '/order-confirmation/:ref';
   static const String orders = '/orders';
   static const String orderDetail = '/orders/:id';
+  static const String orderLookup = '/track-order';
   static const String returns = '/returns';
   static const String profile = '/profile';
   static const String addresses = '/addresses';
@@ -130,21 +138,34 @@ final GoRouter goRouter = GoRouter(
       path: AppRoutes.orderConfirmation,
       builder: (context, state) {
         final ref = state.pathParameters['ref'] ?? '';
-        return PlaceholderScreen(label: 'Order Confirmation: $ref');
+        return OrderConfirmationScreen(referenceNumber: ref);
       },
     ),
 
     // Orders & Returns
     GoRoute(
       path: AppRoutes.orders,
-      builder: (context, state) => const PlaceholderScreen(label: 'Orders'),
+      builder: (context, state) => const OrdersScreen(),
     ),
     GoRoute(
       path: AppRoutes.orderDetail,
       builder: (context, state) {
         final id = state.pathParameters['id'] ?? '';
-        return PlaceholderScreen(label: 'Order Detail: $id');
+        final order = dummyOrders.firstWhere(
+          (o) => o.id == id,
+          orElse: () => dummyOrders.first,
+        );
+        return OrderDetailScreen(order: order);
       },
+    ),
+    GoRoute(
+      path: AppRoutes.orderLookup,
+      // Give the lookup screen its own isolated OrderCubit so
+      // lookup state doesn't bleed into the orders list
+      builder: (context, state) => BlocProvider(
+        create: (_) => OrderCubit(),
+        child: const OrderLookupScreen(),
+      ),
     ),
     GoRoute(
       path: AppRoutes.returns,

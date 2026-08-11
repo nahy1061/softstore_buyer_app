@@ -111,7 +111,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // Products Grid
+              // Products Grid
           Expanded(
             child: GridView.builder(
               padding: AppSpacing.paddingLg,
@@ -133,108 +133,75 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             ),
           ),
-        ],
-      ),
 
-      // Current Order Bottom Section
-      bottomNavigationBar: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Order Summary
-          Container(
-            width: double.infinity,
-            padding: AppSpacing.paddingLg,
-            decoration: BoxDecoration(
-              color: AppColors.background,
-              border: Border(top: BorderSide(color: AppColors.divider)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
+          // Current Order bar — sits just above the bottom nav, inside the body
+          if (cartItems > 0)
+            Container(
+              width: double.infinity,
+              padding: AppSpacing.paddingLg,
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                border: const Border(top: BorderSide(color: AppColors.divider)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Current Order',
+                          'Current Order · $cartItems item${cartItems > 1 ? 's' : ''}',
                           style: AppTypography.labelMedium.copyWith(
                             color: AppColors.textSecondary,
                           ),
                         ),
-                        const SizedBox(height: AppSpacing.xs),
+                        const SizedBox(height: 2),
                         Text(
-                          '($cartItems items)',
-                          style: AppTypography.bodySmall.copyWith(
-                            color: AppColors.textSecondary,
+                          'PKR ${cartTotal.toStringAsFixed(0)}',
+                          style: AppTypography.pricePrimary.copyWith(
+                            fontSize: 16,
+                            color: AppColors.textPrimary,
                           ),
                         ),
                       ],
                     ),
-                    Text(
-                      'PKR ${cartTotal.toStringAsFixed(2)}',
-                      style: AppTypography.pricePrimary.copyWith(
-                        color: AppColors.primary,
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  ElevatedButton(
+                    onPressed: () => context.go(AppRoutes.checkout),
+                    style: ElevatedButton.styleFrom(
+                      minimumSize: Size.zero,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.lg,
+                        vertical: AppSpacing.md,
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.md),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () => context.go(AppRoutes.checkout),
-                    child: const Text('Pay & Checkout'),
+                    child: const Text('Checkout'),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-
-          // Bottom Navigation
-          BottomNavigationBar(
-            items: const [
-              BottomNavigationBarItem(
-                icon: Icon(Icons.inventory_2),
-                label: 'Marketplace',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.receipt_long),
-                label: 'Orders',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.shopping_cart),
-                label: 'Cart',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.analytics),
-                label: 'Reports',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.person),
-                label: 'Profile',
-              ),
-            ],
-            currentIndex: 0,
-            onTap: (index) {
-              switch (index) {
-                case 0:
-                  context.go(AppRoutes.home);
-                  break;
-                case 1:
-                  context.go(AppRoutes.orders);
-                  break;
-                case 2:
-                  context.go(AppRoutes.cart);
-                  break;
-                case 3:
-                  context.go(AppRoutes.profile);
-                  break;
-              }
-            },
-          ),
         ],
+      ),
+
+      // Single-bar bottom navigation — nothing else stacked here
+      bottomNavigationBar: BottomNavigationBar(
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.inventory_2), label: 'Marketplace'),
+          BottomNavigationBarItem(icon: Icon(Icons.receipt_long), label: 'Orders'),
+          BottomNavigationBarItem(icon: Icon(Icons.shopping_cart), label: 'Cart'),
+          BottomNavigationBarItem(icon: Icon(Icons.analytics), label: 'Reports'),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
+        ],
+        currentIndex: 0,
+        onTap: (index) {
+          switch (index) {
+            case 0: context.go(AppRoutes.home); break;
+            case 1: context.go(AppRoutes.orders); break;
+            case 2: context.go(AppRoutes.cart); break;
+            case 3: context.go(AppRoutes.profile); break;
+          }
+        },
       ),
     );
   }
