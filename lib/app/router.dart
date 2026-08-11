@@ -1,6 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../features/home/screens/home_screen.dart';
+import '../features/profile/screens/profile_hub_screen.dart';
+import '../features/profile/screens/edit_profile_screen.dart';
+import '../features/profile/screens/change_password_screen.dart';
+import '../features/profile/screens/settings_screen.dart';
+import '../features/profile/screens/addresses_screen.dart';
+import '../features/profile/screens/address_form_screen.dart';
 
 // Placeholder screens (will be replaced with actual screens)
 class PlaceholderScreen extends StatelessWidget {
@@ -53,7 +59,11 @@ abstract final class AppRoutes {
   static const String orderDetail = '/orders/:id';
   static const String returns = '/returns';
   static const String profile = '/profile';
+  static const String editProfile = '/profile/edit';
+  static const String changePassword = '/profile/change-password';
+  static const String settingsScreen = '/profile/settings';
   static const String addresses = '/addresses';
+  static const String addressAdd = '/addresses/add';
   static const String notifications = '/notifications';
   static const String support = '/support';
   static const String supportFaq = '/support/faq';
@@ -164,11 +174,38 @@ final GoRouter goRouter = GoRouter(
     // Profile
     GoRoute(
       path: AppRoutes.profile,
-      builder: (context, state) => const PlaceholderScreen(label: 'Profile'),
+      builder: (context, state) => const ProfileHubScreen(),
+      routes: [
+        GoRoute(
+          path: 'edit',
+          builder: (context, state) => const EditProfileScreen(),
+        ),
+        GoRoute(
+          path: 'change-password',
+          builder: (context, state) => const ChangePasswordScreen(),
+        ),
+        GoRoute(
+          path: 'settings',
+          builder: (context, state) => const SettingsScreen(),
+        ),
+      ],
     ),
     GoRoute(
       path: AppRoutes.addresses,
-      builder: (context, state) => const PlaceholderScreen(label: 'Addresses'),
+      builder: (context, state) => const AddressesScreen(),
+      routes: [
+        GoRoute(
+          path: 'add',
+          builder: (context, state) => const AddressFormScreen(isEditing: false),
+        ),
+        GoRoute(
+          path: 'edit/:id',
+          builder: (context, state) {
+            final id = state.pathParameters['id'] ?? '';
+            return AddressFormScreen(isEditing: true, addressId: id);
+          },
+        ),
+      ],
     ),
 
     // Notifications

@@ -2,7 +2,7 @@ abstract final class Validators {
   static String? email(String? value) {
     if (value?.isEmpty ?? true) return 'Email is required';
     final emailRegex = RegExp(
-        r'^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$');
+        r"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$");
     if (!emailRegex.hasMatch(value!)) return 'Enter a valid email address';
     return null;
   }
@@ -20,11 +20,9 @@ abstract final class Validators {
   }
 
   static String? pakistaniPhone(String? value) {
-    if (value?.isEmpty ?? true) return null;
+    if (value == null || value.isEmpty) return null;
     final phoneRegex = RegExp(r'^03\d{9}$');
-    if (!phoneRegex.hasMatch(value!)) {
-      return 'Enter a valid Pakistani phone number';
-    }
+    if (!phoneRegex.hasMatch(value)) return 'Enter a valid Pakistani phone number';
     return null;
   }
 
@@ -42,9 +40,7 @@ abstract final class Validators {
 
   static String? otp(String? value) {
     if (value?.isEmpty ?? true) return 'OTP is required';
-    if (!RegExp(r'^\d{6}$').hasMatch(value!)) {
-      return 'Enter the 6-digit code';
-    }
+    if (!RegExp(r'^\d{6}$').hasMatch(value!)) return 'Enter the 6-digit code';
     return null;
   }
 

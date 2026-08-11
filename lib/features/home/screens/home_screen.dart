@@ -196,20 +196,24 @@ class _HomeScreenState extends State<HomeScreen> {
           BottomNavigationBar(
             items: const [
               BottomNavigationBarItem(
-                icon: Icon(Icons.inventory_2),
-                label: 'Inventory',
+                icon: Icon(Icons.home_outlined),
+                activeIcon: Icon(Icons.home),
+                label: 'Home',
               ),
               BottomNavigationBarItem(
-                icon: Icon(Icons.receipt_long),
+                icon: Icon(Icons.receipt_long_outlined),
+                activeIcon: Icon(Icons.receipt_long),
                 label: 'Orders',
               ),
               BottomNavigationBarItem(
-                icon: Icon(Icons.shopping_cart),
+                icon: Icon(Icons.shopping_cart_outlined),
+                activeIcon: Icon(Icons.shopping_cart),
                 label: 'Cart',
               ),
               BottomNavigationBarItem(
-                icon: Icon(Icons.analytics),
-                label: 'Reports',
+                icon: Icon(Icons.person_outline),
+                activeIcon: Icon(Icons.person),
+                label: 'Profile',
               ),
             ],
             currentIndex: 0,
