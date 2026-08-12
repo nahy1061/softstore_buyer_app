@@ -240,6 +240,22 @@ class Order {
   }
 }
 
+// ─── Cancellation Reasons ─────────────────────────────────────────────────────
+
+const List<String> cancellationReasons = [
+  'Shipping cost is too high',
+  'Delivery time is too long',
+  'Decided for alternative product',
+  'Duplicate order',
+  'Want to place a new order with more/different items',
+  'Seller asked me to cancel / informed that item is out of stock',
+  'Change of Delivery Address',
+  'Forgot to use voucher/voucher issue',
+  'Don\'t want this order/item anymore',
+  'Found cheaper elsewhere',
+  'Change payment method',
+];
+
 // ─── Dummy data for UI preview ────────────────────────────────────────────────
 
 final List<Order> dummyOrders = [

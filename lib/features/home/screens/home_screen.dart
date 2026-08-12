@@ -144,53 +144,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // Current Order bar — sits just above the bottom nav, inside the body
-          if (cartItems > 0)
-            Container(
-              width: double.infinity,
-              padding: AppSpacing.paddingLg,
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                border: const Border(top: BorderSide(color: AppColors.divider)),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Current Order · $cartItems item${cartItems > 1 ? 's' : ''}',
-                          style: AppTypography.labelMedium.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'PKR ${cartTotal.toStringAsFixed(0)}',
-                          style: AppTypography.pricePrimary.copyWith(
-                            fontSize: 16,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  ElevatedButton(
-                    onPressed: () => context.go(AppRoutes.checkout),
-                    style: ElevatedButton.styleFrom(
-                      minimumSize: Size.zero,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.lg,
-                        vertical: AppSpacing.md,
-                      ),
-                    ),
-                    child: const Text('Checkout'),
-                  ),
-                ],
-              ),
-            ),
         ],
       ),
 
@@ -244,28 +197,30 @@ class _ProductCard extends StatelessWidget {
             ),
 
             // Product Info
-            Padding(
-              padding: AppSpacing.paddingMd,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Product Name
-                  Text(
-                    productName,
-                    style: AppTypography.productName,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-
-                  // Price
-                  Text(
-                    'PKR ${price.toString()}',
-                    style: AppTypography.pricePrimary.copyWith(
-                      color: AppColors.primary,
+            Expanded(
+              child: Padding(
+                padding: AppSpacing.paddingMd,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Product Name
+                    Text(
+                      productName,
+                      style: AppTypography.productName,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                ],
+                    const SizedBox(height: AppSpacing.sm),
+
+                    // Price
+                    Text(
+                      'PKR ${price.toString()}',
+                      style: AppTypography.pricePrimary.copyWith(
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
