@@ -194,6 +194,21 @@ class _FaqScreenState extends State<FaqScreen> {
               child: const Text('Contact Support'),
             ),
           ),
+          const SizedBox(height: AppSpacing.sm),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => context.push(AppRoutes.orderLookup),
+              icon: const Icon(Icons.local_shipping_outlined, size: 16),
+              label: const Text('Track an Order'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.primary,
+                side: const BorderSide(color: AppColors.primary),
+                shape: RoundedRectangleBorder(
+                    borderRadius: AppDimensions.radiusMd),
+              ),
+            ),
+          ),
         ],
       ),
     );

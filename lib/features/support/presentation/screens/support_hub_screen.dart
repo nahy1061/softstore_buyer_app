@@ -104,6 +104,12 @@ class SupportHubScreen extends StatelessWidget {
               subtitle: 'View and reply to your support tickets',
               onTap: () => context.push(AppRoutes.supportTickets),
             ),
+            _SupportOptionCard(
+              icon: Icons.local_shipping_outlined,
+              title: 'Track My Order',
+              subtitle: 'Check live status of your order',
+              onTap: () => context.push(AppRoutes.orderLookup),
+            ),
 
             const SizedBox(height: AppSpacing.xl),
 
