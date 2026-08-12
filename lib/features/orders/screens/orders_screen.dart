@@ -9,6 +9,8 @@ import '../../../app/router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/app_spacing.dart';
+// Shared bottom navigation bar used across all main screens
+import '../../../core/widgets/app_bottom_nav_bar.dart';
 
 class OrdersScreen extends StatefulWidget {
   const OrdersScreen({super.key});
@@ -78,6 +80,8 @@ class _OrdersScreenState extends State<OrdersScreen>
           const SizedBox(width: AppSpacing.xs),
         ],
       ),
+      // Shared bottom nav — index 1 = Orders (this screen)
+      bottomNavigationBar: const AppBottomNavBar(currentIndex: 1),
       body: Column(
         children: [
           Container(

@@ -9,6 +9,8 @@ import '../../../app/router.dart';
 import '../cubit/cart_cubit.dart';
 import '../cubit/cart_state.dart';
 import '../models/cart_item.dart';
+// Shared bottom navigation bar used across all main screens
+import '../../../core/widgets/app_bottom_nav_bar.dart';
 
 class CartScreen extends StatelessWidget {
   const CartScreen({super.key});
@@ -75,6 +77,8 @@ class CartScreen extends StatelessWidget {
         elevation: 0,
         centerTitle: false,
       ),
+      // Shared bottom nav — index 3 = Cart (this screen)
+      bottomNavigationBar: const AppBottomNavBar(currentIndex: 3),
       body: BlocBuilder<CartCubit, CartState>(
         builder: (context, state) {
           return state.items.isEmpty

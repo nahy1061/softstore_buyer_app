@@ -18,6 +18,7 @@ import '../features/profile/screens/addresses_screen.dart';
 import '../features/profile/screens/address_form_screen.dart';
 import '../features/support/presentation/screens/faq_screen.dart';
 import '../features/support/presentation/screens/support_hub_screen.dart';
+import '../features/deals/screens/deals_screen.dart';
 
 // Placeholder screens (will be replaced with actual screens)
 class PlaceholderScreen extends StatelessWidget {
@@ -81,6 +82,7 @@ abstract final class AppRoutes {
   static const String supportFaq = '/support/faq';
   static const String supportContact = '/support/contact';
   static const String supportTickets = '/support/tickets';
+  static const String deals = '/deals'; // Sponsors & Deals hub (center S button)
 }
 
 final GoRouter goRouter = GoRouter(
@@ -249,6 +251,12 @@ final GoRouter goRouter = GoRouter(
       path: AppRoutes.notifications,
       builder: (context, state) =>
           const PlaceholderScreen(label: 'Notifications'),
+    ),
+
+    // Deals & Sponsors — center S button destination
+    GoRoute(
+      path: AppRoutes.deals,
+      builder: (context, state) => const DealsScreen(),
     ),
 
     // Support — Naheed's screens
