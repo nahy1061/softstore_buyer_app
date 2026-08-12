@@ -13,10 +13,14 @@ class SupportHubScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: const Color(0xFFF7F7F7),
       appBar: AppBar(
         backgroundColor: Colors.white,
-        leading: BackButton(color: AppColors.textPrimary),
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 1,
+        shadowColor: Colors.black12,
+        leading: const BackButton(color: AppColors.textPrimary),
         title: Text(
           'Help & Support',
           style: AppTypography.screenTitle.copyWith(color: AppColors.textPrimary),
@@ -27,136 +31,135 @@ class SupportHubScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Hero banner
-            Container(
-              width: double.infinity,
-              color: Colors.white,
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                AppSpacing.xl,
-                AppSpacing.lg,
-                AppSpacing.xl,
+            _HeroBanner(),
+
+            const SizedBox(height: AppSpacing.lg),
+
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+              child: Text(
+                'WHAT DO YOU NEED HELP WITH?',
+                style: AppTypography.overline.copyWith(
+                  color: AppColors.textSecondary,
+                  letterSpacing: 1.0,
+                ),
               ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+
+            // 2x2 feature grid
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(AppSpacing.md),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha: 0.08),
-                      borderRadius: AppDimensions.radiusMd,
-                    ),
-                    child: const Icon(
-                      Icons.support_agent_rounded,
-                      color: AppColors.primary,
-                      size: 32,
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _FeatureCard(
+                          icon: Icons.help_outline_rounded,
+                          title: 'Help Centre',
+                          subtitle: 'Browse FAQs',
+                          onTap: () => context.push(AppRoutes.supportFaq),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: _FeatureCard(
+                          icon: Icons.headset_mic_outlined,
+                          title: 'Contact Us',
+                          subtitle: 'Open a ticket',
+                          onTap: () => context.push(AppRoutes.supportContact),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: AppSpacing.md),
-                  Text(
-                    'How can we help?',
-                    style: AppTypography.screenTitle.copyWith(
-                      color: AppColors.textPrimary,
-                      fontSize: 22,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    'Find answers, contact support, or track your tickets.',
-                    style: AppTypography.bodyMedium.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _FeatureCard(
+                          icon: Icons.confirmation_number_outlined,
+                          title: 'My Tickets',
+                          subtitle: 'Track & reply',
+                          onTap: () => context.push(AppRoutes.supportTickets),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: _FeatureCard(
+                          icon: Icons.local_shipping_outlined,
+                          title: 'Track Order',
+                          subtitle: 'Live updates',
+                          onTap: () => context.push(AppRoutes.orderLookup),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
 
-            const Divider(height: 1, color: AppColors.divider),
-            const SizedBox(height: AppSpacing.lg),
-
-            // Main options
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-              child: Text(
-                'GET HELP',
-                style: AppTypography.overline.copyWith(
-                  color: AppColors.textSecondary,
-                  letterSpacing: 1.2,
-                ),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-
-            _SupportOptionCard(
-              icon: Icons.help_outline_rounded,
-              title: 'Help Centre & FAQ',
-              subtitle: 'Browse answers to common questions',
-              onTap: () => context.push(AppRoutes.supportFaq),
-            ),
-            _SupportOptionCard(
-              icon: Icons.headset_mic_outlined,
-              title: 'Contact Support',
-              subtitle: 'Open a ticket or reach us directly',
-              onTap: () => context.push(AppRoutes.supportContact),
-            ),
-            _SupportOptionCard(
-              icon: Icons.confirmation_number_outlined,
-              title: 'My Tickets',
-              subtitle: 'View and reply to your support tickets',
-              onTap: () => context.push(AppRoutes.supportTickets),
-            ),
-            _SupportOptionCard(
-              icon: Icons.local_shipping_outlined,
-              title: 'Track My Order',
-              subtitle: 'Check live status of your order',
-              onTap: () => context.push(AppRoutes.orderLookup),
-            ),
-
             const SizedBox(height: AppSpacing.xl),
 
-            // Quick contact
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
               child: Text(
                 'QUICK CONTACT',
                 style: AppTypography.overline.copyWith(
                   color: AppColors.textSecondary,
-                  letterSpacing: 1.2,
+                  letterSpacing: 1.0,
                 ),
               ),
             ),
-            const SizedBox(height: AppSpacing.sm),
+            const SizedBox(height: AppSpacing.md),
 
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: AppDimensions.radiusLg,
-                border: Border.all(color: AppColors.divider),
-              ),
-              child: Column(
-                children: [
-                  _QuickContactTile(
-                    icon: Icons.chat_outlined,
-                    label: 'WhatsApp',
-                    value: '+92-300-9999999',
-                    subtitle: 'Mon–Sat, 9am–9pm PKT',
-                    onTap: () => launchUrl(
-                      Uri.parse('https://wa.me/923009999999'),
-                      mode: LaunchMode.externalApplication,
+            // Quick contact list
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: AppDimensions.radiusLg,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.06),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
                     ),
-                  ),
-                  const Divider(height: 1, color: AppColors.divider),
-                  _QuickContactTile(
-                    icon: Icons.email_outlined,
-                    label: 'Email',
-                    value: 'info@softstore.pk',
-                    subtitle: 'Best for detailed queries',
-                    onTap: () => launchUrl(
-                      Uri.parse('mailto:info@softstore.pk'),
-                      mode: LaunchMode.externalApplication,
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    _QuickContactListItem(
+                      icon: Icons.chat_outlined,
+                      label: 'WhatsApp',
+                      isFirst: true,
+                      onTap: () => launchUrl(
+                        Uri.parse('https://wa.me/923009999999'),
+                        mode: LaunchMode.externalApplication,
+                      ),
                     ),
-                  ),
-                ],
+                    const Divider(height: 1, indent: 60, color: Color(0xFFEEEEEE)),
+                    _QuickContactListItem(
+                      icon: Icons.email_outlined,
+                      label: 'Email',
+                      onTap: () => launchUrl(
+                        Uri.parse('mailto:info@softstore.pk'),
+                        mode: LaunchMode.externalApplication,
+                      ),
+                    ),
+                    const Divider(height: 1, indent: 60, color: Color(0xFFEEEEEE)),
+                    _QuickContactListItem(
+                      icon: Icons.call_outlined,
+                      label: 'Call',
+                      isLast: true,
+                      onTap: () => launchUrl(
+                        Uri.parse('tel:+923009999999'),
+                        mode: LaunchMode.externalApplication,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
 
@@ -168,13 +171,93 @@ class SupportHubScreen extends StatelessWidget {
   }
 }
 
-class _SupportOptionCard extends StatelessWidget {
+class _HeroBanner extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.all(AppSpacing.lg),
+      padding: const EdgeInsets.all(AppSpacing.xl),
+      decoration: BoxDecoration(
+        color: AppColors.primary,
+        borderRadius: AppDimensions.radiusLg,
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.3),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            right: -16,
+            top: -16,
+            child: Container(
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.07),
+              ),
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: AppDimensions.radiusMd,
+                    ),
+                    child: const Icon(
+                      Icons.support_agent_rounded,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'How can we help you?',
+                        style: AppTypography.sectionHeading.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Text(
+                        'We\'re here for you, 7 days a week',
+                        style: AppTypography.bodySmall.copyWith(
+                          color: Colors.white.withValues(alpha: 0.85),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FeatureCard extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
   final VoidCallback onTap;
 
-  const _SupportOptionCard({
+  const _FeatureCard({
     required this.icon,
     required this.title,
     required this.subtitle,
@@ -183,125 +266,109 @@ class _SupportOptionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(
-          AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: AppDimensions.radiusLg,
-        border: Border.all(color: AppColors.divider),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: AppDimensions.radiusLg,
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          child: Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.08),
-                  borderRadius: AppDimensions.radiusMd,
-                ),
-                child: Icon(icon, color: AppColors.primary, size: 22),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: AppDimensions.radiusLg,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.08),
+                borderRadius: AppDimensions.radiusSm,
               ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: AppTypography.bodyMedium.copyWith(
-                        color: AppColors.textPrimary,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: AppTypography.bodySmall.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
+              child: Icon(icon, color: AppColors.primary, size: 22),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              title,
+              style: AppTypography.labelLarge.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w700,
               ),
-              const Icon(
-                Icons.chevron_right,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
+              style: AppTypography.bodySmall.copyWith(
                 color: AppColors.textSecondary,
-                size: 20,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _QuickContactTile extends StatelessWidget {
+class _QuickContactListItem extends StatelessWidget {
   final IconData icon;
   final String label;
-  final String value;
-  final String subtitle;
+  final bool isFirst;
+  final bool isLast;
   final VoidCallback onTap;
 
-  const _QuickContactTile({
+  const _QuickContactListItem({
     required this.icon,
     required this.label,
-    required this.value,
-    required this.subtitle,
     required this.onTap,
+    this.isFirst = false,
+    this.isLast = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final radius = BorderRadius.vertical(
+      top: isFirst ? const Radius.circular(12) : Radius.zero,
+      bottom: isLast ? const Radius.circular(12) : Radius.zero,
+    );
     return InkWell(
       onTap: onTap,
-      borderRadius: AppDimensions.radiusLg,
+      borderRadius: radius,
       child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.lg),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg,
+          vertical: AppSpacing.md,
+        ),
         child: Row(
           children: [
-            Icon(icon, color: AppColors.primary, size: 22),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    value,
-                    style: AppTypography.bodyMedium.copyWith(
-                      color: AppColors.textPrimary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  Text(
-                    subtitle,
-                    style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
             Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sm, vertical: 4),
+              width: 40,
+              height: 40,
               decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.08),
+                color: AppColors.primary.withValues(alpha: 0.1),
                 borderRadius: AppDimensions.radiusSm,
               ),
-              child: Text(
-                label,
-                style: AppTypography.labelSmall.copyWith(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w600,
-                ),
+              child: Icon(icon, color: AppColors.primary, size: 20),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Text(
+              label,
+              style: AppTypography.bodyMedium.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w600,
               ),
+            ),
+            const Spacer(),
+            Icon(
+              Icons.arrow_outward_rounded,
+              size: 16,
+              color: AppColors.primary,
             ),
           ],
         ),

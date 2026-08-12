@@ -16,25 +16,24 @@ class TicketsListScreen extends StatefulWidget {
 
 class _TicketsListScreenState extends State<TicketsListScreen> {
   List<Ticket> _tickets = List.from(kMockTickets);
-  bool _isLoading = false;
 
   Future<void> _refresh() async {
-    setState(() => _isLoading = true);
     await Future.delayed(const Duration(seconds: 1));
     if (!mounted) return;
-    setState(() {
-      _tickets = List.from(kMockTickets);
-      _isLoading = false;
-    });
+    setState(() => _tickets = List.from(kMockTickets));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: const Color(0xFFF7F7F7),
       appBar: AppBar(
         backgroundColor: Colors.white,
-        leading: BackButton(color: AppColors.textPrimary),
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 1,
+        shadowColor: Colors.black12,
+        leading: const BackButton(color: AppColors.textPrimary),
         title: Text(
           'My Tickets',
           style: AppTypography.screenTitle.copyWith(color: AppColors.textPrimary),
@@ -42,7 +41,8 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
         actions: [
           IconButton(
             onPressed: () => context.push(AppRoutes.supportContact),
-            icon: const Icon(Icons.add_circle_outline, color: AppColors.primary),
+            icon: const Icon(Icons.add_circle_outline_rounded,
+                color: AppColors.primary),
             tooltip: 'New Ticket',
           ),
         ],
@@ -62,29 +62,24 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
               width: 80,
               height: 80,
               decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.08),
+                color: AppColors.primary.withValues(alpha: 0.07),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
-                Icons.confirmation_number_outlined,
-                color: AppColors.primary,
-                size: 40,
-              ),
+              child: const Icon(Icons.confirmation_number_outlined,
+                  color: AppColors.primary, size: 40),
             ),
             const SizedBox(height: AppSpacing.xl),
             Text(
               'No Tickets Yet',
-              style: AppTypography.sectionHeading.copyWith(
-                color: AppColors.textPrimary,
-              ),
+              style: AppTypography.sectionHeading
+                  .copyWith(color: AppColors.textPrimary),
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
               'You haven\'t submitted any support tickets.\nNeed help? Contact us anytime.',
               textAlign: TextAlign.center,
-              style: AppTypography.bodyMedium.copyWith(
-                color: AppColors.textSecondary,
-              ),
+              style: AppTypography.bodyMedium
+                  .copyWith(color: AppColors.textSecondary),
             ),
             const SizedBox(height: AppSpacing.xl),
             FilledButton.icon(
@@ -97,12 +92,9 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.xl,
-                  vertical: AppSpacing.md,
-                ),
+                    horizontal: AppSpacing.xl, vertical: AppSpacing.md),
                 shape: RoundedRectangleBorder(
-                  borderRadius: AppDimensions.radiusMd,
-                ),
+                    borderRadius: AppDimensions.radiusMd),
               ),
             ),
           ],
@@ -140,28 +132,47 @@ class _TicketCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final statusColor = _statusColor(ticket.status);
+
     return Container(
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: AppDimensions.radiusMd,
-        border: Border.all(color: AppColors.divider),
+        borderRadius: AppDimensions.radiusLg,
+        border: Border(
+          left: BorderSide(color: statusColor, width: 3),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: InkWell(
         onTap: onTap,
-        borderRadius: AppDimensions.radiusMd,
+        borderRadius: AppDimensions.radiusLg,
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.lg),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Top row: ticket ID + status badge
+              // Top row: category icon + name, status badge
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    ticket.id,
-                    style: AppTypography.labelMedium.copyWith(
-                      color: AppColors.textSecondary,
+                  Icon(
+                    _categoryIcon(ticket.category),
+                    size: 15,
+                    color: AppColors.textSecondary,
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  Expanded(
+                    child: Text(
+                      ticket.category,
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                   ),
                   _StatusBadge(status: ticket.status),
@@ -174,29 +185,11 @@ class _TicketCard extends StatelessWidget {
                 ticket.subject,
                 style: AppTypography.bodyMedium.copyWith(
                   color: AppColors.textPrimary,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
                 ),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: AppSpacing.xs),
-
-              // Category
-              Row(
-                children: [
-                  Icon(
-                    _categoryIcon(ticket.category),
-                    size: 14,
-                    color: AppColors.textSecondary,
-                  ),
-                  const SizedBox(width: AppSpacing.xs),
-                  Text(
-                    ticket.category,
-                    style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
               ),
               const SizedBox(height: AppSpacing.md),
 
@@ -205,35 +198,52 @@ class _TicketCard extends StatelessWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.all(AppSpacing.md),
                 decoration: BoxDecoration(
-                  color: AppColors.background,
+                  color: const Color(0xFFF7F7F7),
                   borderRadius: AppDimensions.radiusSm,
                 ),
-                child: Text(
-                  ticket.lastMessage,
-                  style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.chat_bubble_outline_rounded,
+                      size: 16,
+                      color: AppColors.textDisabled,
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Text(
+                        ticket.lastMessage,
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
 
-              // Bottom row: date + chevron
+              // Bottom row: ticket ID + date + arrow
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
+                  Text(
+                    ticket.id,
+                    style: AppTypography.labelSmall.copyWith(
+                      color: AppColors.textDisabled,
+                      fontSize: 11,
+                    ),
+                  ),
+                  const Spacer(),
                   Text(
                     _formatDate(ticket.lastUpdatedAt),
                     style: AppTypography.bodySmall.copyWith(
                       color: AppColors.textDisabled,
                     ),
                   ),
-                  const Icon(
-                    Icons.chevron_right,
-                    size: 18,
-                    color: AppColors.textSecondary,
-                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  Icon(Icons.chevron_right_rounded,
+                      size: 18, color: statusColor),
                 ],
               ),
             ],
@@ -267,6 +277,19 @@ class _TicketCard extends StatelessWidget {
     ];
     return '${months[dt.month]} ${dt.day}, ${dt.year}';
   }
+
+  Color _statusColor(TicketStatus status) {
+    switch (status) {
+      case TicketStatus.open:
+        return AppColors.primary;
+      case TicketStatus.inProgress:
+        return AppColors.statusPending;
+      case TicketStatus.resolved:
+        return AppColors.success;
+      case TicketStatus.closed:
+        return AppColors.textSecondary;
+    }
+  }
 }
 
 class _StatusBadge extends StatelessWidget {
@@ -280,7 +303,7 @@ class _StatusBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 3),
       decoration: BoxDecoration(
         color: _backgroundColor,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
         _label,
