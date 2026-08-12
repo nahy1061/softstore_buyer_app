@@ -17,6 +17,7 @@ import '../features/profile/screens/address_form_screen.dart';
 import '../features/support/presentation/screens/faq_screen.dart';
 import '../features/support/presentation/screens/contact_support_screen.dart';
 import '../features/support/presentation/screens/support_hub_screen.dart';
+import '../features/support/presentation/screens/tickets_list_screen.dart';
 
 // Placeholder screens (will be replaced with actual screens)
 class PlaceholderScreen extends StatelessWidget {
@@ -256,8 +257,7 @@ final GoRouter goRouter = GoRouter(
         ),
         GoRoute(
           path: 'tickets',
-          builder: (context, state) =>
-              const PlaceholderScreen(label: 'Support Tickets'),
+          builder: (context, state) => const TicketsListScreen(),
         ),
       ],
     ),
