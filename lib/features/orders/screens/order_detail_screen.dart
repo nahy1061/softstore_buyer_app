@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import '../../../app/router.dart';
 import '../cubit/order_cubit.dart';
 import '../cubit/order_state.dart';
 import '../models/order_model.dart';
@@ -12,20 +13,62 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_dimensions.dart';
 
-class OrderDetailScreen extends StatelessWidget {
+class OrderDetailScreen extends StatefulWidget {
   final Order order;
 
   const OrderDetailScreen({super.key, required this.order});
+
+  @override
+  State<OrderDetailScreen> createState() => _OrderDetailScreenState();
+}
+
+class _OrderDetailScreenState extends State<OrderDetailScreen> {
+  late Order currentOrder;
+
+  @override
+  void initState() {
+    super.initState();
+    currentOrder = widget.order;
+  }
 
   @override
   Widget build(BuildContext context) {
     return BlocListener<OrderCubit, OrderState>(
       listener: (context, state) {
         if (state is OrderCancelled) {
+          // Update order status to cancelled
+          setState(() {
+            currentOrder = Order(
+              id: currentOrder.id,
+              referenceNumber: currentOrder.referenceNumber,
+              placedAt: currentOrder.placedAt,
+              status: OrderStatus.cancelled,
+              items: currentOrder.items,
+              deliveryAddress: currentOrder.deliveryAddress,
+              subtotal: currentOrder.subtotal,
+              deliveryFee: currentOrder.deliveryFee,
+              discount: currentOrder.discount,
+              storeName: currentOrder.storeName,
+              storeCity: currentOrder.storeCity,
+              storeContact: currentOrder.storeContact,
+              estimatedDelivery: currentOrder.estimatedDelivery,
+              statusHistory: currentOrder.statusHistory,
+            );
+          });
+
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Order cancelled successfully')),
+            const SnackBar(
+              content: Text('Order cancelled successfully'),
+              backgroundColor: AppColors.statusCancelled,
+              duration: Duration(seconds: 2),
+            ),
           );
-          context.go('/orders');
+
+          // Reload orders to update the orders list, then navigate back
+          Future.delayed(const Duration(seconds: 2), () {
+            context.read<OrderCubit>().loadOrders();
+            context.go('/orders');
+          });
         }
         if (state is OrderError) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -50,32 +93,67 @@ class OrderDetailScreen extends StatelessWidget {
                 .copyWith(color: AppColors.textPrimary),
           ),
           actions: [
-            IconButton(
-              icon: const Icon(Icons.help_outline_rounded,
-                  color: AppColors.textSecondary),
-              tooltip: 'Support',
-              onPressed: () {},
+            // 3-dot menu
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert_rounded,
+                  color: AppColors.textPrimary),
+              onSelected: (value) {
+                switch (value) {
+                  case 'help':
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Opening support...')),
+                    );
+                    break;
+                  case 'share':
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Sharing order...')),
+                    );
+                    break;
+                }
+              },
+              itemBuilder: (BuildContext context) => [
+                const PopupMenuItem<String>(
+                  value: 'share',
+                  child: Row(
+                    children: [
+                      Icon(Icons.share_rounded, size: 20),
+                      SizedBox(width: 12),
+                      Text('Share'),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem<String>(
+                  value: 'help',
+                  child: Row(
+                    children: [
+                      Icon(Icons.help_outline_rounded, size: 20),
+                      SizedBox(width: 12),
+                      Text('Need Help?'),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ],
         ),
         body: ListView(
           padding: const EdgeInsets.all(AppSpacing.lg),
           children: [
-            _OrderHeaderCard(order: order),
+            _OrderHeaderCard(order: currentOrder),
             const SizedBox(height: AppSpacing.md),
-            _FulfillmentCard(order: order),
+            _FulfillmentCard(order: currentOrder),
             const SizedBox(height: AppSpacing.md),
-            _StoreAndAddressRow(order: order),
+            _StoreAndAddressRow(order: currentOrder),
             const SizedBox(height: AppSpacing.md),
-            if (order.statusHistory.isNotEmpty) ...[
-              _StatusHistoryCard(history: order.statusHistory),
+            if (currentOrder.statusHistory.isNotEmpty) ...[
+              _StatusHistoryCard(history: currentOrder.statusHistory),
               const SizedBox(height: AppSpacing.md),
             ],
-            _OrderItemsCard(order: order),
+            _OrderItemsCard(order: currentOrder),
             const SizedBox(height: AppSpacing.md),
-            _PriceBreakdownCard(order: order),
+            _PriceBreakdownCard(order: currentOrder),
             const SizedBox(height: AppSpacing.xl),
-            _ActionButtons(order: order),
+            _ActionButtons(order: currentOrder),
             const SizedBox(height: AppSpacing.xxl),
           ],
         ),
