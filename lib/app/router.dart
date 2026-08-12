@@ -15,6 +15,7 @@ import '../features/profile/screens/settings_screen.dart';
 import '../features/profile/screens/addresses_screen.dart';
 import '../features/profile/screens/address_form_screen.dart';
 import '../features/support/presentation/screens/faq_screen.dart';
+import '../features/support/presentation/screens/contact_support_screen.dart';
 import '../features/support/presentation/screens/support_hub_screen.dart';
 
 // Placeholder screens (will be replaced with actual screens)
@@ -251,8 +252,7 @@ final GoRouter goRouter = GoRouter(
         ),
         GoRoute(
           path: 'contact',
-          builder: (context, state) =>
-              const PlaceholderScreen(label: 'Contact Us'),
+          builder: (context, state) => const ContactSupportScreen(),
         ),
         GoRoute(
           path: 'tickets',
