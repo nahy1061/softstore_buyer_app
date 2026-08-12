@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import '../../../../app/router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
@@ -183,7 +185,7 @@ class _FaqScreenState extends State<FaqScreen> {
           SizedBox(
             width: double.infinity,
             child: FilledButton(
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () => context.push(AppRoutes.supportContact),
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 shape: RoundedRectangleBorder(
