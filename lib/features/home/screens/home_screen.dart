@@ -22,14 +22,46 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final List<String> categories = ['All', 'Electronics', 'Groceries', 'Apparel', 'Home'];
   final List<Map<String, dynamic>> products = [
-    {'name': 'Wireless Earbuds Pro', 'price': 4500, 'category': 'Electronics', 'icon': Icons.headphones},
-    {'name': 'Organic Bananas (1 Dozen)', 'price': 350, 'category': 'Groceries', 'icon': Icons.shopping_basket},
-    {'name': 'Smart Watch Series X', 'price': 12000, 'category': 'Electronics', 'icon': Icons.watch},
-    {'name': 'Premium Olive Oil 1L', 'price': 2800, 'category': 'Groceries', 'icon': Icons.local_drink},
-    {'name': 'Mechanical RGB Keyboard', 'price': 8500, 'category': 'Electronics', 'icon': Icons.keyboard},
-    {'name': 'Artisan Sourdough Loaf', 'price': 450, 'category': 'Groceries', 'icon': Icons.bakery_dining},
-    {'name': 'Premium T-Shirt', 'price': 1200, 'category': 'Apparel', 'icon': Icons.checkroom},
-    {'name': 'Coffee Maker', 'price': 5500, 'category': 'Home', 'icon': Icons.coffee},
+    {
+      'name': 'Wireless Earbuds Pro', 'price': 4500,
+      'category': 'Electronics', 'icon': Icons.headphones,
+      'colors': [
+        {'name': 'Black', 'value': 0xFF1A1A1A},
+        {'name': 'White', 'value': 0xFFF5F5F5},
+        {'name': 'Blue',  'value': 0xFF1565C0},
+      ],
+    },
+    {'name': 'Organic Bananas (1 Dozen)', 'price': 350, 'category': 'Groceries', 'icon': Icons.shopping_basket, 'colors': <Map<String, dynamic>>[]},
+    {
+      'name': 'Smart Watch Series X', 'price': 12000,
+      'category': 'Electronics', 'icon': Icons.watch,
+      'colors': [
+        {'name': 'Silver', 'value': 0xFFC0C0C0},
+        {'name': 'Gold',   'value': 0xFFFFD700},
+        {'name': 'Black',  'value': 0xFF1A1A1A},
+      ],
+    },
+    {'name': 'Premium Olive Oil 1L', 'price': 2800, 'category': 'Groceries', 'icon': Icons.local_drink, 'colors': <Map<String, dynamic>>[]},
+    {
+      'name': 'Mechanical RGB Keyboard', 'price': 8500,
+      'category': 'Electronics', 'icon': Icons.keyboard,
+      'colors': [
+        {'name': 'Black', 'value': 0xFF1A1A1A},
+        {'name': 'White', 'value': 0xFFF5F5F5},
+      ],
+    },
+    {'name': 'Artisan Sourdough Loaf', 'price': 450, 'category': 'Groceries', 'icon': Icons.bakery_dining, 'colors': <Map<String, dynamic>>[]},
+    {
+      'name': 'Premium T-Shirt', 'price': 1200,
+      'category': 'Apparel', 'icon': Icons.checkroom,
+      'colors': [
+        {'name': 'Black', 'value': 0xFF1A1A1A},
+        {'name': 'White', 'value': 0xFFF5F5F5},
+        {'name': 'Red',   'value': 0xFFD32F2F},
+        {'name': 'Navy',  'value': 0xFF1A237E},
+      ],
+    },
+    {'name': 'Coffee Maker', 'price': 5500, 'category': 'Home', 'icon': Icons.coffee, 'colors': <Map<String, dynamic>>[]},
   ];
 
   @override
@@ -137,6 +169,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       'price': product['price'] as int,
                       'iconCodePoint':
                           (product['icon'] as IconData).codePoint,
+                      'colors': product['colors']
+                          as List<Map<String, dynamic>>? ?? [],
                     },
                   ),
                 );
