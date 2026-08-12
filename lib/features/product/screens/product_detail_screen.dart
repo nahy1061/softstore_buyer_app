@@ -8,12 +8,14 @@ import '../../../core/theme/app_spacing.dart';
 import '../../cart/cubit/cart_cubit.dart';
 import '../../cart/cubit/cart_state.dart';
 import '../../cart/models/cart_item.dart';
+import '../../cart/screens/cart_screen.dart';
 
 class ProductDetailScreen extends StatelessWidget {
   final String slug;
   final String name;
   final int price;
   final int iconCodePoint;
+  final List<Map<String, dynamic>> colors;
 
   const ProductDetailScreen({
     super.key,
@@ -21,6 +23,7 @@ class ProductDetailScreen extends StatelessWidget {
     required this.name,
     required this.price,
     required this.iconCodePoint,
+    this.colors = const [],
   });
 
   IconData get _icon =>
@@ -134,6 +137,7 @@ class ProductDetailScreen extends StatelessWidget {
           price: price,
           iconCodePoint: iconCodePoint,
           slug: slug,
+          colors: colors,
         ),
       ),
     );
@@ -751,13 +755,27 @@ class _BottomBar extends StatelessWidget {
   final int price;
   final int iconCodePoint;
   final String slug;
+  final List<Map<String, dynamic>> colors;
 
   const _BottomBar({
     required this.name,
     required this.price,
     required this.iconCodePoint,
     required this.slug,
+    required this.colors,
   });
+
+  void _showCheckout(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => BlocProvider.value(
+        value: context.read<CartCubit>(),
+        child: const CartCheckoutSheet(),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -788,7 +806,43 @@ class _BottomBar extends StatelessWidget {
             child: SizedBox(
               height: 46,
               child: OutlinedButton(
-                onPressed: () {},
+                onPressed: () {
+                  if (colors.isEmpty) {
+                    context.read<CartCubit>().addItem(CartItem(
+                          id: slug,
+                          name: name,
+                          price: price,
+                          iconCodePoint: iconCodePoint,
+                        ));
+                    _showCheckout(context);
+                    return;
+                  }
+                  showModalBottomSheet<String>(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) => BlocProvider.value(
+                      value: context.read<CartCubit>(),
+                      child: _ColorSheet(
+                        name: name,
+                        price: price,
+                        iconCodePoint: iconCodePoint,
+                        slug: slug,
+                        colors: colors,
+                      ),
+                    ),
+                  ).then((selectedColor) {
+                    if (selectedColor != null && context.mounted) {
+                      context.read<CartCubit>().addItem(CartItem(
+                            id: '${slug}_$selectedColor',
+                            name: '$name ($selectedColor)',
+                            price: price,
+                            iconCodePoint: iconCodePoint,
+                          ));
+                      _showCheckout(context);
+                    }
+                  });
+                },
                 style: OutlinedButton.styleFrom(
                   side: const BorderSide(color: AppColors.primary),
                   foregroundColor: AppColors.primary,
@@ -843,6 +897,293 @@ class _BottomBar extends StatelessWidget {
     );
   }
 }
+
+// ── Color selection sheet ─────────────────────────────────────────────────
+
+class _ColorSheet extends StatefulWidget {
+  final String name;
+  final int price;
+  final int iconCodePoint;
+  final String slug;
+  final List<Map<String, dynamic>> colors;
+
+  const _ColorSheet({
+    required this.name,
+    required this.price,
+    required this.iconCodePoint,
+    required this.slug,
+    required this.colors,
+  });
+
+  @override
+  State<_ColorSheet> createState() => _ColorSheetState();
+}
+
+class _ColorSheetState extends State<_ColorSheet> {
+  int _selectedIndex = 0;
+  int _quantity = 1;
+
+  IconData get _icon => IconData(widget.iconCodePoint,
+      fontFamily: 'MaterialIcons');
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+    final selected = widget.colors[_selectedIndex];
+    final selectedName = selected['name'] as String;
+    final originalPrice = (widget.price * 1.25).round();
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      padding:
+          EdgeInsets.fromLTRB(16, 12, 16, bottomPadding + 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Drag handle + close
+          Row(
+            children: [
+              const Spacer(),
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDDDDDD),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const Spacer(),
+              GestureDetector(
+                onTap: () => Navigator.of(context).pop(),
+                child: const Icon(Icons.close,
+                    color: Color(0xFF888888), size: 20),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Product info row
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF5F5F5),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Center(
+                  child: Icon(_icon,
+                      size: 38, color: AppColors.primary),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'PKR ${widget.price}',
+                    style: const TextStyle(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 20,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'PKR $originalPrice',
+                    style: const TextStyle(
+                      color: Color(0xFFAAAAAA),
+                      fontSize: 13,
+                      decoration: TextDecoration.lineThrough,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    selectedName,
+                    style: const TextStyle(
+                        fontSize: 13, color: Color(0xFF555555)),
+                  ),
+                ],
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 20),
+          const Divider(height: 1, color: Color(0xFFEEEEEE)),
+          const SizedBox(height: 16),
+
+          // Color Family heading
+          Row(
+            children: const [
+              Text(
+                'Color Family',
+                style: TextStyle(
+                    fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Color swatches
+          Row(
+            children: List.generate(widget.colors.length, (i) {
+              final c = widget.colors[i];
+              final colorValue = c['value'] as int;
+              final colorName = c['name'] as String;
+              final isSelected = i == _selectedIndex;
+              return Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: GestureDetector(
+                  onTap: () => setState(() => _selectedIndex = i),
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: Color(colorValue),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: isSelected
+                                ? AppColors.primary
+                                : const Color(0xFFDDDDDD),
+                            width: isSelected ? 2.5 : 1,
+                          ),
+                        ),
+                        child: isSelected
+                            ? Align(
+                                alignment: Alignment.bottomRight,
+                                child: Container(
+                                  margin: const EdgeInsets.all(3),
+                                  width: 16,
+                                  height: 16,
+                                  decoration: const BoxDecoration(
+                                    color: AppColors.primary,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.check,
+                                      color: Colors.white, size: 10),
+                                ),
+                              )
+                            : null,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        colorName,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: isSelected
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                          color: isSelected
+                              ? AppColors.primary
+                              : const Color(0xFF555555),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ),
+
+          const SizedBox(height: 16),
+          const Divider(height: 1, color: Color(0xFFEEEEEE)),
+          const SizedBox(height: 14),
+
+          // Quantity row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Quantity',
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 14)),
+              Row(
+                children: [
+                  _QtyBtn(
+                    icon: Icons.remove,
+                    onTap: () {
+                      if (_quantity > 1) {
+                        setState(() => _quantity--);
+                      }
+                    },
+                  ),
+                  Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 18),
+                    child: Text(
+                      '$_quantity',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 15),
+                    ),
+                  ),
+                  _QtyBtn(
+                    icon: Icons.add,
+                    onTap: () => setState(() => _quantity++),
+                  ),
+                ],
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 20),
+
+          // Buy Now button
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () =>
+                  Navigator.of(context).pop(selectedName),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Text(
+                'Buy Now',
+                style: TextStyle(
+                    fontWeight: FontWeight.bold, fontSize: 15),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QtyBtn extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  const _QtyBtn({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 30,
+        height: 30,
+        decoration: BoxDecoration(
+          border: Border.all(color: const Color(0xFFDDDDDD)),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Icon(icon, size: 16, color: const Color(0xFF333333)),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _IconAction extends StatelessWidget {
   final IconData icon;

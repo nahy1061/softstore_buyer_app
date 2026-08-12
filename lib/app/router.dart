@@ -119,6 +119,9 @@ final GoRouter goRouter = GoRouter(
           name: extra['name'] as String? ?? slug,
           price: extra['price'] as int? ?? 0,
           iconCodePoint: extra['iconCodePoint'] as int? ?? 0xe59c,
+          colors: (extra['colors'] as List?)
+                  ?.cast<Map<String, dynamic>>() ??
+              const [],
         );
       },
     ),
@@ -188,8 +191,13 @@ final GoRouter goRouter = GoRouter(
           (o) => o.id == id,
           orElse: () => dummyOrders.first,
         );
+<<<<<<< HEAD
         // BlocProvider is required: OrderDetailScreen uses BlocListener
         // and context.read<OrderCubit>() for the cancel order action.
+=======
+        // OrderDetailScreen uses BlocListener/context.read<OrderCubit>
+        // so it must be wrapped in its own BlocProvider
+>>>>>>> 016ec00c8a09e0c8cffcb43973439bcb7e427229
         return BlocProvider(
           create: (_) => OrderCubit(),
           child: OrderDetailScreen(order: order),

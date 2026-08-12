@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import '../../../app/router.dart';
 import '../cubit/order_cubit.dart';
 import '../cubit/order_state.dart';
 import '../models/order_model.dart';
@@ -144,11 +145,21 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             const SizedBox(height: AppSpacing.md),
             _StoreAndAddressRow(order: currentOrder),
             const SizedBox(height: AppSpacing.md),
+<<<<<<< HEAD
             _OrderItemsCard(order: currentOrder),
             const SizedBox(height: AppSpacing.md),
             _PriceBreakdownCard(order: currentOrder),
             const SizedBox(height: AppSpacing.md),
             _QuickActionsCard(order: currentOrder),
+=======
+            if (currentOrder.statusHistory.isNotEmpty) ...[
+              _StatusHistoryCard(history: currentOrder.statusHistory),
+              const SizedBox(height: AppSpacing.md),
+            ],
+            _OrderItemsCard(order: currentOrder),
+            const SizedBox(height: AppSpacing.md),
+            _PriceBreakdownCard(order: currentOrder),
+>>>>>>> 016ec00c8a09e0c8cffcb43973439bcb7e427229
             const SizedBox(height: AppSpacing.xl),
             _ActionButtons(order: currentOrder),
             const SizedBox(height: AppSpacing.xxl),
