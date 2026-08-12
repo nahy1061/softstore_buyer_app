@@ -183,7 +183,12 @@ final GoRouter goRouter = GoRouter(
           (o) => o.id == id,
           orElse: () => dummyOrders.first,
         );
-        return OrderDetailScreen(order: order);
+        // OrderDetailScreen uses BlocListener/context.read<OrderCubit>
+        // so it must be wrapped in its own BlocProvider
+        return BlocProvider(
+          create: (_) => OrderCubit(),
+          child: OrderDetailScreen(order: order),
+        );
       },
     ),
     GoRoute(
