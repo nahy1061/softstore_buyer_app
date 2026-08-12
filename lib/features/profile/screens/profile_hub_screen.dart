@@ -5,6 +5,8 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_dimensions.dart';
 import '../../../app/router.dart';
+// Shared bottom navigation bar used across all main screens
+import '../../../core/widgets/app_bottom_nav_bar.dart';
 
 class ProfileHubScreen extends StatelessWidget {
   const ProfileHubScreen({super.key});
@@ -100,7 +102,8 @@ class ProfileHubScreen extends StatelessWidget {
           ],
         ),
       ),
-      bottomNavigationBar: _BottomNav(currentIndex: 3),
+      // Shared bottom nav — index 4 = Profile (this screen)
+      bottomNavigationBar: const AppBottomNavBar(currentIndex: 4),
     );
   }
 }
@@ -279,52 +282,3 @@ class _SignOutButton extends StatelessWidget {
   }
 }
 
-class _BottomNav extends StatelessWidget {
-  final int currentIndex;
-  const _BottomNav({required this.currentIndex});
-
-  @override
-  Widget build(BuildContext context) {
-    return BottomNavigationBar(
-      currentIndex: currentIndex,
-      items: const [
-        BottomNavigationBarItem(
-          icon: Icon(Icons.home_outlined),
-          activeIcon: Icon(Icons.home),
-          label: 'Home',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.receipt_long_outlined),
-          activeIcon: Icon(Icons.receipt_long),
-          label: 'Orders',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.shopping_cart_outlined),
-          activeIcon: Icon(Icons.shopping_cart),
-          label: 'Cart',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.person_outline),
-          activeIcon: Icon(Icons.person),
-          label: 'Profile',
-        ),
-      ],
-      onTap: (index) {
-        switch (index) {
-          case 0:
-            context.go(AppRoutes.home);
-            break;
-          case 1:
-            context.go(AppRoutes.orders);
-            break;
-          case 2:
-            context.go(AppRoutes.cart);
-            break;
-          case 3:
-            context.go(AppRoutes.profile);
-            break;
-        }
-      },
-    );
-  }
-}

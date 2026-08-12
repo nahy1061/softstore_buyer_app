@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import '../../../app/router.dart';
 import '../cubit/order_cubit.dart';
 import '../cubit/order_state.dart';
 import '../models/order_model.dart';
@@ -54,7 +55,7 @@ class OrderDetailScreen extends StatelessWidget {
               icon: const Icon(Icons.help_outline_rounded,
                   color: AppColors.textSecondary),
               tooltip: 'Support',
-              onPressed: () {},
+              onPressed: () => context.push(AppRoutes.supportContact),
             ),
           ],
         ),

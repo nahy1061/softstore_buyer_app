@@ -9,6 +9,8 @@ import '../../../app/router.dart';
 import '../cubit/cart_cubit.dart';
 import '../cubit/cart_state.dart';
 import '../models/cart_item.dart';
+// Shared bottom navigation bar used across all main screens
+import '../../../core/widgets/app_bottom_nav_bar.dart';
 
 class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
@@ -85,7 +87,8 @@ class _CartScreenState extends State<CartScreen> {
             centerTitle: false,
             bottom: const PreferredSize(
               preferredSize: Size.fromHeight(1),
-              child: Divider(height: 1, thickness: 1, color: Color(0xFFE8E8E8)),
+              child: Divider(
+                  height: 1, thickness: 1, color: Color(0xFFE8E8E8)),
             ),
             actions: _selectedIds.isEmpty
                 ? null
@@ -103,6 +106,8 @@ class _CartScreenState extends State<CartScreen> {
                     ),
                   ],
           ),
+          // Shared bottom nav — index 3 = Cart (this screen)
+          bottomNavigationBar: const AppBottomNavBar(currentIndex: 3),
           body: state.items.isEmpty
               ? _buildEmptyView(context)
               : _buildCartView(context, state),

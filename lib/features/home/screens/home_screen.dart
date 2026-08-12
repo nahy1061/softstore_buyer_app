@@ -5,6 +5,8 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_dimensions.dart';
 import '../../../app/router.dart';
+// Shared bottom navigation bar used across all main screens
+import '../../../core/widgets/app_bottom_nav_bar.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -226,25 +228,8 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
 
-      // Single-bar bottom navigation — nothing else stacked here
-      bottomNavigationBar: BottomNavigationBar(
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.inventory_2), label: 'Marketplace'),
-          BottomNavigationBarItem(icon: Icon(Icons.receipt_long), label: 'Orders'),
-          BottomNavigationBarItem(icon: Icon(Icons.shopping_cart), label: 'Cart'),
-          BottomNavigationBarItem(icon: Icon(Icons.analytics), label: 'Reports'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
-        ],
-        currentIndex: 0,
-        onTap: (index) {
-          switch (index) {
-            case 0: context.go(AppRoutes.home); break;
-            case 1: context.go(AppRoutes.orders); break;
-            case 2: context.go(AppRoutes.cart); break;
-            case 3: context.go(AppRoutes.profile); break;
-          }
-        },
-      ),
+      // Shared bottom nav — index 0 = Marketplace (this screen)
+      bottomNavigationBar: const AppBottomNavBar(currentIndex: 0),
     );
   }
 }
