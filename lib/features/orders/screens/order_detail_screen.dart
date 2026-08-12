@@ -145,13 +145,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             const SizedBox(height: AppSpacing.md),
             _StoreAndAddressRow(order: currentOrder),
             const SizedBox(height: AppSpacing.md),
-<<<<<<< HEAD
-            _OrderItemsCard(order: currentOrder),
-            const SizedBox(height: AppSpacing.md),
-            _PriceBreakdownCard(order: currentOrder),
-            const SizedBox(height: AppSpacing.md),
-            _QuickActionsCard(order: currentOrder),
-=======
             if (currentOrder.statusHistory.isNotEmpty) ...[
               _StatusHistoryCard(history: currentOrder.statusHistory),
               const SizedBox(height: AppSpacing.md),
@@ -159,7 +152,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             _OrderItemsCard(order: currentOrder),
             const SizedBox(height: AppSpacing.md),
             _PriceBreakdownCard(order: currentOrder),
->>>>>>> 016ec00c8a09e0c8cffcb43973439bcb7e427229
             const SizedBox(height: AppSpacing.xl),
             _ActionButtons(order: currentOrder),
             const SizedBox(height: AppSpacing.xxl),
@@ -434,6 +426,108 @@ class _StoreAndAddressRow extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+// ─── Seller status history ────────────────────────────────────────────────────
+
+class _StatusHistoryCard extends StatelessWidget {
+  final List<OrderStatusEvent> history;
+  const _StatusHistoryCard({required this.history});
+
+  @override
+  Widget build(BuildContext context) {
+    return _Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Seller Status History & Updates',
+            style: AppTypography.sectionHeading
+                .copyWith(color: AppColors.textPrimary),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          ...history.asMap().entries.map((e) => _HistoryEventRow(
+            event: e.value,
+            isLast: e.key == history.length - 1,
+          )),
+        ],
+      ),
+    );
+  }
+}
+
+class _HistoryEventRow extends StatelessWidget {
+  final OrderStatusEvent event;
+  final bool isLast;
+  const _HistoryEventRow({required this.event, required this.isLast});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Column(
+            children: [
+              Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: event.status.color,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              if (!isLast)
+                Container(
+                  width: 2,
+                  height: 30,
+                  color: event.status.color.withValues(alpha: 0.3),
+                  margin: const EdgeInsets.symmetric(vertical: 4),
+                ),
+            ],
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  event.status.label,
+                  style: AppTypography.labelMedium.copyWith(
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                if (event.note != null)
+                  Text(
+                    event.note!,
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                Text(
+                  _formatTime(event.timestamp),
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.textDisabled,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatTime(DateTime dt) {
+    final now = DateTime.now();
+    final diff = now.difference(dt);
+    if (diff.inDays > 0) return '${diff.inDays} day${diff.inDays > 1 ? 's' : ''} ago';
+    if (diff.inHours > 0) return '${diff.inHours} hour${diff.inHours > 1 ? 's' : ''} ago';
+    if (diff.inMinutes > 0) return '${diff.inMinutes} minute${diff.inMinutes > 1 ? 's' : ''} ago';
+    return 'Just now';
   }
 }
 

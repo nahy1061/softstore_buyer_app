@@ -191,13 +191,8 @@ final GoRouter goRouter = GoRouter(
           (o) => o.id == id,
           orElse: () => dummyOrders.first,
         );
-<<<<<<< HEAD
         // BlocProvider is required: OrderDetailScreen uses BlocListener
         // and context.read<OrderCubit>() for the cancel order action.
-=======
-        // OrderDetailScreen uses BlocListener/context.read<OrderCubit>
-        // so it must be wrapped in its own BlocProvider
->>>>>>> 016ec00c8a09e0c8cffcb43973439bcb7e427229
         return BlocProvider(
           create: (_) => OrderCubit(),
           child: OrderDetailScreen(order: order),
