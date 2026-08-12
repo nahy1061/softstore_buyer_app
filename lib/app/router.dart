@@ -16,9 +16,13 @@ import '../features/profile/screens/change_password_screen.dart';
 import '../features/profile/screens/settings_screen.dart';
 import '../features/profile/screens/addresses_screen.dart';
 import '../features/profile/screens/address_form_screen.dart';
-import '../features/support/presentation/screens/faq_screen.dart';
-import '../features/support/presentation/screens/support_hub_screen.dart';
 import '../features/deals/screens/deals_screen.dart';
+import '../features/support/presentation/screens/faq_screen.dart';
+import '../features/support/presentation/screens/contact_support_screen.dart';
+import '../features/support/presentation/screens/support_hub_screen.dart';
+import '../features/support/presentation/screens/tickets_list_screen.dart';
+import '../features/support/presentation/screens/ticket_chat_screen.dart';
+import '../features/support/models/ticket_model.dart';
 
 // Placeholder screens (will be replaced with actual screens)
 class PlaceholderScreen extends StatelessWidget {
@@ -78,11 +82,12 @@ abstract final class AppRoutes {
   static const String addresses = '/addresses';
   static const String addressAdd = '/addresses/add';
   static const String notifications = '/notifications';
+  static const String deals = '/deals';
   static const String support = '/support';
   static const String supportFaq = '/support/faq';
   static const String supportContact = '/support/contact';
   static const String supportTickets = '/support/tickets';
-  static const String deals = '/deals'; // Sponsors & Deals hub (center S button)
+  static const String supportTicketChat = '/support/tickets/:id';
 }
 
 final GoRouter goRouter = GoRouter(
@@ -253,7 +258,7 @@ final GoRouter goRouter = GoRouter(
           const PlaceholderScreen(label: 'Notifications'),
     ),
 
-    // Deals & Sponsors — center S button destination
+    // Deals & Sponsors
     GoRoute(
       path: AppRoutes.deals,
       builder: (context, state) => const DealsScreen(),
@@ -270,13 +275,24 @@ final GoRouter goRouter = GoRouter(
         ),
         GoRoute(
           path: 'contact',
-          builder: (context, state) =>
-              const PlaceholderScreen(label: 'Contact Us'),
+          builder: (context, state) => const ContactSupportScreen(),
         ),
         GoRoute(
           path: 'tickets',
-          builder: (context, state) =>
-              const PlaceholderScreen(label: 'Support Tickets'),
+          builder: (context, state) => const TicketsListScreen(),
+          routes: [
+            GoRoute(
+              path: ':id',
+              builder: (context, state) {
+                final id = state.pathParameters['id'] ?? '';
+                final ticket = kMockTickets.firstWhere(
+                  (t) => t.id == id,
+                  orElse: () => kMockTickets.first,
+                );
+                return TicketChatScreen(ticket: ticket);
+              },
+            ),
+          ],
         ),
       ],
     ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../../app/router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_dimensions.dart';
@@ -133,9 +134,10 @@ class SupportHubScreen extends StatelessWidget {
                     label: 'WhatsApp',
                     value: '+92-300-9999999',
                     subtitle: 'Mon–Sat, 9am–9pm PKT',
-                    onTap: () {
-                      // Will open WhatsApp when url_launcher is added
-                    },
+                    onTap: () => launchUrl(
+                      Uri.parse('https://wa.me/923009999999'),
+                      mode: LaunchMode.externalApplication,
+                    ),
                   ),
                   const Divider(height: 1, color: AppColors.divider),
                   _QuickContactTile(
@@ -143,9 +145,10 @@ class SupportHubScreen extends StatelessWidget {
                     label: 'Email',
                     value: 'info@softstore.pk',
                     subtitle: 'Best for detailed queries',
-                    onTap: () {
-                      // Will open email app when url_launcher is added
-                    },
+                    onTap: () => launchUrl(
+                      Uri.parse('mailto:info@softstore.pk'),
+                      mode: LaunchMode.externalApplication,
+                    ),
                   ),
                 ],
               ),
