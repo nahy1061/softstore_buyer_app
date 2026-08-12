@@ -124,16 +124,7 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
           final ticket = _tickets[index];
           return _TicketCard(
             ticket: ticket,
-            onTap: () {
-              // Will navigate to ticket chat in Feature 5
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Ticket ${ticket.id} — chat coming soon'),
-                  backgroundColor: AppColors.primary,
-                  duration: const Duration(seconds: 1),
-                ),
-              );
-            },
+            onTap: () => context.push('/support/tickets/${ticket.id}'),
           );
         },
       ),
