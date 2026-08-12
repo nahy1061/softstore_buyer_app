@@ -240,29 +240,103 @@ class _CartScreenState extends State<CartScreen> {
     return Column(
       children: [
         Expanded(
-          child: ListView.separated(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            itemCount: state.items.length,
-            separatorBuilder: (_, _) =>
-                const SizedBox(height: AppSpacing.md),
-            itemBuilder: (context, index) {
-              final item = state.items[index];
-              return _CartItemTile(
-                item: item,
-                isSelected: _selectedIds.contains(item.id),
-                onToggle: () => setState(() {
-                  if (_selectedIds.contains(item.id)) {
-                    _selectedIds.remove(item.id);
-                  } else {
-                    _selectedIds.add(item.id);
-                  }
-                }),
-                onDelete: () {
-                  setState(() => _selectedIds.remove(item.id));
-                  context.read<CartCubit>().removeItem(item.id);
-                },
-              );
-            },
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
+                ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  itemCount: state.items.length,
+                  separatorBuilder: (_, _) =>
+                      const SizedBox(height: AppSpacing.md),
+                  itemBuilder: (context, index) {
+                    final item = state.items[index];
+                    return _CartItemTile(
+                      item: item,
+                      isSelected: _selectedIds.contains(item.id),
+                      onToggle: () => setState(() {
+                        if (_selectedIds.contains(item.id)) {
+                          _selectedIds.remove(item.id);
+                        } else {
+                          _selectedIds.add(item.id);
+                        }
+                      }),
+                      onDelete: () {
+                        setState(() => _selectedIds.remove(item.id));
+                        context.read<CartCubit>().removeItem(item.id);
+                      },
+                    );
+                  },
+                ),
+
+                // Marketplace recommendations
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 24),
+                      Text(
+                        'You might also like',
+                        style: AppTypography.bodyMedium.copyWith(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          childAspectRatio: 0.62,
+                          crossAxisSpacing: 10,
+                          mainAxisSpacing: 10,
+                        ),
+                        itemCount: _recommendations.length,
+                        itemBuilder: (context, index) {
+                          final p = _recommendations[index];
+                          final iconData = p['icon'] as IconData;
+                          final productId = (p['name'] as String)
+                              .toLowerCase()
+                              .replaceAll(' ', '_');
+                          return _RecommendationCard(
+                            name: p['name'] as String,
+                            price: p['price'] as int,
+                            discount: p['discount'] as int,
+                            rating: p['rating'] as double,
+                            sold: p['sold'] as String,
+                            icon: iconData,
+                            onTap: () => context.push(
+                              '/product/$productId',
+                              extra: {
+                                'name': p['name'] as String,
+                                'price': p['price'] as int,
+                                'iconCodePoint': iconData.codePoint,
+                              },
+                            ),
+                            onAddToCart: () {
+                              context.read<CartCubit>().addItem(
+                                    CartItem(
+                                      id: productId,
+                                      name: p['name'] as String,
+                                      price: p['price'] as int,
+                                      iconCodePoint: iconData.codePoint,
+                                    ),
+                                  );
+                            },
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 24),
+              ],
+            ),
           ),
         ),
 
