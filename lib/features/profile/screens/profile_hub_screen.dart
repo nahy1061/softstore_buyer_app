@@ -4,8 +4,9 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_dimensions.dart';
-import '../../../core/widgets/app_bottom_nav.dart';
 import '../../../app/router.dart';
+// Shared bottom navigation bar used across all main screens
+import '../../../core/widgets/app_bottom_nav_bar.dart';
 
 class ProfileHubScreen extends StatelessWidget {
   const ProfileHubScreen({super.key});
@@ -33,7 +34,8 @@ class ProfileHubScreen extends StatelessWidget {
           ),
         ),
       ),
-      bottomNavigationBar: const AppBottomNav(currentIndex: 3),
+      // Shared bottom nav — index 4 = Profile (this screen)
+      bottomNavigationBar: const AppBottomNavBar(currentIndex: 4),
     );
   }
 }
@@ -79,7 +81,7 @@ class _ProfileHeaderState extends State<_ProfileHeader>
         color: AppColors.surface,
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withOpacity(0.08),
+            color: AppColors.primary.withValues(alpha: 0.08),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
@@ -491,7 +493,7 @@ class _OrderStatusChip extends StatelessWidget {
           width: 48,
           height: 48,
           decoration: BoxDecoration(
-            color: color.withOpacity(0.12),
+            color: color.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Icon(icon, color: color, size: 24),
