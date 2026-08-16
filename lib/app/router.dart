@@ -196,7 +196,10 @@ final GoRouter goRouter = GoRouter(
           (o) => o.id == id,
           orElse: () => dummyOrders.first,
         );
-        return OrderDetailScreen(order: order);
+        return BlocProvider(
+          create: (_) => OrderCubit(),
+          child: OrderDetailScreen(order: order),
+        );
       },
     ),
     GoRoute(
@@ -221,7 +224,7 @@ final GoRouter goRouter = GoRouter(
       builder: (context, state) => const PlaceholderScreen(label: 'Register'),
     ),
 
-    // Profile â€” Arwah's screens
+    // Profile — Arwah's screens
     GoRoute(
       path: AppRoutes.profile,
       builder: (context, state) => const ProfileHubScreen(),
@@ -272,7 +275,7 @@ final GoRouter goRouter = GoRouter(
       builder: (context, state) => const DealsScreen(),
     ),
 
-    // Support â€” Naheed's screens
+    // Support — Naheed's screens
     GoRoute(
       path: AppRoutes.support,
       builder: (context, state) => const SupportHubScreen(),
@@ -283,7 +286,15 @@ final GoRouter goRouter = GoRouter(
         ),
         GoRoute(
           path: 'contact',
-          builder: (context, state) => const ContactSupportScreen(),
+          builder: (context, state) {
+            final extra = state.extra as Map<String, dynamic>?;
+            return ContactSupportScreen(
+              orderReference: extra?['orderReference'] as String?,
+              orderId: extra?['orderId'] as int?,
+              initialSubject: extra?['subject'] as String?,
+              initialCategoryLabel: extra?['categoryLabel'] as String?,
+            );
+          },
         ),
         GoRoute(
           path: 'tickets',

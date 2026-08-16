@@ -55,7 +55,15 @@ class OrderDetailScreen extends StatelessWidget {
               icon: const Icon(Icons.help_outline_rounded,
                   color: AppColors.textSecondary),
               tooltip: 'Support',
-              onPressed: () => context.push(AppRoutes.supportContact),
+              onPressed: () => context.push(
+                AppRoutes.supportContact,
+                extra: {
+                  'orderReference': order.referenceNumber,
+                  'orderId': int.tryParse(order.id),
+                  'subject': 'Issue with order ${order.referenceNumber}',
+                  'categoryLabel': 'Order issue',
+                },
+              ),
             ),
           ],
         ),
