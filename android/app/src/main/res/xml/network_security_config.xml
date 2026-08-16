@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Trust system CAs for all connections -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system"/>
+        </trust-anchors>
+    </base-config>
+    <!-- For softstore.pk: also trust the bundled SSL.com 2022 root CA in case
+         it is not yet present in the device's system trust store -->
+    <domain-config>
+        <domain includeSubdomains="true">softstore.pk</domain>
+        <trust-anchors>
+            <certificates src="system"/>
+            <certificates src="@raw/sslcom_root_ca_2022"/>
+        </trust-anchors>
+    </domain-config>
+</network-security-config>
