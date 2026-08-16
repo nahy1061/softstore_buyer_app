@@ -56,7 +56,37 @@ class OrderCubit extends Cubit<OrderState> {
   Future<void> cancelOrder(String orderId, {String? reason}) async {
     emit(const OrderCancelling());
     await Future.delayed(const Duration(milliseconds: 600));
+    // Update the order status in dummyOrders
+    final orderIndex = dummyOrders.indexWhere((o) => o.id == orderId);
+    if (orderIndex != -1) {
+      final cancelledOrder = dummyOrders[orderIndex];
+      dummyOrders[orderIndex] = Order(
+        id: cancelledOrder.id,
+        referenceNumber: cancelledOrder.referenceNumber,
+        placedAt: cancelledOrder.placedAt,
+        status: OrderStatus.cancelled,
+        items: cancelledOrder.items,
+        deliveryAddress: cancelledOrder.deliveryAddress,
+        subtotal: cancelledOrder.subtotal,
+        deliveryFee: cancelledOrder.deliveryFee,
+        discount: cancelledOrder.discount,
+        storeName: cancelledOrder.storeName,
+        storeCity: cancelledOrder.storeCity,
+        storeContact: cancelledOrder.storeContact,
+        estimatedDelivery: cancelledOrder.estimatedDelivery,
+        statusHistory: [
+          ...cancelledOrder.statusHistory,
+          OrderStatusEvent(
+            status: OrderStatus.cancelled,
+            timestamp: DateTime.now(),
+            note: reason ?? 'Cancelled by customer',
+          ),
+        ],
+      );
+    }
     emit(OrderCancelled(orderId: orderId));
+    // Reload orders to reflect the cancellation in the orders list
+    emit(OrderLoaded(orders: List.from(dummyOrders)));
   }
 
   void reset() => emit(const OrderInitial());

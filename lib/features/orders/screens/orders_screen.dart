@@ -22,17 +22,23 @@ class OrdersScreen extends StatefulWidget {
 class _OrdersScreenState extends State<OrdersScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  final TextEditingController _searchCtrl = TextEditingController();
+  String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+    _searchCtrl.addListener(() {
+      setState(() => _searchQuery = _searchCtrl.text.toLowerCase());
+    });
     context.read<OrderCubit>().loadOrders();
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _searchCtrl.dispose();
     super.dispose();
   }
 
@@ -84,6 +90,36 @@ class _OrdersScreenState extends State<OrdersScreen>
       bottomNavigationBar: const AppBottomNavBar(currentIndex: 1),
       body: Column(
         children: [
+          // Search bar
+          Container(
+            color: AppColors.surface,
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: TextField(
+              controller: _searchCtrl,
+              decoration: InputDecoration(
+                hintText: 'Search by invoice number...',
+                prefixIcon: const Icon(Icons.search_rounded,
+                    color: AppColors.textSecondary),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.close_rounded,
+                            color: AppColors.textSecondary),
+                        onPressed: () {
+                          _searchCtrl.clear();
+                          setState(() => _searchQuery = '');
+                        },
+                      )
+                    : null,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: AppColors.divider),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+              ),
+            ),
+          ),
+          // Tab bar
           Container(
             color: AppColors.surface,
             child: TabBar(
@@ -126,28 +162,38 @@ class _OrdersScreenState extends State<OrdersScreen>
                   );
                 }
                 if (state is OrderLoaded) {
+                  // Filter orders by search query
+                  List<Order> _filterOrders(List<Order> orders) {
+                    if (_searchQuery.isEmpty) return orders;
+                    return orders
+                        .where((o) => o.referenceNumber
+                            .toLowerCase()
+                            .contains(_searchQuery))
+                        .toList();
+                  }
+
                   return TabBarView(
                     controller: _tabController,
                     children: [
                       _OrderList(
-                        orders: state.orders,
+                        orders: _filterOrders(state.orders),
                         onOrderTap: (o) =>
                             context.push('/orders/${o.id}'),
                       ),
                       _OrderList(
-                        orders: state.active,
+                        orders: _filterOrders(state.active),
                         onOrderTap: (o) =>
                             context.push('/orders/${o.id}'),
                         emptyLabel: 'No active orders',
                       ),
                       _OrderList(
-                        orders: state.delivered,
+                        orders: _filterOrders(state.delivered),
                         onOrderTap: (o) =>
                             context.push('/orders/${o.id}'),
                         emptyLabel: 'No delivered orders',
                       ),
                       _OrderList(
-                        orders: state.cancelled,
+                        orders: _filterOrders(state.cancelled),
                         onOrderTap: (o) =>
                             context.push('/orders/${o.id}'),
                         emptyLabel: 'No cancelled orders',
@@ -183,12 +229,20 @@ class _OrderList extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.receipt_long_outlined,
-              size: 60,
-              color: AppColors.textDisabled,
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.receipt_long_outlined,
+                size: 40,
+                color: AppColors.textDisabled,
+              ),
             ),
-            const SizedBox(height: AppSpacing.md),
+            const SizedBox(height: AppSpacing.lg),
             Text(
               emptyLabel,
               style: AppTypography.sectionHeading.copyWith(
@@ -212,7 +266,10 @@ class _OrderList extends StatelessWidget {
       itemCount: orders.length,
       itemBuilder: (context, index) {
         final order = orders[index];
-        return OrderCard(order: order, onTap: () => onOrderTap(order));
+        return Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.md),
+          child: OrderCard(order: order, onTap: () => onOrderTap(order)),
+        );
       },
     );
   }

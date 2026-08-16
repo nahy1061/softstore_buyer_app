@@ -523,58 +523,6 @@ class _LookupResultCard extends StatelessWidget {
             ),
           ],
 
-          const Divider(height: 1, color: AppColors.divider),
-
-          // Items
-          Padding(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Order Items',
-                  style: AppTypography.sectionHeading
-                      .copyWith(color: AppColors.textPrimary),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.sm, vertical: AppSpacing.sm),
-                  color: AppColors.background,
-                  child: Row(
-                    children: [
-                      Expanded(
-                        flex: 5,
-                        child: Text('Item Name',
-                            style: AppTypography.overline.copyWith(
-                                color: AppColors.textSecondary,
-                                fontWeight: FontWeight.w700)),
-                      ),
-                      SizedBox(
-                        width: 40,
-                        child: Text('Qty',
-                            style: AppTypography.overline.copyWith(
-                                color: AppColors.textSecondary,
-                                fontWeight: FontWeight.w700),
-                            textAlign: TextAlign.center),
-                      ),
-                      SizedBox(
-                        width: 80,
-                        child: Text('Subtotal',
-                            style: AppTypography.overline.copyWith(
-                                color: AppColors.textSecondary,
-                                fontWeight: FontWeight.w700),
-                            textAlign: TextAlign.right),
-                      ),
-                    ],
-                  ),
-                ),
-                const Divider(color: AppColors.divider),
-                ...order.items.map((item) => _ItemRow(item: item)),
-              ],
-            ),
-          ),
-
           // CTA
           Padding(
             padding: const EdgeInsets.fromLTRB(
@@ -682,49 +630,3 @@ class _HistoryRow extends StatelessWidget {
   }
 }
 
-class _ItemRow extends StatelessWidget {
-  final OrderItem item;
-  const _ItemRow({required this.item});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            flex: 5,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(item.name,
-                    style: AppTypography.bodyMedium
-                        .copyWith(color: AppColors.textPrimary)),
-                if (item.sku != null)
-                  Text('SKU: ${item.sku}',
-                      style: AppTypography.bodySmall
-                          .copyWith(color: AppColors.textSecondary)),
-              ],
-            ),
-          ),
-          SizedBox(
-            width: 40,
-            child: Text('${item.quantity}',
-                style: AppTypography.bodyMedium
-                    .copyWith(color: AppColors.textPrimary),
-                textAlign: TextAlign.center),
-          ),
-          SizedBox(
-            width: 80,
-            child: Text('PKR ${item.subtotal.toStringAsFixed(0)}',
-                style: AppTypography.labelMedium.copyWith(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w700),
-                textAlign: TextAlign.right),
-          ),
-        ],
-      ),
-    );
-  }
-}

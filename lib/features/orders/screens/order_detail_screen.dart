@@ -13,20 +13,62 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_dimensions.dart';
 
-class OrderDetailScreen extends StatelessWidget {
+class OrderDetailScreen extends StatefulWidget {
   final Order order;
 
   const OrderDetailScreen({super.key, required this.order});
+
+  @override
+  State<OrderDetailScreen> createState() => _OrderDetailScreenState();
+}
+
+class _OrderDetailScreenState extends State<OrderDetailScreen> {
+  late Order currentOrder;
+
+  @override
+  void initState() {
+    super.initState();
+    currentOrder = widget.order;
+  }
 
   @override
   Widget build(BuildContext context) {
     return BlocListener<OrderCubit, OrderState>(
       listener: (context, state) {
         if (state is OrderCancelled) {
+          // Update order status to cancelled
+          setState(() {
+            currentOrder = Order(
+              id: currentOrder.id,
+              referenceNumber: currentOrder.referenceNumber,
+              placedAt: currentOrder.placedAt,
+              status: OrderStatus.cancelled,
+              items: currentOrder.items,
+              deliveryAddress: currentOrder.deliveryAddress,
+              subtotal: currentOrder.subtotal,
+              deliveryFee: currentOrder.deliveryFee,
+              discount: currentOrder.discount,
+              storeName: currentOrder.storeName,
+              storeCity: currentOrder.storeCity,
+              storeContact: currentOrder.storeContact,
+              estimatedDelivery: currentOrder.estimatedDelivery,
+              statusHistory: currentOrder.statusHistory,
+            );
+          });
+
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Order cancelled successfully')),
+            const SnackBar(
+              content: Text('Order cancelled successfully'),
+              backgroundColor: AppColors.statusCancelled,
+              duration: Duration(seconds: 2),
+            ),
           );
-          context.go('/orders');
+
+          // Reload orders to update the orders list, then navigate back
+          Future.delayed(const Duration(seconds: 2), () {
+            context.read<OrderCubit>().loadOrders();
+            context.go('/orders');
+          });
         }
         if (state is OrderError) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -51,32 +93,67 @@ class OrderDetailScreen extends StatelessWidget {
                 .copyWith(color: AppColors.textPrimary),
           ),
           actions: [
-            IconButton(
-              icon: const Icon(Icons.help_outline_rounded,
-                  color: AppColors.textSecondary),
-              tooltip: 'Support',
-              onPressed: () => context.push(AppRoutes.supportContact),
+            // 3-dot menu
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert_rounded,
+                  color: AppColors.textPrimary),
+              onSelected: (value) {
+                switch (value) {
+                  case 'help':
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Opening support...')),
+                    );
+                    break;
+                  case 'share':
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Sharing order...')),
+                    );
+                    break;
+                }
+              },
+              itemBuilder: (BuildContext context) => [
+                const PopupMenuItem<String>(
+                  value: 'share',
+                  child: Row(
+                    children: [
+                      Icon(Icons.share_rounded, size: 20),
+                      SizedBox(width: 12),
+                      Text('Share'),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem<String>(
+                  value: 'help',
+                  child: Row(
+                    children: [
+                      Icon(Icons.help_outline_rounded, size: 20),
+                      SizedBox(width: 12),
+                      Text('Need Help?'),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ],
         ),
         body: ListView(
           padding: const EdgeInsets.all(AppSpacing.lg),
           children: [
-            _OrderHeaderCard(order: order),
+            _OrderHeaderCard(order: currentOrder),
             const SizedBox(height: AppSpacing.md),
-            _FulfillmentCard(order: order),
+            _FulfillmentCard(order: currentOrder),
             const SizedBox(height: AppSpacing.md),
-            _StoreAndAddressRow(order: order),
+            _StoreAndAddressRow(order: currentOrder),
             const SizedBox(height: AppSpacing.md),
-            if (order.statusHistory.isNotEmpty) ...[
-              _StatusHistoryCard(history: order.statusHistory),
+            if (currentOrder.statusHistory.isNotEmpty) ...[
+              _StatusHistoryCard(history: currentOrder.statusHistory),
               const SizedBox(height: AppSpacing.md),
             ],
-            _OrderItemsCard(order: order),
+            _OrderItemsCard(order: currentOrder),
             const SizedBox(height: AppSpacing.md),
-            _PriceBreakdownCard(order: order),
+            _PriceBreakdownCard(order: currentOrder),
             const SizedBox(height: AppSpacing.xl),
-            _ActionButtons(order: order),
+            _ActionButtons(order: currentOrder),
             const SizedBox(height: AppSpacing.xxl),
           ],
         ),
@@ -370,7 +447,10 @@ class _StatusHistoryCard extends StatelessWidget {
                 .copyWith(color: AppColors.textPrimary),
           ),
           const SizedBox(height: AppSpacing.md),
-          ...history.map((event) => _HistoryEventRow(event: event)),
+          ...history.asMap().entries.map((e) => _HistoryEventRow(
+            event: e.value,
+            isLast: e.key == history.length - 1,
+          )),
         ],
       ),
     );
@@ -379,7 +459,8 @@ class _StatusHistoryCard extends StatelessWidget {
 
 class _HistoryEventRow extends StatelessWidget {
   final OrderStatusEvent event;
-  const _HistoryEventRow({required this.event});
+  final bool isLast;
+  const _HistoryEventRow({required this.event, required this.isLast});
 
   @override
   Widget build(BuildContext context) {
@@ -398,11 +479,13 @@ class _HistoryEventRow extends StatelessWidget {
                   shape: BoxShape.circle,
                 ),
               ),
-              Container(
-                width: 2,
-                height: 24,
-                color: AppColors.divider,
-              ),
+              if (!isLast)
+                Container(
+                  width: 2,
+                  height: 30,
+                  color: event.status.color.withValues(alpha: 0.3),
+                  margin: const EdgeInsets.symmetric(vertical: 4),
+                ),
             ],
           ),
           const SizedBox(width: AppSpacing.md),
@@ -410,43 +493,26 @@ class _HistoryEventRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      event.status.label,
-                      style: AppTypography.labelMedium.copyWith(
-                        color: event.status.color,
-                      ),
-                    ),
-                    Text(
-                      _formatShort(event.timestamp),
-                      style: AppTypography.bodySmall.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  ],
+                Text(
+                  event.status.label,
+                  style: AppTypography.labelMedium.copyWith(
+                    color: AppColors.textPrimary,
+                  ),
                 ),
-                if (event.note != null) ...[
-                  const SizedBox(height: 3),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.background,
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: AppColors.divider),
-                    ),
-                    child: Text(
-                      'Seller Note: ${event.note}',
-                      style: AppTypography.bodySmall.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
+                if (event.note != null)
+                  Text(
+                    event.note!,
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.textSecondary,
                     ),
                   ),
-                ],
+                Text(
+                  _formatTime(event.timestamp),
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.textDisabled,
+                    fontSize: 12,
+                  ),
+                ),
               ],
             ),
           ),
@@ -455,19 +521,13 @@ class _HistoryEventRow extends StatelessWidget {
     );
   }
 
-  String _formatShort(DateTime dt) {
-    const months = [
-      '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    final hour = dt.hour > 12
-        ? dt.hour - 12
-        : dt.hour == 0
-            ? 12
-            : dt.hour;
-    final ampm = dt.hour >= 12 ? 'PM' : 'AM';
-    final min = dt.minute.toString().padLeft(2, '0');
-    return '${months[dt.month]} ${dt.day}, ${dt.year} · $hour:$min $ampm';
+  String _formatTime(DateTime dt) {
+    final now = DateTime.now();
+    final diff = now.difference(dt);
+    if (diff.inDays > 0) return '${diff.inDays} day${diff.inDays > 1 ? 's' : ''} ago';
+    if (diff.inHours > 0) return '${diff.inHours} hour${diff.inHours > 1 ? 's' : ''} ago';
+    if (diff.inMinutes > 0) return '${diff.inMinutes} minute${diff.inMinutes > 1 ? 's' : ''} ago';
+    return 'Just now';
   }
 }
 
@@ -555,58 +615,83 @@ class _ItemTableRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.md),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            flex: 5,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.name,
-                  style: AppTypography.bodyMedium.copyWith(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w500,
-                  ),
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: AppColors.background,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppColors.divider),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Product image placeholder
+            Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: AppColors.divider),
+              ),
+              child: Center(
+                child: Icon(
+                  Icons.image_not_supported_outlined,
+                  size: 24,
+                  color: AppColors.textDisabled,
                 ),
-                if (item.sku != null || item.variantLabel != null) ...[
-                  const SizedBox(height: 2),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    [
-                      if (item.sku != null) 'SKU: ${item.sku}',
-                      if (item.variantLabel != null) item.variantLabel!,
-                    ].join(' · '),
-                    style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.textSecondary,
+                    item.name,
+                    style: AppTypography.bodyMedium.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w500,
                     ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (item.sku != null || item.variantLabel != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      [
+                        if (item.sku != null) 'SKU: ${item.sku}',
+                        if (item.variantLabel != null) item.variantLabel!,
+                      ].join(' · '),
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 6),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Qty: ${item.quantity}',
+                        style: AppTypography.labelSmall.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      Text(
+                        'PKR ${item.subtotal.toStringAsFixed(0)}',
+                        style: AppTypography.labelMedium.copyWith(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
-              ],
-            ),
-          ),
-          SizedBox(
-            width: 40,
-            child: Text(
-              '${item.quantity}',
-              style: AppTypography.bodyMedium.copyWith(
-                color: AppColors.textPrimary,
               ),
-              textAlign: TextAlign.center,
             ),
-          ),
-          SizedBox(
-            width: 80,
-            child: Text(
-              'PKR ${item.subtotal.toStringAsFixed(0)}',
-              style: AppTypography.labelMedium.copyWith(
-                color: AppColors.textPrimary,
-                fontWeight: FontWeight.w700,
-              ),
-              textAlign: TextAlign.right,
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -702,20 +787,139 @@ class _PriceRow extends StatelessWidget {
   }
 }
 
+// ─── Quick actions card ───────────────────────────────────────────────────────
+
+class _QuickActionsCard extends StatelessWidget {
+  final Order order;
+  const _QuickActionsCard({required this.order});
+
+  @override
+  Widget build(BuildContext context) {
+    return _Card(
+      child: Column(
+        children: [
+          Text(
+            'Quick Actions',
+            style: AppTypography.sectionHeading
+                .copyWith(color: AppColors.textPrimary),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              Expanded(
+                child: _ActionButton(
+                  icon: Icons.download_rounded,
+                  label: 'Invoice',
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Invoice downloading...'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: _ActionButton(
+                  icon: Icons.share_rounded,
+                  label: 'Share',
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Sharing order...'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: _ActionButton(
+                  icon: Icons.contact_mail_rounded,
+                  label: 'Seller',
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Opening seller chat...'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _ActionButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+        child: Column(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, color: AppColors.primary, size: 20),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              style: AppTypography.labelSmall.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 // ─── Action buttons ───────────────────────────────────────────────────────────
 
 class _ActionButtons extends StatelessWidget {
   final Order order;
   const _ActionButtons({required this.order});
 
+  bool get _canCancel =>
+      order.status == OrderStatus.pending ||
+      order.status == OrderStatus.processing;
+
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        if (order.status == OrderStatus.pending ||
-            order.status == OrderStatus.processing)
-          OutlinedButton(
-            onPressed: () => _showCancelDialog(context, order.id),
+        // Cancel order button for pending and processing orders only
+        if (_canCancel)
+          OutlinedButton.icon(
+            onPressed: () => _showCancellationReasonDialog(context),
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.statusCancelled,
               side: const BorderSide(color: AppColors.statusCancelled),
@@ -724,11 +928,19 @@ class _ActionButtons extends StatelessWidget {
               shape: RoundedRectangleBorder(
                   borderRadius: AppDimensions.radiusSm),
             ),
-            child: const Text('Cancel Order'),
+            icon: const Icon(Icons.close_rounded, size: 18),
+            label: const Text('Cancel Order'),
           ),
         if (order.status == OrderStatus.delivered) ...[
           ElevatedButton.icon(
-            onPressed: () {},
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Adding items to cart...'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
             icon: const Icon(Icons.refresh_rounded, size: 18),
             label: const Text('Reorder'),
             style: ElevatedButton.styleFrom(
@@ -741,34 +953,38 @@ class _ActionButtons extends StatelessWidget {
                   borderRadius: AppDimensions.radiusSm),
             ),
           ),
+          const SizedBox(height: AppSpacing.md),
+          OutlinedButton.icon(
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Return initiated...'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
+            icon: const Icon(Icons.assignment_return_rounded, size: 18),
+            label: const Text('Request Return'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.textPrimary,
+              side: const BorderSide(color: AppColors.divider),
+              minimumSize:
+                  const Size.fromHeight(AppDimensions.touchTarget),
+              shape: RoundedRectangleBorder(
+                  borderRadius: AppDimensions.radiusSm),
+            ),
+          ),
         ],
       ],
     );
   }
 
-  void _showCancelDialog(BuildContext context, String orderId) {
+  void _showCancellationReasonDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Cancel Order?'),
-        content: const Text(
-          'Are you sure you want to cancel this order? This action cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Keep Order'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              context.read<OrderCubit>().cancelOrder(orderId);
-            },
-            style: TextButton.styleFrom(
-                foregroundColor: AppColors.statusCancelled),
-            child: const Text('Cancel Order'),
-          ),
-        ],
+      builder: (ctx) => _OrderCancellationReasonDialog(
+        orderId: order.id,
+        parentContext: context,
       ),
     );
   }
@@ -792,6 +1008,175 @@ class _Card extends StatelessWidget {
         border: Border.all(color: AppColors.divider, width: 0.8),
       ),
       child: child,
+    );
+  }
+}
+
+// ─── Order-Level Cancellation Reason Dialog ────────────────────────────────────
+
+class _OrderCancellationReasonDialog extends StatefulWidget {
+  final String orderId;
+  final BuildContext parentContext;
+
+  const _OrderCancellationReasonDialog({
+    required this.orderId,
+    required this.parentContext,
+  });
+
+  @override
+  State<_OrderCancellationReasonDialog> createState() =>
+      _OrderCancellationReasonDialogState();
+}
+
+class _OrderCancellationReasonDialogState extends State<_OrderCancellationReasonDialog> {
+  String? selectedReason;
+  final customReasonCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    customReasonCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Cancel Order',
+                  style: AppTypography.sectionHeading,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              'Please select a reason for cancellation',
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    ...cancellationReasons.map((reason) =>
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                        child: InkWell(
+                          onTap: () =>
+                              setState(() => selectedReason = reason),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 20,
+                                height: 20,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(3),
+                                  border: Border.all(
+                                    color: selectedReason == reason
+                                        ? AppColors.primary
+                                        : AppColors.divider,
+                                    width: 2,
+                                  ),
+                                ),
+                                child: selectedReason == reason
+                                    ? const Icon(
+                                      Icons.check,
+                                      size: 14,
+                                      color: AppColors.primary,
+                                    )
+                                    : null,
+                              ),
+                              const SizedBox(width: AppSpacing.md),
+                              Expanded(
+                                child: Text(
+                                  reason,
+                                  style: AppTypography.bodySmall,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    TextField(
+                      controller: customReasonCtrl,
+                      maxLines: 3,
+                      decoration: InputDecoration(
+                        hintText: 'Other reason (optional)...',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        contentPadding: const EdgeInsets.all(AppSpacing.md),
+                      ),
+                      onChanged: (_) => setState(() {}),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Keep Order'),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: (selectedReason != null ||
+                            customReasonCtrl.text.isNotEmpty)
+                        ? () {
+                          final reason =
+                              selectedReason ?? customReasonCtrl.text;
+                          Navigator.pop(context);
+                          widget.parentContext
+                              .read<OrderCubit>()
+                              .cancelOrder(widget.orderId);
+                          ScaffoldMessenger.of(widget.parentContext)
+                              .showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'Order cancelled\nReason: $reason',
+                              ),
+                              backgroundColor: AppColors.primary,
+                              duration: const Duration(seconds: 3),
+                            ),
+                          );
+                        }
+                        : null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.statusCancelled,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text('Confirm Cancel'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
