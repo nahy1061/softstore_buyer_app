@@ -16,6 +16,7 @@ import '../features/profile/screens/change_password_screen.dart';
 import '../features/profile/screens/settings_screen.dart';
 import '../features/profile/screens/addresses_screen.dart';
 import '../features/profile/screens/address_form_screen.dart';
+import '../core/widgets/app_bottom_nav.dart';
 import '../features/deals/screens/deals_screen.dart';
 import '../features/support/presentation/screens/faq_screen.dart';
 import '../features/support/presentation/screens/contact_support_screen.dart';
@@ -27,8 +28,9 @@ import '../features/support/models/ticket_model.dart';
 // Placeholder screens (will be replaced with actual screens)
 class PlaceholderScreen extends StatelessWidget {
   final String label;
+  final int? navIndex;
 
-  const PlaceholderScreen({super.key, required this.label});
+  const PlaceholderScreen({super.key, required this.label, this.navIndex});
 
   @override
   Widget build(BuildContext context) {
@@ -41,13 +43,16 @@ class PlaceholderScreen extends StatelessWidget {
             const Icon(Icons.construction, size: 64, color: Colors.grey),
             const SizedBox(height: 16),
             Text(
-              '$label\n(Placeholder)',
+              '$label\n(Coming Soon)',
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 18),
             ),
           ],
         ),
       ),
+      bottomNavigationBar: navIndex != null
+          ? AppBottomNav(currentIndex: navIndex!)
+          : null,
     );
   }
 }
