@@ -7,12 +7,15 @@ import '../features/profile/screens/change_password_screen.dart';
 import '../features/profile/screens/settings_screen.dart';
 import '../features/profile/screens/addresses_screen.dart';
 import '../features/profile/screens/address_form_screen.dart';
+import '../core/widgets/app_bottom_nav.dart';
+import '../features/orders/screens/orders_screen.dart';
 
 // Placeholder screens (will be replaced with actual screens)
 class PlaceholderScreen extends StatelessWidget {
   final String label;
+  final int? navIndex;
 
-  const PlaceholderScreen({super.key, required this.label});
+  const PlaceholderScreen({super.key, required this.label, this.navIndex});
 
   @override
   Widget build(BuildContext context) {
@@ -22,16 +25,19 @@ class PlaceholderScreen extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.construction, size: 64, color: Colors.grey),
+            const Icon(Icons.construction, size: 64, color: Colors.grey),
             const SizedBox(height: 16),
             Text(
-              '$label\n(Placeholder)',
+              '$label\n(Coming Soon)',
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 18),
             ),
           ],
         ),
       ),
+      bottomNavigationBar: navIndex != null
+          ? AppBottomNav(currentIndex: navIndex!)
+          : null,
     );
   }
 }
@@ -112,7 +118,7 @@ final GoRouter goRouter = GoRouter(
     // Cart & Checkout
     GoRoute(
       path: AppRoutes.cart,
-      builder: (context, state) => const PlaceholderScreen(label: 'Cart'),
+      builder: (context, state) => const PlaceholderScreen(label: 'Cart', navIndex: 2),
     ),
     GoRoute(
       path: AppRoutes.wishlist,
@@ -147,7 +153,7 @@ final GoRouter goRouter = GoRouter(
     // Orders & Returns
     GoRoute(
       path: AppRoutes.orders,
-      builder: (context, state) => const PlaceholderScreen(label: 'Orders'),
+      builder: (context, state) => const OrdersScreen(),
     ),
     GoRoute(
       path: AppRoutes.orderDetail,
