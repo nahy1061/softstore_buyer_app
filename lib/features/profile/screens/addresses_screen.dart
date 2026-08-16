@@ -84,7 +84,7 @@ class _AddressesScreenState extends State<AddressesScreen> {
           : ListView.separated(
               padding: AppSpacing.paddingLg,
               itemCount: _addresses.length,
-              separatorBuilder: (_, __) =>
+              separatorBuilder: (context, index) =>
                   const SizedBox(height: AppSpacing.md),
               itemBuilder: (context, index) {
                 final address = _addresses[index];
@@ -145,7 +145,7 @@ class _AddressCard extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(
                     horizontal: AppSpacing.sm, vertical: 3),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
+                  color: AppColors.primary.withValues(alpha:0.1),
                   borderRadius: AppDimensions.radiusSm,
                 ),
                 child: Text(
@@ -160,7 +160,7 @@ class _AddressCard extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(
                       horizontal: AppSpacing.sm, vertical: 3),
                   decoration: BoxDecoration(
-                    color: AppColors.success.withOpacity(0.1),
+                    color: AppColors.success.withValues(alpha:0.1),
                     borderRadius: AppDimensions.radiusSm,
                   ),
                   child: Text(

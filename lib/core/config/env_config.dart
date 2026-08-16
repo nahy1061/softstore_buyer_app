@@ -3,7 +3,7 @@
 class EnvConfig {
   static const String baseUrl = String.fromEnvironment(
     'BASE_URL',
-    defaultValue: 'https://api.dev.softstore.com',
+    defaultValue: 'https://beta.softsore.pk',
   );
 
   static const String environment = String.fromEnvironment(

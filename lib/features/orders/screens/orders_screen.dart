@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import '../cubit/order_cubit.dart';
+import '../cubit/order_state.dart';
+import '../models/order_model.dart';
+import '../widgets/order_card.dart';
+import '../../../app/router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/app_spacing.dart';
-import '../../../core/widgets/app_bottom_nav.dart';
-import '../../../app/router.dart';
+// Shared bottom navigation bar used across all main screens
+import '../../../core/widgets/app_bottom_nav_bar.dart';
 
 class OrdersScreen extends StatefulWidget {
   const OrdersScreen({super.key});
@@ -16,33 +22,24 @@ class OrdersScreen extends StatefulWidget {
 class _OrdersScreenState extends State<OrdersScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-
-  final List<String> _tabs = [
-    'Pending',
-    'Confirmed',
-    'Processing',
-    'Shipped',
-    'Delivered',
-    'Cancelled',
-  ];
+  final TextEditingController _searchCtrl = TextEditingController();
+  String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: _tabs.length, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
+    _searchCtrl.addListener(() {
+      setState(() => _searchQuery = _searchCtrl.text.toLowerCase());
+    });
+    context.read<OrderCubit>().loadOrders();
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _searchCtrl.dispose();
     super.dispose();
-  }
-
-  void _showTrackOrderDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (_) => _TrackOrderDialog(),
-    );
   }
 
   @override
@@ -51,48 +48,238 @@ class _OrdersScreenState extends State<OrdersScreen>
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.surface,
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-          onPressed: () => context.go(AppRoutes.profile),
+        centerTitle: false,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'My Orders',
+              style: AppTypography.screenTitle.copyWith(
+                color: AppColors.textPrimary,
+              ),
+            ),
+            Text(
+              'Track and manage your recent purchases',
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
         ),
-        title: Text('My Orders', style: AppTypography.screenTitle),
-        centerTitle: true,
         actions: [
-          IconButton(
-            onPressed: () => _showTrackOrderDialog(context),
-            icon: const Icon(Icons.my_location_outlined,
-                color: AppColors.primary, size: 24),
-            tooltip: 'Track Order',
+          TextButton.icon(
+            onPressed: () => context.push(AppRoutes.orderLookup),
+            icon: const Icon(Icons.search_rounded, size: 16),
+            label: const Text('Track Order'),
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.primary,
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: AppSpacing.xs,
+              ),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              textStyle: AppTypography.labelMedium,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.xs),
+        ],
+      ),
+      // Shared bottom nav — index 1 = Orders (this screen)
+      bottomNavigationBar: const AppBottomNavBar(currentIndex: 1),
+      body: Column(
+        children: [
+          // Search bar
+          Container(
+            color: AppColors.surface,
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: TextField(
+              controller: _searchCtrl,
+              decoration: InputDecoration(
+                hintText: 'Search by invoice number...',
+                prefixIcon: const Icon(Icons.search_rounded,
+                    color: AppColors.textSecondary),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.close_rounded,
+                            color: AppColors.textSecondary),
+                        onPressed: () {
+                          _searchCtrl.clear();
+                          setState(() => _searchQuery = '');
+                        },
+                      )
+                    : null,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: AppColors.divider),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+              ),
+            ),
+          ),
+          // Tab bar
+          Container(
+            color: AppColors.surface,
+            child: TabBar(
+              controller: _tabController,
+              labelStyle: AppTypography.labelMedium,
+              unselectedLabelStyle: AppTypography.labelMedium,
+              labelColor: AppColors.primary,
+              unselectedLabelColor: AppColors.textSecondary,
+              indicatorColor: AppColors.primary,
+              indicatorWeight: 2.5,
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
+              onTap: (index) {
+                // No filter change needed — we slice the loaded list in UI
+              },
+              tabs: const [
+                Tab(text: 'All'),
+                Tab(text: 'Active'),
+                Tab(text: 'Delivered'),
+                Tab(text: 'Cancelled'),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: AppColors.divider),
+          Expanded(
+            child: BlocBuilder<OrderCubit, OrderState>(
+              builder: (context, state) {
+                if (state is OrderLoading || state is OrderInitial) {
+                  return const Center(
+                    child: CircularProgressIndicator(
+                      color: AppColors.primary,
+                      strokeWidth: 2,
+                    ),
+                  );
+                }
+                if (state is OrderError) {
+                  return _ErrorView(
+                    message: state.message,
+                    onRetry: () => context.read<OrderCubit>().loadOrders(),
+                  );
+                }
+                if (state is OrderLoaded) {
+                  // Filter orders by search query
+                  List<Order> _filterOrders(List<Order> orders) {
+                    if (_searchQuery.isEmpty) return orders;
+                    return orders
+                        .where((o) => o.referenceNumber
+                            .toLowerCase()
+                            .contains(_searchQuery))
+                        .toList();
+                  }
+
+                  return TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _OrderList(
+                        orders: _filterOrders(state.orders),
+                        onOrderTap: (o) =>
+                            context.push('/orders/${o.id}'),
+                      ),
+                      _OrderList(
+                        orders: _filterOrders(state.active),
+                        onOrderTap: (o) =>
+                            context.push('/orders/${o.id}'),
+                        emptyLabel: 'No active orders',
+                      ),
+                      _OrderList(
+                        orders: _filterOrders(state.delivered),
+                        onOrderTap: (o) =>
+                            context.push('/orders/${o.id}'),
+                        emptyLabel: 'No delivered orders',
+                      ),
+                      _OrderList(
+                        orders: _filterOrders(state.cancelled),
+                        onOrderTap: (o) =>
+                            context.push('/orders/${o.id}'),
+                        emptyLabel: 'No cancelled orders',
+                      ),
+                    ],
+                  );
+                }
+                return const SizedBox.shrink();
+              },
+            ),
           ),
         ],
-        bottom: TabBar(
-          controller: _tabController,
-          isScrollable: true,
-          labelColor: AppColors.primary,
-          unselectedLabelColor: AppColors.textSecondary,
-          labelStyle: AppTypography.labelMedium
-              .copyWith(fontWeight: FontWeight.w600),
-          unselectedLabelStyle: AppTypography.labelMedium,
-          indicatorColor: AppColors.primary,
-          indicatorWeight: 2.5,
-          tabAlignment: TabAlignment.start,
-          tabs: _tabs.map((t) => Tab(text: t)).toList(),
-        ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: _tabs
-            .map((_) => const _EmptyOrdersState())
-            .toList(),
-      ),
-      bottomNavigationBar: const AppBottomNav(currentIndex: 1),
     );
   }
 }
 
-class _EmptyOrdersState extends StatelessWidget {
-  const _EmptyOrdersState();
+class _OrderList extends StatelessWidget {
+  final List<Order> orders;
+  final void Function(Order) onOrderTap;
+  final String emptyLabel;
+
+  const _OrderList({
+    required this.orders,
+    required this.onOrderTap,
+    this.emptyLabel = 'No orders yet',
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (orders.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.receipt_long_outlined,
+                size: 40,
+                color: AppColors.textDisabled,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Text(
+              emptyLabel,
+              style: AppTypography.sectionHeading.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              'Orders you place will appear here.',
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.textDisabled,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      itemCount: orders.length,
+      itemBuilder: (context, index) {
+        final order = orders[index];
+        return Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.md),
+          child: OrderCard(order: order, onTap: () => onOrderTap(order)),
+        );
+      },
+    );
+  }
+}
+
+class _ErrorView extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+
+  const _ErrorView({required this.message, required this.onRetry});
 
   @override
   Widget build(BuildContext context) {
@@ -100,159 +287,28 @@ class _EmptyOrdersState extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.shopping_bag_outlined,
-            size: 72,
-            color: AppColors.textDisabled,
-          ),
-          const SizedBox(height: AppSpacing.lg),
+          const Icon(Icons.error_outline_rounded,
+              size: 52, color: AppColors.statusCancelled),
+          const SizedBox(height: AppSpacing.md),
           Text(
-            'No orders yet',
+            'Something went wrong',
             style: AppTypography.sectionHeading
                 .copyWith(color: AppColors.textPrimary),
           ),
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: AppSpacing.xs),
           Text(
-            'Your placed orders will show up here.',
-            style: AppTypography.bodyMedium
+            message,
+            style: AppTypography.bodySmall
                 .copyWith(color: AppColors.textSecondary),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          ElevatedButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh_rounded, size: 16),
+            label: const Text('Retry'),
           ),
         ],
-      ),
-    );
-  }
-}
-
-// ── Track Order Dialog ──────────────────────────────────────────────────────
-
-class _TrackOrderDialog extends StatefulWidget {
-  @override
-  State<_TrackOrderDialog> createState() => _TrackOrderDialogState();
-}
-
-class _TrackOrderDialogState extends State<_TrackOrderDialog> {
-  final _invoiceController = TextEditingController();
-  final _phoneController = TextEditingController();
-
-  @override
-  void dispose() {
-    _invoiceController.dispose();
-    _phoneController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      insetPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-      child: Container(
-        padding: AppSpacing.paddingXl,
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Header
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.1),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.local_shipping_outlined,
-                  color: AppColors.primary, size: 28),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Text('Track Your Order',
-                style: AppTypography.sectionHeading
-                    .copyWith(fontSize: 18)),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              'Enter your invoice number and phone number',
-              style: AppTypography.bodySmall
-                  .copyWith(color: AppColors.textSecondary),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: AppSpacing.xl),
-
-            // Invoice Input
-            TextFormField(
-              controller: _invoiceController,
-              decoration: InputDecoration(
-                labelText: 'Invoice Number',
-                prefixIcon: const Icon(Icons.receipt_outlined),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppColors.divider),
-                ),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-
-            // Phone Input
-            TextFormField(
-              controller: _phoneController,
-              keyboardType: TextInputType.phone,
-              decoration: InputDecoration(
-                labelText: 'Phone Number',
-                prefixIcon: const Icon(Icons.phone_outlined),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppColors.divider),
-                ),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.xl),
-
-            // Buttons
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: AppColors.divider),
-                      minimumSize: const Size(double.infinity, 48),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: Text('Cancel',
-                        style: AppTypography.labelMedium
-                            .copyWith(color: AppColors.textSecondary)),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () {
-                      // Track order logic here
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                            content:
-                                Text('Tracking your order...')),
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      minimumSize: const Size(double.infinity, 48),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                      elevation: 0,
-                    ),
-                    child: Text('Track Order',
-                        style: AppTypography.labelMedium
-                            .copyWith(color: Colors.white)),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
       ),
     );
   }

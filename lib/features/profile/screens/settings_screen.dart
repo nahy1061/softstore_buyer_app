@@ -146,7 +146,7 @@ class _ToggleTile extends StatelessWidget {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.08),
+              color: AppColors.primary.withValues(alpha:0.08),
               borderRadius: AppDimensions.radiusSm,
             ),
             child: Icon(icon, color: AppColors.primary, size: 20),
@@ -168,7 +168,7 @@ class _ToggleTile extends StatelessWidget {
           Switch(
             value: value,
             onChanged: onChanged,
-            activeColor: AppColors.primary,
+            activeThumbColor: AppColors.primary,
           ),
         ],
       ),
@@ -195,7 +195,7 @@ class _InfoTile extends StatelessWidget {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.08),
+              color: AppColors.primary.withValues(alpha:0.08),
               borderRadius: AppDimensions.radiusSm,
             ),
             child: Icon(icon, color: AppColors.primary, size: 20),
@@ -235,7 +235,7 @@ class _ActionTile extends StatelessWidget {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.08),
+                color: AppColors.primary.withValues(alpha:0.08),
                 borderRadius: AppDimensions.radiusSm,
               ),
               child: Icon(icon, color: AppColors.primary, size: 20),

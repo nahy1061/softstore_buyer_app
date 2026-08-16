@@ -4,8 +4,9 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_dimensions.dart';
-import '../../../core/widgets/app_bottom_nav.dart';
 import '../../../app/router.dart';
+// Shared bottom navigation bar used across all main screens
+import '../../../core/widgets/app_bottom_nav_bar.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -21,14 +22,46 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final List<String> categories = ['All', 'Electronics', 'Groceries', 'Apparel', 'Home'];
   final List<Map<String, dynamic>> products = [
-    {'name': 'Wireless Earbuds Pro', 'price': 4500, 'category': 'Electronics', 'icon': Icons.headphones},
-    {'name': 'Organic Bananas (1 Dozen)', 'price': 350, 'category': 'Groceries', 'icon': Icons.shopping_basket},
-    {'name': 'Smart Watch Series X', 'price': 12000, 'category': 'Electronics', 'icon': Icons.watch},
-    {'name': 'Premium Olive Oil 1L', 'price': 2800, 'category': 'Groceries', 'icon': Icons.local_drink},
-    {'name': 'Mechanical RGB Keyboard', 'price': 8500, 'category': 'Electronics', 'icon': Icons.keyboard},
-    {'name': 'Artisan Sourdough Loaf', 'price': 450, 'category': 'Groceries', 'icon': Icons.bakery_dining},
-    {'name': 'Premium T-Shirt', 'price': 1200, 'category': 'Apparel', 'icon': Icons.checkroom},
-    {'name': 'Coffee Maker', 'price': 5500, 'category': 'Home', 'icon': Icons.coffee},
+    {
+      'name': 'Wireless Earbuds Pro', 'price': 4500,
+      'category': 'Electronics', 'icon': Icons.headphones,
+      'colors': [
+        {'name': 'Black', 'value': 0xFF1A1A1A},
+        {'name': 'White', 'value': 0xFFF5F5F5},
+        {'name': 'Blue',  'value': 0xFF1565C0},
+      ],
+    },
+    {'name': 'Organic Bananas (1 Dozen)', 'price': 350, 'category': 'Groceries', 'icon': Icons.shopping_basket, 'colors': <Map<String, dynamic>>[]},
+    {
+      'name': 'Smart Watch Series X', 'price': 12000,
+      'category': 'Electronics', 'icon': Icons.watch,
+      'colors': [
+        {'name': 'Silver', 'value': 0xFFC0C0C0},
+        {'name': 'Gold',   'value': 0xFFFFD700},
+        {'name': 'Black',  'value': 0xFF1A1A1A},
+      ],
+    },
+    {'name': 'Premium Olive Oil 1L', 'price': 2800, 'category': 'Groceries', 'icon': Icons.local_drink, 'colors': <Map<String, dynamic>>[]},
+    {
+      'name': 'Mechanical RGB Keyboard', 'price': 8500,
+      'category': 'Electronics', 'icon': Icons.keyboard,
+      'colors': [
+        {'name': 'Black', 'value': 0xFF1A1A1A},
+        {'name': 'White', 'value': 0xFFF5F5F5},
+      ],
+    },
+    {'name': 'Artisan Sourdough Loaf', 'price': 450, 'category': 'Groceries', 'icon': Icons.bakery_dining, 'colors': <Map<String, dynamic>>[]},
+    {
+      'name': 'Premium T-Shirt', 'price': 1200,
+      'category': 'Apparel', 'icon': Icons.checkroom,
+      'colors': [
+        {'name': 'Black', 'value': 0xFF1A1A1A},
+        {'name': 'White', 'value': 0xFFF5F5F5},
+        {'name': 'Red',   'value': 0xFFD32F2F},
+        {'name': 'Navy',  'value': 0xFF1A237E},
+      ],
+    },
+    {'name': 'Coffee Maker', 'price': 5500, 'category': 'Home', 'icon': Icons.coffee, 'colors': <Map<String, dynamic>>[]},
   ];
 
   @override
@@ -112,7 +145,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // Products Grid
+              // Products Grid
           Expanded(
             child: GridView.builder(
               padding: AppSpacing.paddingLg,
@@ -129,73 +162,27 @@ class _HomeScreenState extends State<HomeScreen> {
                   productName: product['name'],
                   price: product['price'],
                   icon: product['icon'],
-                  onTap: () => context.go('/product/${product['name'].toLowerCase().replaceAll(' ', '-')}'),
+                  onTap: () => context.push(
+                    '/product/${(product['name'] as String).toLowerCase().replaceAll(' ', '-')}',
+                    extra: {
+                      'name': product['name'] as String,
+                      'price': product['price'] as int,
+                      'iconCodePoint':
+                          (product['icon'] as IconData).codePoint,
+                      'colors': product['colors']
+                          as List<Map<String, dynamic>>? ?? [],
+                    },
+                  ),
                 );
               },
             ),
           ),
+
         ],
       ),
 
-      // Current Order Bottom Section
-      bottomNavigationBar: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Order Summary
-          Container(
-            width: double.infinity,
-            padding: AppSpacing.paddingLg,
-            decoration: BoxDecoration(
-              color: AppColors.background,
-              border: Border(top: BorderSide(color: AppColors.divider)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Current Order',
-                          style: AppTypography.labelMedium.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.xs),
-                        Text(
-                          '($cartItems items)',
-                          style: AppTypography.bodySmall.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Text(
-                      'PKR ${cartTotal.toStringAsFixed(2)}',
-                      style: AppTypography.pricePrimary.copyWith(
-                        color: AppColors.primary,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.md),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () => context.go(AppRoutes.checkout),
-                    child: const Text('Pay & Checkout'),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const AppBottomNav(currentIndex: 0),
-        ],
-      ),
+      // Shared bottom nav — index 0 = Marketplace (this screen)
+      bottomNavigationBar: const AppBottomNavBar(currentIndex: 0),
     );
   }
 }
@@ -244,28 +231,30 @@ class _ProductCard extends StatelessWidget {
             ),
 
             // Product Info
-            Padding(
-              padding: AppSpacing.paddingMd,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Product Name
-                  Text(
-                    productName,
-                    style: AppTypography.productName,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-
-                  // Price
-                  Text(
-                    'PKR ${price.toString()}',
-                    style: AppTypography.pricePrimary.copyWith(
-                      color: AppColors.primary,
+            Expanded(
+              child: Padding(
+                padding: AppSpacing.paddingMd,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Product Name
+                    Text(
+                      productName,
+                      style: AppTypography.productName,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                ],
+                    const SizedBox(height: AppSpacing.sm),
+
+                    // Price
+                    Text(
+                      'PKR ${price.toString()}',
+                      style: AppTypography.pricePrimary.copyWith(
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],

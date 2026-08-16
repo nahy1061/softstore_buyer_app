@@ -1,6 +1,6 @@
 {
-    "name": "softstore_buyer_app",
-    "short_name": "softstore_buyer_app",
+    "name": "softstore_buyer",
+    "short_name": "softstore_buyer",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

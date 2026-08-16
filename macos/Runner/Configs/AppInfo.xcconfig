@@ -5,10 +5,10 @@
 // 'flutter create' template.
 
 // The application's name. By default this is also the title of the Flutter window.
-PRODUCT_NAME = softstore_buyer_app
+PRODUCT_NAME = softstore_buyer
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.softstore.softstoreBuyerApp
+PRODUCT_BUNDLE_IDENTIFIER = pk.softstore.softstoreBuyer
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2026 com.softstore. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2026 pk.softstore. All rights reserved.
