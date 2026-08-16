@@ -16,7 +16,7 @@ import '../features/profile/screens/change_password_screen.dart';
 import '../features/profile/screens/settings_screen.dart';
 import '../features/profile/screens/addresses_screen.dart';
 import '../features/profile/screens/address_form_screen.dart';
-import '../core/widgets/app_bottom_nav.dart';
+import '../core/widgets/app_bottom_nav_bar.dart';
 import '../features/deals/screens/deals_screen.dart';
 import '../features/support/presentation/screens/faq_screen.dart';
 import '../features/support/presentation/screens/contact_support_screen.dart';
@@ -51,7 +51,7 @@ class PlaceholderScreen extends StatelessWidget {
         ),
       ),
       bottomNavigationBar: navIndex != null
-          ? AppBottomNav(currentIndex: navIndex!)
+          ? AppBottomNavBar(currentIndex: navIndex!)
           : null,
     );
   }
