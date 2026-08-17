@@ -14,7 +14,7 @@ class SoftstoreBuyerApp extends StatelessWidget {
         BlocProvider(create: (_) => CartCubit()),
       ],
       child: MaterialApp.router(
-        title: 'Softstore Buyer',
+        title: 'SoftStore',
         theme: AppTheme.light,
         routerConfig: goRouter,
         debugShowCheckedModeBanner: false,
