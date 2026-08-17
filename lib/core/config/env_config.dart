@@ -8,7 +8,7 @@ class EnvConfig {
 
   static const String environment = String.fromEnvironment(
     'ENVIRONMENT',
-    defaultValue: 'dev',
+    defaultValue: 'dev'
   );
 
   static const String firebaseProjectId = String.fromEnvironment(

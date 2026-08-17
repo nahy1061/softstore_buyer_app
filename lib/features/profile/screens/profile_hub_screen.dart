@@ -101,7 +101,6 @@ class ProfileHubScreen extends StatelessWidget {
           ],
         ),
       ),
-      // Shared bottom nav — index 4 = Profile (this screen)
       bottomNavigationBar: const AppBottomNavBar(currentIndex: 4),
     );
   }

@@ -23,6 +23,8 @@ import '../features/support/presentation/screens/support_hub_screen.dart';
 import '../features/support/presentation/screens/tickets_list_screen.dart';
 import '../features/support/presentation/screens/ticket_chat_screen.dart';
 import '../features/support/models/ticket_model.dart';
+import '../features/support/presentation/cubits/support_cubit.dart';
+import '../features/support/data/support_repository.dart';
 
 // Placeholder screens (will be replaced with actual screens)
 class PlaceholderScreen extends StatelessWidget {
@@ -234,7 +236,7 @@ final GoRouter goRouter = GoRouter(
       builder: (context, state) => const PlaceholderScreen(label: 'Register'),
     ),
 
-    // Profile — Arwah's screens
+    // Profile � Arwah's screens
     GoRoute(
       path: AppRoutes.profile,
       builder: (context, state) => const ProfileHubScreen(),
@@ -285,7 +287,7 @@ final GoRouter goRouter = GoRouter(
       builder: (context, state) => const DealsScreen(),
     ),
 
-    // Support — Naheed's screens
+    // Support � Naheed's screens
     GoRoute(
       path: AppRoutes.support,
       builder: (context, state) => const SupportHubScreen(),
@@ -296,19 +298,41 @@ final GoRouter goRouter = GoRouter(
         ),
         GoRoute(
           path: 'contact',
-          builder: (context, state) => const ContactSupportScreen(),
+          builder: (context, state) {
+            final extra = state.extra as Map<String, dynamic>?;
+            return BlocProvider(
+              create: (_) => SupportCubit(repository: SupportRepository()),
+              child: ContactSupportScreen(
+                orderReference: extra?['orderReference'] as String?,
+                orderId: extra?['orderId'] as int?,
+                initialSubject: extra?['subject'] as String?,
+                initialCategoryLabel: extra?['categoryLabel'] as String?,
+              ),
+            );
+          },
         ),
         GoRoute(
           path: 'tickets',
-          builder: (context, state) => const TicketsListScreen(),
+          builder: (context, state) => BlocProvider(
+            create: (_) => SupportCubit(repository: SupportRepository()),
+            child: const TicketsListScreen(),
+          ),
           routes: [
             GoRoute(
               path: ':id',
               builder: (context, state) {
-                final id = state.pathParameters['id'] ?? '';
+                final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
                 final ticket = kMockTickets.firstWhere(
                   (t) => t.id == id,
-                  orElse: () => kMockTickets.first,
+                  orElse: () => Ticket(
+                    id: id,
+                    subject: 'Ticket #$id',
+                    category: '',
+                    status: TicketStatus.open,
+                    createdAt: DateTime.now(),
+                    lastUpdatedAt: DateTime.now(),
+                    lastMessage: '',
+                  ),
                 );
                 return TicketChatScreen(ticket: ticket);
               },

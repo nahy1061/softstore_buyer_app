@@ -11,6 +11,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_dimensions.dart';
+import '../../../app/router.dart';
 
 class OrderDetailScreen extends StatefulWidget {
   final Order order;
@@ -105,8 +106,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               onSelected: (value) {
                 switch (value) {
                   case 'help':
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Opening support...')),
+                    context.push(
+                      AppRoutes.supportContact,
+                      extra: {
+                        'orderReference': currentOrder.referenceNumber,
+                        'orderId': int.tryParse(currentOrder.id),
+                        'subject': 'Issue with order ${currentOrder.referenceNumber}',
+                        'categoryLabel': 'Order issue',
+                      },
                     );
                     break;
                   case 'share':

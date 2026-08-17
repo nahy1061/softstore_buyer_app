@@ -1,15 +1,36 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../../../app/router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_dimensions.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/validators.dart';
+import '../../models/support_category.dart';
+import '../../models/support_ticket_form.dart';
+import '../../models/ticket_model.dart';
+import '../cubits/support_cubit.dart';
+import '../cubits/support_state.dart';
+
+/// Temporary until AuthCubit / profile API is wired (matches profile hub mock).
+const _mockLoggedInUserName = 'Arwah Imran';
+const _mockLoggedInUserEmail = 'arwah@example.com';
+const _mockIsLoggedIn = true;
 
 class ContactSupportScreen extends StatefulWidget {
-  const ContactSupportScreen({super.key});
+  final String? orderReference;
+  final int? orderId;
+  final String? initialSubject;
+  final String? initialCategoryLabel;
+
+  const ContactSupportScreen({
+    super.key,
+    this.orderReference,
+    this.orderId,
+    this.initialSubject,
+    this.initialCategoryLabel,
+  });
 
   @override
   State<ContactSupportScreen> createState() => _ContactSupportScreenState();
@@ -25,15 +46,34 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
 
   String? _selectedCategory;
   bool _isSubmitting = false;
+  String? _submitError;
 
-  static const _categories = [
-    'Order issue',
-    'Delivery problem',
-    'Return & refund',
-    'Payment issue',
-    'Account problem',
-    'Other',
-  ];
+  @override
+  void initState() {
+    super.initState();
+    if (widget.orderReference != null) {
+      _orderNumberController.text = widget.orderReference!;
+    }
+    if (widget.initialSubject != null) {
+      _subjectController.text = widget.initialSubject!;
+    }
+    _selectedCategory = widget.initialCategoryLabel;
+    if (_mockIsLoggedIn) {
+      _nameController.text = _mockLoggedInUserName;
+      _emailController.text = _mockLoggedInUserEmail;
+    }
+  }
+
+  int? get _resolvedOrderId =>
+      widget.orderId ?? parseNumericOrderId(_orderNumberController.text);
+
+  bool get _hasLinkedOrder => _resolvedOrderId != null;
+
+  bool get _showsInvoiceReferenceOnly {
+    final input = _orderNumberController.text.trim();
+    if (input.isEmpty) return false;
+    return !_hasLinkedOrder && validateOrderReference(input) == null;
+  }
 
   @override
   void dispose() {
@@ -48,23 +88,46 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
   Future<void> _submitTicket() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedCategory == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select a category'),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      setState(() => _submitError = 'Please select a category');
       return;
     }
 
-    setState(() => _isSubmitting = true);
-    await Future.delayed(const Duration(seconds: 2));
-    if (!mounted) return;
-    setState(() => _isSubmitting = false);
-    _showSuccessDialog();
+    setState(() {
+      _isSubmitting = true;
+      _submitError = null;
+    });
+
+    try {
+      final submitData = SupportTicketSubmitData.fromForm(
+        subject: _subjectController.text,
+        message: _messageController.text,
+        categoryLabel: _selectedCategory!,
+        orderId: _resolvedOrderId,
+      );
+
+      if (!mounted) return;
+      context.read<SupportCubit>().createTicket(
+            subject: submitData.subject,
+            message: submitData.message,
+            category: submitData.categoryApiValue,
+            orderId: submitData.orderId,
+            email: _emailController.text.trim().isNotEmpty
+                ? _emailController.text.trim()
+                : null,
+            guestName: _nameController.text.trim().isNotEmpty
+                ? _nameController.text.trim()
+                : null,
+          );
+    } on ArgumentError catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _submitError = error.message;
+        _isSubmitting = false;
+      });
+    }
   }
 
-  void _showSuccessDialog() {
+  void _showSuccessDialog(Ticket ticket) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -92,7 +155,7 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
-              'Your ticket #SS-20260812-001 has been created. Our team will respond within 24 hours.',
+              'Your ticket ${ticket.displayId} has been created. Our team will respond within 24 hours.',
               textAlign: TextAlign.center,
               style: AppTypography.bodyMedium
                   .copyWith(color: AppColors.textSecondary),
@@ -140,26 +203,76 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF7F7F7),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 1,
-        shadowColor: Colors.black12,
-        leading: const BackButton(color: AppColors.textPrimary),
-        title: Text(
-          'Contact Support',
-          style: AppTypography.screenTitle.copyWith(color: AppColors.textPrimary),
+    return BlocListener<SupportCubit, SupportState>(
+      listener: (context, state) {
+        if (state is TicketCreated) {
+          setState(() => _isSubmitting = false);
+          _showSuccessDialog(state.ticket);
+        } else if (state is SupportError) {
+          setState(() {
+            _isSubmitting = false;
+            _submitError = state.message;
+          });
+        }
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF7F7F7),
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          scrolledUnderElevation: 1,
+          shadowColor: Colors.black12,
+          leading: const BackButton(color: AppColors.textPrimary),
+          title: Text(
+            'Contact Support',
+            style: AppTypography.screenTitle.copyWith(color: AppColors.textPrimary),
+          ),
+        ),
+        body: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (widget.orderReference != null) _buildOrderContextBanner(),
+              _buildTicketFormSection(),
+              const SizedBox(height: AppSpacing.xl),
+            ],
+          ),
         ),
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    );
+  }
+
+  Widget _buildOrderContextBanner() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.lg,
+        AppSpacing.lg,
+        0,
+      ),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: AppColors.primary.withValues(alpha: 0.08),
+          borderRadius: AppDimensions.radiusMd,
+          border: Border.all(color: AppColors.primary.withValues(alpha: 0.15)),
+        ),
+        child: Row(
           children: [
-            _buildTicketFormSection(),
-            const SizedBox(height: AppSpacing.xl),
+            const Icon(Icons.receipt_long_outlined,
+                color: AppColors.primary, size: 20),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                'Reporting an issue for order ${widget.orderReference}',
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -174,6 +287,7 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            const SizedBox(height: AppSpacing.lg),
             Text(
               'SUBMIT A TICKET',
               style: AppTypography.overline.copyWith(
@@ -182,50 +296,62 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
               ),
             ),
             const SizedBox(height: AppSpacing.md),
-
-            // Card 1: Your details
             _FormCard(
               title: 'Your Details',
-              subtitle: 'We\'ll use this to follow up with you',
+              subtitle: _mockIsLoggedIn
+                  ? 'Taken from your profile'
+                  : 'We\'ll use this to follow up with you',
               icon: Icons.person_outline_rounded,
-              child: Column(
-                children: [
-                  _buildTextField(
-                    controller: _nameController,
-                    label: 'Your Name',
-                    hint: 'Enter your full name',
-                    icon: Icons.person_outline,
-                    validator: Validators.fullName,
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                  _buildTextField(
-                    controller: _emailController,
-                    label: 'Email Address',
-                    hint: 'Enter your email',
-                    icon: Icons.email_outlined,
-                    keyboardType: TextInputType.emailAddress,
-                    validator: Validators.email,
-                  ),
-                ],
-              ),
+              child: _mockIsLoggedIn
+                  ? _buildProfileSummary()
+                  : Column(
+                      children: [
+                        _buildTextField(
+                          controller: _nameController,
+                          label: 'Your Name',
+                          hint: 'Enter your full name',
+                          icon: Icons.person_outline,
+                          validator: Validators.fullName,
+                        ),
+                        const SizedBox(height: AppSpacing.lg),
+                        _buildTextField(
+                          controller: _emailController,
+                          label: 'Email Address',
+                          hint: 'Enter your email',
+                          icon: Icons.email_outlined,
+                          keyboardType: TextInputType.emailAddress,
+                          validator: Validators.email,
+                        ),
+                      ],
+                    ),
             ),
-
             const SizedBox(height: AppSpacing.md),
-
-            // Card 2: Issue details
             _FormCard(
               title: 'Issue Details',
               subtitle: 'Tell us what happened',
               icon: Icons.description_outlined,
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildTextField(
                     controller: _orderNumberController,
                     label: 'Order Number',
-                    hint: 'e.g. SS-12345 (optional)',
+                    hint: 'e.g. SS-20240801-0042 (optional)',
                     icon: Icons.receipt_outlined,
                     required: false,
+                    readOnly: widget.orderReference != null,
+                    validator: validateOrderReference,
+                    onChanged: (_) => setState(() {}),
                   ),
+                  if (_showsInvoiceReferenceOnly) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    Text(
+                      'Order reference saved. It will be linked when the ticket is submitted.',
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: AppSpacing.lg),
                   _buildDropdown(),
                   const SizedBox(height: AppSpacing.lg),
@@ -254,6 +380,36 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
                       return null;
                     },
                   ),
+                  if (_submitError != null) ...[
+                    const SizedBox(height: AppSpacing.md),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(AppSpacing.md),
+                      decoration: BoxDecoration(
+                        color: AppColors.error.withValues(alpha: 0.08),
+                        borderRadius: AppDimensions.radiusSm,
+                        border: Border.all(
+                          color: AppColors.error.withValues(alpha: 0.2),
+                        ),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.error_outline,
+                              color: AppColors.error, size: 18),
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(
+                            child: Text(
+                              _submitError!,
+                              style: AppTypography.bodySmall.copyWith(
+                                color: AppColors.error,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: AppSpacing.xl),
                   SizedBox(
                     width: double.infinity,
@@ -292,15 +448,75 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
     );
   }
 
+  Widget _buildProfileSummary() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F7F7),
+        borderRadius: AppDimensions.radiusMd,
+        border: Border.all(color: const Color(0xFFEEEEEE)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.person, color: AppColors.primary),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _nameController.text,
+                      style: AppTypography.bodyMedium.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      _emailController.text,
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'Contact details are managed in your profile.',
+            style: AppTypography.bodySmall.copyWith(
+              color: AppColors.textDisabled,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildTextField({
     required TextEditingController controller,
     required String label,
     required String hint,
     IconData? icon,
     bool required = true,
+    bool readOnly = false,
     int maxLines = 1,
     TextInputType? keyboardType,
     String? Function(String?)? validator,
+    ValueChanged<String>? onChanged,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -323,7 +539,9 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
           controller: controller,
           maxLines: maxLines,
           keyboardType: keyboardType,
+          readOnly: readOnly,
           validator: validator,
+          onChanged: onChanged,
           style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary),
           decoration: InputDecoration(
             hintText: hint,
@@ -386,15 +604,18 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
           hint: Text('Select a category',
               style: AppTypography.bodyMedium
                   .copyWith(color: AppColors.textDisabled)),
-          items: _categories.map((category) {
+          items: kSupportCategories.map((category) {
             return DropdownMenuItem(
-              value: category,
-              child: Text(category,
+              value: category.label,
+              child: Text(category.label,
                   style: AppTypography.bodyMedium
                       .copyWith(color: AppColors.textPrimary)),
             );
           }).toList(),
-          onChanged: (value) => setState(() => _selectedCategory = value),
+          onChanged: (value) => setState(() {
+            _selectedCategory = value;
+            _submitError = null;
+          }),
           validator: (value) =>
               value == null ? 'Please select a category' : null,
           decoration: InputDecoration(
@@ -468,7 +689,6 @@ class _FormCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Card header
           Padding(
             padding: const EdgeInsets.fromLTRB(
               AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, 0,
@@ -520,4 +740,3 @@ class _FormCard extends StatelessWidget {
     );
   }
 }
-
