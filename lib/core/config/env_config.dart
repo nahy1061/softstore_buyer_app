@@ -3,12 +3,12 @@
 class EnvConfig {
   static const String baseUrl = String.fromEnvironment(
     'BASE_URL',
-    defaultValue: 'https://beta.softsore.pk',
+    defaultValue: 'https://softstore.pk',
   );
 
   static const String environment = String.fromEnvironment(
     'ENVIRONMENT',
-    defaultValue: 'dev',
+    defaultValue: 'dev'
   );
 
   static const String firebaseProjectId = String.fromEnvironment(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../app/router.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -8,6 +9,9 @@ import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/validators.dart';
 import '../../models/support_category.dart';
 import '../../models/support_ticket_form.dart';
+import '../../models/ticket_model.dart';
+import '../cubits/support_cubit.dart';
+import '../cubits/support_state.dart';
 
 /// Temporary until AuthCubit / profile API is wired (matches profile hub mock).
 const _mockLoggedInUserName = 'Arwah Imran';
@@ -94,33 +98,36 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
     });
 
     try {
-      SupportTicketSubmitData.fromForm(
+      final submitData = SupportTicketSubmitData.fromForm(
         subject: _subjectController.text,
         message: _messageController.text,
         categoryLabel: _selectedCategory!,
         orderId: _resolvedOrderId,
       );
 
-      // Mock submit — replaced with SupportRepository in Phase B.
-      await Future.delayed(const Duration(seconds: 2));
       if (!mounted) return;
-
-      final mockTicketId = DateTime.now().millisecondsSinceEpoch % 100000;
-      _showSuccessDialog(mockTicketId);
+      context.read<SupportCubit>().createTicket(
+            subject: submitData.subject,
+            message: submitData.message,
+            category: submitData.categoryApiValue,
+            orderId: submitData.orderId,
+            email: _emailController.text.trim().isNotEmpty
+                ? _emailController.text.trim()
+                : null,
+            guestName: _nameController.text.trim().isNotEmpty
+                ? _nameController.text.trim()
+                : null,
+          );
     } on ArgumentError catch (error) {
       if (!mounted) return;
-      setState(() => _submitError = error.message);
-    } catch (_) {
-      if (!mounted) return;
-      setState(
-        () => _submitError = 'Could not submit your ticket. Please try again.',
-      );
-    } finally {
-      if (mounted) setState(() => _isSubmitting = false);
+      setState(() {
+        _submitError = error.message;
+        _isSubmitting = false;
+      });
     }
   }
 
-  void _showSuccessDialog(int ticketId) {
+  void _showSuccessDialog(Ticket ticket) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -148,7 +155,7 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
-              'Your ticket ${formatTicketDisplayId(ticketId)} has been created. Our team will respond within 24 hours.',
+              'Your ticket ${ticket.displayId} has been created. Our team will respond within 24 hours.',
               textAlign: TextAlign.center,
               style: AppTypography.bodyMedium
                   .copyWith(color: AppColors.textSecondary),
@@ -196,28 +203,41 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF7F7F7),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 1,
-        shadowColor: Colors.black12,
-        leading: const BackButton(color: AppColors.textPrimary),
-        title: Text(
-          'Contact Support',
-          style: AppTypography.screenTitle.copyWith(color: AppColors.textPrimary),
+    return BlocListener<SupportCubit, SupportState>(
+      listener: (context, state) {
+        if (state is TicketCreated) {
+          setState(() => _isSubmitting = false);
+          _showSuccessDialog(state.ticket);
+        } else if (state is SupportError) {
+          setState(() {
+            _isSubmitting = false;
+            _submitError = state.message;
+          });
+        }
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF7F7F7),
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          scrolledUnderElevation: 1,
+          shadowColor: Colors.black12,
+          leading: const BackButton(color: AppColors.textPrimary),
+          title: Text(
+            'Contact Support',
+            style: AppTypography.screenTitle.copyWith(color: AppColors.textPrimary),
+          ),
         ),
-      ),
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (widget.orderReference != null) _buildOrderContextBanner(),
-            _buildTicketFormSection(),
-            const SizedBox(height: AppSpacing.xl),
-          ],
+        body: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (widget.orderReference != null) _buildOrderContextBanner(),
+              _buildTicketFormSection(),
+              const SizedBox(height: AppSpacing.xl),
+            ],
+          ),
         ),
       ),
     );

@@ -81,8 +81,8 @@ class ApiEndpoints {
   static const String registerFcmToken = '/notifications/register-token';
 
   // Support endpoints
-  static const String createSupportTicket = '/support/tickets';
-  static const String getSupportTickets = '/support/tickets';
-  static const String getSupportTicketMessages = '/support/tickets/:id/messages';
-  static const String sendSupportMessage = '/support/tickets/:id/messages';
+  static const String createSupportTicket = '/store/support/tickets';
+  static const String getSupportTickets = '/store/support/tickets';
+  static const String getSupportTicketMessages = '/store/support/tickets/:id';
+  static const String sendSupportMessage = '/store/support/tickets/:id';
 }
