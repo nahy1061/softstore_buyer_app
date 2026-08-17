@@ -34,14 +34,32 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
         elevation: 0,
         scrolledUnderElevation: 1,
         shadowColor: Colors.black12,
-        leading: const BackButton(color: AppColors.textPrimary),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded,
+              color: AppColors.textPrimary),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(AppRoutes.support);
+            }
+          },
+        ),
         title: Text(
           'My Tickets',
-          style: AppTypography.screenTitle.copyWith(color: AppColors.textPrimary),
+          style: AppTypography.screenTitle
+              .copyWith(color: AppColors.textPrimary),
         ),
         actions: [
           IconButton(
-            onPressed: () => context.push(AppRoutes.supportContact),
+            onPressed: () {
+              final cubit = context.read<SupportCubit>();
+              context.push(AppRoutes.supportContact).then((_) {
+                if (mounted) {
+                  cubit.loadTickets();
+                }
+              });
+            },
             icon: const Icon(Icons.add_circle_outline_rounded,
                 color: AppColors.primary),
             tooltip: 'New Ticket',
@@ -50,7 +68,7 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
       ),
       body: BlocBuilder<SupportCubit, SupportState>(
         builder: (context, state) {
-          if (state is SupportLoading) {
+          if (state is SupportLoading || state is SupportInitial) {
             return const Center(
               child: CircularProgressIndicator(color: AppColors.primary),
             );
@@ -104,7 +122,9 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
             return _buildTicketList(tickets);
           }
 
-          return _buildEmptyState();
+          return const Center(
+            child: CircularProgressIndicator(color: AppColors.primary),
+          );
         },
       ),
     );
@@ -142,7 +162,14 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
             ),
             const SizedBox(height: AppSpacing.xl),
             FilledButton.icon(
-              onPressed: () => context.push(AppRoutes.supportContact),
+              onPressed: () {
+                final cubit = context.read<SupportCubit>();
+                context.push(AppRoutes.supportContact).then((_) {
+                  if (mounted) {
+                    cubit.loadTickets();
+                  }
+                });
+              },
               icon: const Icon(Icons.add, size: 18),
               label: Text(
                 'Create a Ticket',
@@ -170,12 +197,21 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(AppSpacing.lg),
         itemCount: tickets.length,
-        separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.md),
+        separatorBuilder: (_, index) => const SizedBox(height: AppSpacing.md),
         itemBuilder: (context, index) {
           final ticket = tickets[index];
           return _TicketCard(
             ticket: ticket,
-            onTap: () => context.push('/support/tickets/${ticket.id}'),
+            onTap: () {
+              final cubit = context.read<SupportCubit>();
+              context
+                  .push('/support/tickets/${ticket.id}', extra: ticket)
+                  .then((_) {
+                if (mounted) {
+                  cubit.loadTickets();
+                }
+              });
+            },
           );
         },
       ),

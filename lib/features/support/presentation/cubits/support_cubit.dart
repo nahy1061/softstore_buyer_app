@@ -38,51 +38,73 @@ class SupportCubit extends Cubit<SupportState> {
   }
 
   Future<void> loadTickets() async {
+    // 1. Cache-first: if we have cached tickets, emit immediately for instant 0ms load
+    final cached = _repository.cachedTickets;
+    if (cached.isNotEmpty) {
+      emit(TicketsLoaded(tickets: cached));
+    } else {
+      emit(const SupportLoading());
+    }
+
+    // 2. Refresh from backend in the background
     try {
       final tickets = await _repository.getTickets();
-      emit(TicketsLoaded(tickets: tickets));
+      if (!isClosed) {
+        emit(TicketsLoaded(tickets: tickets));
+      }
     } catch (e) {
-      // If API fails, still show cached tickets
-      final cached = _repository.cachedTickets;
-      if (cached.isNotEmpty) {
-        emit(TicketsLoaded(tickets: cached));
-      } else {
-        emit(SupportError(message: e.toString().replaceFirst('Exception: ', '')));
+      if (!isClosed && state is! TicketsLoaded) {
+        final fallback = _repository.cachedTickets;
+        if (fallback.isNotEmpty) {
+          emit(TicketsLoaded(tickets: fallback));
+        } else {
+          emit(SupportError(
+              message: e.toString().replaceFirst('Exception: ', '')));
+        }
       }
     }
   }
 
-  Future<void> loadMessages(int ticketId, {DateTime? since}) async {
+  Future<void> loadMessages(int ticketId) async {
     try {
-      final messages = await _repository.getMessages(ticketId, since: since);
-      emit(MessagesLoaded(messages: messages));
+      final messages = await _repository.getMessages(ticketId);
+      if (!isClosed) {
+        emit(MessagesLoaded(messages: messages));
+      }
     } catch (e) {
-      emit(SupportError(message: e.toString().replaceFirst('Exception: ', '')));
+      if (!isClosed) {
+        emit(SupportError(
+            message: e.toString().replaceFirst('Exception: ', '')));
+      }
     }
   }
 
   Future<void> sendMessage(int ticketId, String body) async {
     try {
       await _repository.sendMessage(ticketId, body);
-      emit(const MessageSent());
+      if (!isClosed) {
+        emit(const MessageSent());
+      }
     } catch (e) {
-      emit(SupportError(message: e.toString().replaceFirst('Exception: ', '')));
+      if (!isClosed) {
+        emit(SupportError(
+            message: e.toString().replaceFirst('Exception: ', '')));
+      }
     }
   }
 
-  void startPolling(int ticketId, {Duration interval = const Duration(seconds: 10)}) {
+  /// Start background polling for new replies.
+  void startPolling(int ticketId,
+      {Duration interval = const Duration(seconds: 5)}) {
     stopPolling();
-    DateTime? lastMessageTime;
-    final current = state;
-    if (current is MessagesLoaded && current.messages.isNotEmpty) {
-      lastMessageTime = current.messages.last.sentAt;
-    }
     _pollTimer = Timer.periodic(interval, (_) async {
-      await loadMessages(ticketId, since: lastMessageTime);
-      final updated = state;
-      if (updated is MessagesLoaded && updated.messages.isNotEmpty) {
-        lastMessageTime = updated.messages.last.sentAt;
-      }
+      if (isClosed) return;
+      try {
+        final messages = await _repository.getMessages(ticketId);
+        if (!isClosed) {
+          emit(MessagesLoaded(messages: messages));
+        }
+      } catch (_) {}
     });
   }
 
