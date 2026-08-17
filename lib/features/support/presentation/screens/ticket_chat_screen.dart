@@ -50,7 +50,7 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
 
     setState(() {
       _messages.add(TicketMessage(
-        id: 'm${_messages.length + 1}',
+        id: _messages.length + 1,
         text: text,
         sender: MessageSender.buyer,
         sentAt: DateTime.now(),
@@ -66,7 +66,7 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
 
     setState(() {
       _messages.add(TicketMessage(
-        id: 'm${_messages.length + 1}',
+        id: _messages.length + 1,
         text: 'Thank you for your message. Our team will review and get back to you shortly.',
         sender: MessageSender.agent,
         sentAt: DateTime.now(),
@@ -118,7 +118,7 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
                     overflow: TextOverflow.ellipsis,
                   ),
                   Text(
-                    widget.ticket.id,
+                    widget.ticket.displayId,
                     style: AppTypography.bodySmall.copyWith(
                       color: AppColors.textSecondary,
                     ),

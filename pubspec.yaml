@@ -47,6 +47,7 @@ dependencies:
   dio: ^5.3.1
   cookie_jar: ^4.0.7
   dio_cookie_manager: ^3.0.0
+  html: ^0.15.4
 
   # Storage (F22-F24)
   shared_preferences: ^2.2.2

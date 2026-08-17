@@ -48,4 +48,8 @@ class ApiEndpoints {
 
   // Support Tickets endpoints
   static const String supportTickets = '/store/support/tickets';
+  static const String createSupportTicket = '/store/support/tickets';
+  static const String getSupportTickets = '/store/support/tickets';
+  static const String getSupportTicketMessages = '/store/support/tickets'; // /store/support/tickets/{id}
+  static const String sendSupportMessage = '/store/support/tickets'; // /store/support/tickets/{id}
 }

@@ -20,7 +20,16 @@ class SupportHubScreen extends StatelessWidget {
         elevation: 0,
         scrolledUnderElevation: 1,
         shadowColor: Colors.black12,
-        leading: const BackButton(color: AppColors.textPrimary),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(AppRoutes.profile);
+            }
+          },
+        ),
         title: Text(
           'Help & Support',
           style: AppTypography.screenTitle.copyWith(color: AppColors.textPrimary),

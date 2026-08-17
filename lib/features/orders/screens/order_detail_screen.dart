@@ -105,8 +105,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               onSelected: (value) {
                 switch (value) {
                   case 'help':
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Opening support...')),
+                    context.push(
+                      AppRoutes.supportContact,
+                      extra: {
+                        'orderReference': order.referenceNumber,
+                        'orderId': int.tryParse(order.id),
+                        'subject': 'Issue with order ${order.referenceNumber}',
+                        'categoryLabel': 'Order issue',
+                      },
                     );
                     break;
                   case 'share':

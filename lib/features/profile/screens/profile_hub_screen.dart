@@ -789,7 +789,7 @@ class _QuickActionsEnhancedGrid extends StatelessWidget {
         Icons.headset_mic_outlined,
         'Support',
         const Color(0xFF5B8CFF),
-        () => context.go(AppRoutes.support),
+        () => context.push(AppRoutes.support),
       ),
       _Action(
         Icons.star_outline,
