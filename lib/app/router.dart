@@ -3,6 +3,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../features/home/screens/home_screen.dart';
 import '../features/cart/screens/cart_screen.dart';
+import '../features/cart/screens/checkout_screen.dart';
+import '../features/cart/cubit/cart_cubit.dart';
 import '../features/product/screens/product_detail_screen.dart';
 import '../features/orders/cubit/order_cubit.dart';
 import '../features/orders/screens/orders_screen.dart';
@@ -153,30 +155,26 @@ final GoRouter goRouter = GoRouter(
     ),
     GoRoute(
       path: AppRoutes.checkout,
-      builder: (context, state) => const PlaceholderScreen(label: 'Checkout'),
-      routes: [
-        GoRoute(
-          path: 'delivery',
-          builder: (context, state) =>
-              const PlaceholderScreen(label: 'Delivery Address'),
-        ),
-        GoRoute(
-          path: 'otp',
-          builder: (context, state) =>
-              const PlaceholderScreen(label: 'OTP Verification'),
-        ),
-        GoRoute(
-          path: 'review',
-          builder: (context, state) =>
-              const PlaceholderScreen(label: 'Order Review'),
-        ),
-      ],
+      builder: (context, state) => BlocProvider(
+        create: (_) => CartCubit(),
+        child: const CheckoutScreen(),
+      ),
     ),
     GoRoute(
       path: AppRoutes.orderConfirmation,
       builder: (context, state) {
         final ref = state.pathParameters['ref'] ?? '';
-        return OrderConfirmationScreen(referenceNumber: ref);
+        final extra = state.extra as Map<String, dynamic>? ?? {};
+        return OrderConfirmationScreen(
+          referenceNumber: ref,
+          invoiceNumber: extra['invoiceNumber'] as String?,
+          subtotal: extra['subtotal'] as int?,
+          delivery: extra['delivery'] as int?,
+          productName: extra['productName'] as String?,
+          productQty: extra['productQty'] as int?,
+          productPrice: extra['productPrice'] as int?,
+          iconCodePoint: extra['iconCodePoint'] as int?,
+        );
       },
     ),
 

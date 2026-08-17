@@ -810,8 +810,11 @@ class _BottomBar extends StatelessWidget {
                   if (colors.isEmpty) {
                     context.read<CartCubit>().addItem(CartItem(
                           id: slug,
-                          name: name,
-                          price: price,
+                          productId: slug,
+                          productName: name,
+                          quantity: 1,
+                          unitPriceSnapshot: price,
+                          subtotalSnapshot: price,
                           iconCodePoint: iconCodePoint,
                         ));
                     _showCheckout(context);
@@ -835,8 +838,11 @@ class _BottomBar extends StatelessWidget {
                     if (selectedColor != null && context.mounted) {
                       context.read<CartCubit>().addItem(CartItem(
                             id: '${slug}_$selectedColor',
-                            name: '$name ($selectedColor)',
-                            price: price,
+                            productId: slug,
+                            productName: '$name ($selectedColor)',
+                            quantity: 1,
+                            unitPriceSnapshot: price,
+                            subtotalSnapshot: price,
                             iconCodePoint: iconCodePoint,
                           ));
                       _showCheckout(context);
@@ -865,8 +871,11 @@ class _BottomBar extends StatelessWidget {
                   context.read<CartCubit>().addItem(
                         CartItem(
                           id: slug,
-                          name: name,
-                          price: price,
+                          productId: slug,
+                          productName: name,
+                          quantity: 1,
+                          unitPriceSnapshot: price,
+                          subtotalSnapshot: price,
                           iconCodePoint: iconCodePoint,
                         ),
                       );
