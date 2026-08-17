@@ -7,3 +7,4 @@ void main() async {
   await DioClient().init();
   runApp(const SoftstoreBuyerApp());
 }
+

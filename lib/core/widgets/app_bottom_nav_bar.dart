@@ -123,12 +123,31 @@ class AppBottomNavBar extends StatelessWidget {
                 ),
               ),
 
-              // ── Animated S circle (overlaps above the bar) ────────────────
+              // ── Animated S circle + "Browse" label ───────────────────────
               Positioned(
                 top: -_circleOverlap,
-                child: _AnimatedSLogo(
-                  onTap: () => _navigate(context, 2),
-                  isActive: currentIndex == 2,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _AnimatedSLogo(
+                      onTap: () => _navigate(context, 2),
+                      isActive: currentIndex == 2,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Browse',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: currentIndex == 2
+                            ? FontWeight.w600
+                            : FontWeight.normal,
+                        color: currentIndex == 2
+                            ? AppColors.primary
+                            : AppColors.textSecondary,
+                        height: 1,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],

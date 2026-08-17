@@ -16,7 +16,7 @@ import '../features/profile/screens/change_password_screen.dart';
 import '../features/profile/screens/settings_screen.dart';
 import '../features/profile/screens/addresses_screen.dart';
 import '../features/profile/screens/address_form_screen.dart';
-import '../core/widgets/app_bottom_nav.dart';
+import '../core/widgets/app_bottom_nav_bar.dart';
 import '../features/deals/screens/deals_screen.dart';
 import '../features/support/presentation/screens/faq_screen.dart';
 import '../features/support/presentation/screens/contact_support_screen.dart';
@@ -53,7 +53,7 @@ class PlaceholderScreen extends StatelessWidget {
         ),
       ),
       bottomNavigationBar: navIndex != null
-          ? AppBottomNav(currentIndex: navIndex!)
+          ? AppBottomNavBar(currentIndex: navIndex!)
           : null,
     );
   }
@@ -194,12 +194,27 @@ final GoRouter goRouter = GoRouter(
       path: AppRoutes.orderDetail,
       builder: (context, state) {
         final id = state.pathParameters['id'] ?? '';
-        final order = dummyOrders.firstWhere(
-          (o) => o.id == id,
-          orElse: () => dummyOrders.first,
-        );
+        final extraOrder = state.extra as Order?;
+        final order = extraOrder ??
+            Order(
+              id: id,
+              referenceNumber: id,
+              placedAt: DateTime.now(),
+              status: OrderStatus.pending,
+              items: const [],
+              deliveryAddress: const OrderAddress(
+                name: 'Buyer',
+                phone: '',
+                addressLine: 'Delivery Address',
+                city: 'Pakistan',
+              ),
+              subtotal: 0,
+              deliveryFee: 0,
+              storeName: 'SoftStore Merchant',
+            );
+
         return BlocProvider(
-          create: (_) => OrderCubit(),
+          create: (_) => OrderCubit()..loadOrderDetail(id),
           child: OrderDetailScreen(order: order),
         );
       },

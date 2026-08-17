@@ -52,26 +52,6 @@ class ProductDetailScreen extends StatelessWidget {
               },
             ),
           ),
-          title: Container(
-            height: 38,
-            decoration: BoxDecoration(
-              color: AppColors.background,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppColors.primary, width: 1.5),
-            ),
-            child: Row(
-              children: [
-                const SizedBox(width: 8),
-                const Icon(Icons.search, size: 18, color: AppColors.textDisabled),
-                const SizedBox(width: 6),
-                Text(
-                  'Search in SoftStore',
-                  style: AppTypography.bodySmall
-                      .copyWith(color: AppColors.textDisabled),
-                ),
-              ],
-            ),
-          ),
           actions: [
             IconButton(
               icon: const Icon(Icons.open_in_new,

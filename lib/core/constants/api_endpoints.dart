@@ -2,87 +2,54 @@
 /// Organized by feature area. Base URL is configured in env_config.dart.
 class ApiEndpoints {
   // Auth endpoints
-  static const String login = '/auth/login';
-  static const String register = '/auth/register';
-  static const String logout = '/auth/logout';
-  static const String googleAuth = '/auth/google';
-  static const String verifyOtp = '/auth/verify-otp';
-  static const String resendOtp = '/auth/resend-otp';
-  static const String forgotPassword = '/auth/forgot-password';
-  static const String resetPassword = '/auth/reset-password';
-  static const String checkSession = '/auth/me';
-  static const String refreshToken = '/auth/refresh-token';
+  static const String login = '/login';
+  static const String register = '/register';
+  static const String logout = '/logout';
+  static const String googleAuth = '/auth/google/callback';
+  static const String checkSession = '/store/account/profile';
 
-  // Products endpoints
-  static const String getProducts = '/products';
-  static const String getProductDetail = '/products/:slug';
-  static const String getProductReviews = '/products/:slug/reviews';
-  static const String getRelatedProducts = '/products/:slug/related';
+  // Checkout Email Verification OTP endpoints
+  static const String sendCheckoutOtp = '/store/checkout/send-code';
+  static const String verifyCheckoutOtp = '/store/checkout/verify-code';
 
-  // Categories endpoints
-  static const String getCategories = '/categories';
-  static const String getCategoryProducts = '/categories/:slug/products';
+  // Catalog & Products endpoints
+  static const String storeHome = '/store';
+  static const String searchProducts = '/store/search';
+  static const String productDetail = '/product'; // /product/{slug}
+  static const String categories = '/store/categories';
+  static const String sellerStore = '/store'; // /store/{slug}
 
-  // Search endpoints
-  static const String getSearchSuggestions = '/search/suggestions';
-  static const String searchProducts = '/search';
-
-  // Seller endpoints
-  static const String getSellerStore = '/sellers/:slug';
-  static const String getSellerProducts = '/sellers/:slug/products';
-  static const String followSeller = '/sellers/:slug/follow';
-  static const String unfollowSeller = '/sellers/:slug/unfollow';
-
-  // Cart endpoints
-  static const String validateCartItem = '/cart/validate-item';
-  static const String validateCart = '/cart/validate';
+  // Cart & Checkout endpoints
+  static const String shippingQuote = '/api/store/shipping-quote';
+  static const String validateCoupon = '/api/store/validate-coupon';
+  static const String checkout = '/store/checkout';
 
   // Wishlist endpoints
-  static const String getWishlist = '/wishlist';
-  static const String addToWishlist = '/wishlist';
-  static const String removeFromWishlist = '/wishlist/:productId';
-  static const String checkWishlisted = '/wishlist/check';
-
-  // Checkout endpoints
-  static const String sendCheckoutOtp = '/checkout/send-otp';
-  static const String verifyCheckoutOtp = '/checkout/verify-otp';
-  static const String validateCoupon = '/checkout/validate-coupon';
-  static const String placeOrder = '/checkout/place-order';
-  static const String getCheckoutRecommendations = '/checkout/recommendations';
+  static const String wishlist = '/store/account/wishlist';
+  static const String toggleWishlist = '/store/wishlist/toggle';
 
   // Orders endpoints
-  static const String getOrders = '/orders';
-  static const String getOrderDetail = '/orders/:id';
-  static const String trackOrder = '/orders/track';
-  static const String cancelOrder = '/orders/:id/cancel';
+  static const String getOrders = '/store/account/orders';
+  static const String getOrderDetail = '/store/account/orders'; // /store/account/orders/{invoiceNumber}
+  static const String trackOrder = '/store/track-order';
+  static const String getReturns = '/store/account/returns';
+  static const String requestReturn = '/store/account/orders'; // /store/account/orders/{invoiceNumber}/return
 
-  // Returns endpoints
-  static const String getReturns = '/returns';
-  static const String getReturnDetail = '/returns/:id';
-  static const String submitReturn = '/returns';
-  static const String uploadReturnEvidence = '/returns/:id/upload-evidence';
+  // Profile & Addresses endpoints
+  static const String profile = '/store/account/profile';
+  static const String changePassword = '/store/account/password';
+  static const String dashboardStats = '/store/account/dashboard';
+  static const String addresses = '/store/account/addresses';
+  static const String deleteAddress = '/store/account/addresses'; // /store/account/addresses/{id}/delete
 
-  // Profile endpoints
-  static const String getProfile = '/profile';
-  static const String updateProfile = '/profile';
-  static const String changePassword = '/profile/change-password';
+  // Messaging & Chat endpoints
+  static const String messages = '/store/messages';
+  static const String newMessage = '/store/messages/new';
 
-  // Addresses endpoints
-  static const String getAddresses = '/addresses';
-  static const String addAddress = '/addresses';
-  static const String updateAddress = '/addresses/:id';
-  static const String deleteAddress = '/addresses/:id';
-  static const String setDefaultAddress = '/addresses/:id/set-default';
-
-  // Notifications endpoints
-  static const String getNotifications = '/notifications';
-  static const String markNotificationRead = '/notifications/:id/read';
-  static const String markAllNotificationsRead = '/notifications/read-all';
-  static const String registerFcmToken = '/notifications/register-token';
-
-  // Support endpoints
+  // Support Tickets endpoints
+  static const String supportTickets = '/store/support/tickets';
   static const String createSupportTicket = '/store/support/tickets';
   static const String getSupportTickets = '/store/support/tickets';
-  static const String getSupportTicketMessages = '/store/support/tickets/:id';
-  static const String sendSupportMessage = '/store/support/tickets/:id';
+  static const String getSupportTicketMessages = '/store/support/tickets'; // /store/support/tickets/{id}
+  static const String sendSupportMessage = '/store/support/tickets'; // /store/support/tickets/{id}
 }
