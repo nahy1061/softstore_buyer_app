@@ -85,6 +85,17 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
     super.dispose();
   }
 
+  void _clearForm() {
+    _formKey.currentState?.reset();
+    _subjectController.clear();
+    _messageController.clear();
+    _orderNumberController.clear();
+    setState(() {
+      _selectedCategory = null;
+      _submitError = null;
+    });
+  }
+
   Future<void> _submitTicket() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedCategory == null) {
@@ -166,7 +177,7 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
               child: FilledButton(
                 onPressed: () {
                   Navigator.of(ctx).pop();
-                  context.push(AppRoutes.supportTickets);
+                  context.pushReplacement(AppRoutes.supportTickets);
                 },
                 style: FilledButton.styleFrom(
                   backgroundColor: AppColors.primary,
@@ -207,6 +218,7 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
       listener: (context, state) {
         if (state is TicketCreated) {
           setState(() => _isSubmitting = false);
+          _clearForm();
           _showSuccessDialog(state.ticket);
         } else if (state is SupportError) {
           setState(() {
@@ -223,10 +235,21 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
           elevation: 0,
           scrolledUnderElevation: 1,
           shadowColor: Colors.black12,
-          leading: const BackButton(color: AppColors.textPrimary),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_rounded,
+                color: AppColors.textPrimary),
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(AppRoutes.support);
+              }
+            },
+          ),
           title: Text(
             'Contact Support',
-            style: AppTypography.screenTitle.copyWith(color: AppColors.textPrimary),
+            style: AppTypography.screenTitle
+                .copyWith(color: AppColors.textPrimary),
           ),
         ),
         body: SingleChildScrollView(
@@ -600,7 +623,7 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
         ),
         const SizedBox(height: AppSpacing.sm),
         DropdownButtonFormField<String>(
-          value: _selectedCategory,
+          initialValue: _selectedCategory,
           hint: Text('Select a category',
               style: AppTypography.bodyMedium
                   .copyWith(color: AppColors.textDisabled)),
