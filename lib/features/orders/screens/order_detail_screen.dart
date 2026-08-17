@@ -11,6 +11,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_dimensions.dart';
+import '../../../app/router.dart';
 
 class OrderDetailScreen extends StatefulWidget {
   final Order order;
@@ -108,9 +109,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     context.push(
                       AppRoutes.supportContact,
                       extra: {
-                        'orderReference': order.referenceNumber,
-                        'orderId': int.tryParse(order.id),
-                        'subject': 'Issue with order ${order.referenceNumber}',
+                        'orderReference': currentOrder.referenceNumber,
+                        'orderId': int.tryParse(currentOrder.id),
+                        'subject': 'Issue with order ${currentOrder.referenceNumber}',
                         'categoryLabel': 'Order issue',
                       },
                     );
