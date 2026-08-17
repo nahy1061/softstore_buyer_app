@@ -1,9 +1,7 @@
-
-import 'dart:convert';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import '../../../core/constants/storage_keys.dart';
 import '../models/cart_item.dart';
+import '../services/cart_service.dart';
+import '../services/checkout_service.dart';
 import 'cart_state.dart';
 
 class CartCubit extends Cubit<CartState> {
@@ -11,57 +9,65 @@ class CartCubit extends Cubit<CartState> {
     _loadFromStorage();
   }
 
+  final CartService _cartService = CartService();
+  final CheckoutService _checkoutService = CheckoutService();
+
   Future<void> _loadFromStorage() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getStringList(StorageKeys.cartItems);
-    if (raw == null || raw.isEmpty) return;
-    final items = raw
-        .map((e) => CartItem.fromJson(jsonDecode(e) as Map<String, dynamic>))
-        .toList();
-    emit(CartState(items: items));
+    final items = await _cartService.getItems();
+    emit(state.copyWith(items: items));
+    if (items.isNotEmpty) _refreshShippingQuote();
   }
 
-  Future<void> _saveToStorage(List<CartItem> items) async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = items.map((e) => jsonEncode(e.toJson())).toList();
-    await prefs.setStringList(StorageKeys.cartItems, raw);
-  }
-
-  void addItem(CartItem item) {
-    final index = state.items.indexWhere((i) => i.id == item.id);
-    List<CartItem> updated;
-    if (index >= 0) {
-      updated = List<CartItem>.from(state.items);
-      updated[index] = updated[index].copyWith(
-        quantity: updated[index].quantity + 1,
-      );
-    } else {
-      updated = [...state.items, item];
-    }
+  void addItem(CartItem item) async {
+    final updated = await _cartService.addItem(item);
     emit(state.copyWith(items: updated));
-    _saveToStorage(updated);
+    _refreshShippingQuote();
   }
 
-  void removeItem(String id) {
-    final updated = state.items.where((i) => i.id != id).toList();
+  void removeItem(String id) async {
+    final updated = await _cartService.removeItem(id);
     emit(state.copyWith(items: updated));
-    _saveToStorage(updated);
+    _refreshShippingQuote();
   }
 
-  void updateQuantity(String id, int quantity) {
+  void updateQuantity(String id, int quantity) async {
     if (quantity <= 0) {
       removeItem(id);
       return;
     }
-    final updated = state.items
-        .map((i) => i.id == id ? i.copyWith(quantity: quantity) : i)
-        .toList();
+    final updated = await _cartService.updateQuantity(id, quantity);
     emit(state.copyWith(items: updated));
-    _saveToStorage(updated);
+    _refreshShippingQuote();
   }
 
-  void clearCart() {
+  void clearCart() async {
+    await _cartService.clear();
     emit(const CartState());
-    _saveToStorage([]);
   }
+
+  /// Fetches a live shipping quote from the server whenever cart items change.
+  Future<void> _refreshShippingQuote() async {
+    if (state.items.isEmpty) {
+      emit(state.copyWith(deliveryFee: 0, freeDelivery: false, clearQuoteError: true));
+      return;
+    }
+
+    emit(state.copyWith(quoteLoading: true, clearQuoteError: true));
+    try {
+      final quote = await _checkoutService.getShippingQuote(state.items);
+      emit(state.copyWith(
+        deliveryFee: quote.deliveryFee,
+        freeDelivery: quote.free,
+        quoteLoading: false,
+      ));
+    } catch (e) {
+      emit(state.copyWith(
+        quoteLoading: false,
+        quoteError: e.toString(),
+      ));
+    }
+  }
+
+  /// Manually trigger a shipping quote refresh.
+  Future<void> refreshShippingQuote() async => _refreshShippingQuote();
 }

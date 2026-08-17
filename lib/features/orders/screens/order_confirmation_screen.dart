@@ -1,14 +1,31 @@
 import 'package:flutter/material.dart';
-import '../models/order_model.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
-import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_dimensions.dart';
+import '../../../core/widgets/app_bottom_nav_bar.dart';
 
 class OrderConfirmationScreen extends StatefulWidget {
   final String referenceNumber;
+  final String? invoiceNumber;
+  final int? subtotal;
+  final int? delivery;
+  final String? productName;
+  final int? productQty;
+  final int? productPrice;
+  final int? iconCodePoint;
 
-  const OrderConfirmationScreen({super.key, required this.referenceNumber});
+  const OrderConfirmationScreen({
+    super.key,
+    required this.referenceNumber,
+    this.invoiceNumber,
+    this.subtotal,
+    this.delivery,
+    this.productName,
+    this.productQty,
+    this.productPrice,
+    this.iconCodePoint,
+  });
 
   @override
   State<OrderConfirmationScreen> createState() =>
@@ -21,11 +38,20 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen>
   late Animation<double> _scaleAnim;
   late Animation<double> _fadeAnim;
 
-  // Resolve the matching dummy order or fallback
-  Order get _order => dummyOrders.firstWhere(
-        (o) => o.referenceNumber == widget.referenceNumber,
-        orElse: () => dummyOrders.first,
-      );
+  // Mock data with prop overrides
+  int get _subtotal => widget.subtotal ?? 200;
+  int get _delivery => widget.delivery ?? 200;
+  int get _total => _subtotal + _delivery;
+  String get _invoice => widget.invoiceNumber ?? 'MKT-1A7EFF74';
+  String get _productName => widget.productName ?? 'Coca Cola 1.5L Bottle';
+  int get _productQty => widget.productQty ?? 1;
+  int get _productPrice => widget.productPrice ?? 200;
+  IconData get _productIcon {
+    if (widget.iconCodePoint != null) {
+      return IconData(widget.iconCodePoint!, fontFamily: 'MaterialIcons');
+    }
+    return const IconData(0xe539, fontFamily: 'MaterialIcons'); // local_drink
+  }
 
   @override
   void initState() {
@@ -53,279 +79,366 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen>
 
   @override
   Widget build(BuildContext context) {
-    final order = _order;
-
     return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          children: [
-            const SizedBox(height: AppSpacing.xl),
-
-            // Animated success icon
-            Center(
-              child: ScaleTransition(
-                scale: _scaleAnim,
-                child: Container(
-                  width: 96,
-                  height: 96,
-                  decoration: const BoxDecoration(
-                    color: AppColors.primary,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.check_rounded,
-                    color: AppColors.surface,
-                    size: 52,
-                  ),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: AppSpacing.xl),
-
-            FadeTransition(
-              opacity: _fadeAnim,
+      backgroundColor: const Color(0xFFF5F5F5),
+      body: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
               child: Column(
                 children: [
-                  Text(
-                    'Order Placed!',
-                    style: AppTypography.screenTitle.copyWith(
-                      fontSize: 26,
-                      color: AppColors.textPrimary,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  Text(
-                    'Your order has been confirmed and is being\nprepared by the store.',
-                    style: AppTypography.bodyMedium.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: AppSpacing.xl),
-
-                  // Reference number box
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.xl,
-                      vertical: AppSpacing.md,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha:0.06),
-                      borderRadius: AppDimensions.radiusMd,
-                      border: Border.all(
-                        color: AppColors.primary.withValues(alpha:0.2),
-                      ),
-                    ),
-                    child: Column(
-                      children: [
-                        Text(
-                          'ORDER REFERENCE',
-                          style: AppTypography.overline.copyWith(
-                            color: AppColors.textSecondary,
-                            letterSpacing: 1.2,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          order.referenceNumber,
-                          style: AppTypography.sectionHeading.copyWith(
-                            color: AppColors.primary,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: AppSpacing.xl),
-
-                  // Summary card
-                  Container(
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: AppDimensions.radiusMd,
-                      boxShadow: AppDimensions.cardShadow,
-                    ),
-                    child: Column(
-                      children: [
-                        _SummaryRow(
-                          icon: Icons.store_rounded,
-                          label: 'Store',
-                          value: order.storeName,
-                        ),
-                        const Divider(height: 1, indent: 16, endIndent: 16),
-                        _SummaryRow(
-                          icon: Icons.shopping_bag_outlined,
-                          label: 'Items',
-                          value:
-                              '${order.totalItems} item${order.totalItems > 1 ? 's' : ''}',
-                        ),
-                        const Divider(height: 1, indent: 16, endIndent: 16),
-                        _SummaryRow(
-                          icon: Icons.payments_outlined,
-                          label: 'Total',
-                          value: 'Rs. ${order.total.toStringAsFixed(0)}',
-                          valueBold: true,
-                        ),
-                        const Divider(height: 1, indent: 16, endIndent: 16),
-                        _SummaryRow(
-                          icon: Icons.local_shipping_outlined,
-                          label: 'Delivery',
-                          value: order.estimatedDelivery ?? 'To be confirmed',
-                          valueColor: AppColors.statusShipped,
-                        ),
-                        const Divider(height: 1, indent: 16, endIndent: 16),
-                        _SummaryRow(
-                          icon: Icons.location_on_outlined,
-                          label: 'Address',
-                          value:
-                              '${order.deliveryAddress.addressLine}, ${order.deliveryAddress.city}',
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: AppSpacing.xl),
-
-                  // COD notice
-                  Container(
-                    padding: const EdgeInsets.all(AppSpacing.md),
-                    decoration: BoxDecoration(
-                      color: AppColors.secondary.withValues(alpha:0.1),
-                      borderRadius: AppDimensions.radiusSm,
-                      border: Border.all(
-                        color: AppColors.secondary.withValues(alpha:0.3),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.info_outline_rounded,
-                          size: 18,
-                          color: AppColors.warning,
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        Expanded(
-                          child: Text(
-                            'Payment will be collected on delivery. Please have the exact amount ready.',
-                            style: AppTypography.bodySmall.copyWith(
-                              color: AppColors.warning,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: AppSpacing.xxl),
-
-                  // Track order CTA
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                    },
-                    icon: const Icon(Icons.local_shipping_rounded, size: 18),
-                    label: Text(
-                      'Track this Order',
-                      style: AppTypography.buttonText,
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: AppColors.surface,
-                      minimumSize: const Size.fromHeight(AppDimensions.touchTarget),
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: AppDimensions.radiusSm,
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: AppSpacing.md),
-
-                  // Browse marketplace CTA
-                  OutlinedButton(
-                    onPressed: () {
-                      // Navigate to home
-                      Navigator.of(context)
-                          .popUntil((route) => route.isFirst);
-                    },
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.textPrimary,
-                      side: const BorderSide(color: AppColors.divider),
-                      minimumSize: const Size.fromHeight(AppDimensions.touchTarget),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: AppDimensions.radiusSm,
-                      ),
-                    ),
-                    child: Text(
-                      'Continue Shopping',
-                      style: AppTypography.buttonText.copyWith(
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: AppSpacing.xxl),
+                  // ── Success Header ─────────────────────────────────
+                  _buildSuccessHeader(),
+                  const SizedBox(height: 8),
+                  _buildPaymentSummaryCard(),
+                  const SizedBox(height: 14),
+                  _buildInvoiceBanner(),
+                  const SizedBox(height: 14),
+                  _buildOrderItemsCard(),
                 ],
               ),
             ),
-          ],
-        ),
+          ),
+
+          // ── Sticky Bottom CTA ───────────────────────────────────
+          _buildBottomCta(),
+        ],
       ),
+      bottomNavigationBar: const AppBottomNavBar(currentIndex: 0),
     );
   }
-}
 
-class _SummaryRow extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-  final bool valueBold;
-  final Color? valueColor;
-
-  const _SummaryRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-    this.valueBold = false,
-    this.valueColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
+  // ── Success Header ─────────────────────────────────────────────────────
+  Widget _buildSuccessHeader() {
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.lg,
-        vertical: AppSpacing.md,
-      ),
-      child: Row(
+      padding: const EdgeInsets.only(top: 10),
+      child: Column(
         children: [
-          Icon(icon, size: 16, color: AppColors.textSecondary),
-          const SizedBox(width: AppSpacing.md),
-          SizedBox(
-            width: 72,
-            child: Text(
-              label,
-              style:
-                  AppTypography.bodySmall.copyWith(color: AppColors.textSecondary),
+          // Green checkmark circle peeking off top
+          ScaleTransition(
+            scale: _scaleAnim,
+            child: Container(
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                color: const Color(0xFFDCFCE7),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF22C55E).withValues(alpha: 0.25),
+                    blurRadius: 20,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.check_rounded,
+                color: Color(0xFF16A34A),
+                size: 56,
+              ),
             ),
           ),
-          Expanded(
-            child: Text(
-              value,
-              style: (valueBold ? AppTypography.labelLarge : AppTypography.bodyMedium)
-                  .copyWith(
-                color: valueColor ?? AppColors.textPrimary,
-              ),
-              textAlign: TextAlign.end,
-              overflow: TextOverflow.ellipsis,
+          const SizedBox(height: 20),
+          FadeTransition(
+            opacity: _fadeAnim,
+            child: Column(
+              children: [
+                Text(
+                  'Order Placed Successfully!',
+                  style: AppTypography.screenTitle.copyWith(
+                    fontSize: 22,
+                    color: AppColors.textPrimary,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Order placed successfully! Your order is\nnow pending seller confirmation.',
+                  textAlign: TextAlign.center,
+                  style: AppTypography.bodyMedium.copyWith(
+                    color: AppColors.textSecondary,
+                    height: 1.4,
+                    fontSize: 15,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // ── Payment Summary Card ───────────────────────────────────────────────
+  Widget _buildPaymentSummaryCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: AppDimensions.radiusLg,
+        boxShadow: AppDimensions.cardShadow,
+      ),
+      child: Column(
+        children: [
+          // COD badge
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+            decoration: BoxDecoration(
+              color: const Color(0xFFDCFCE7),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.payments_rounded,
+                    color: Color(0xFF16A34A), size: 16),
+                const SizedBox(width: 6),
+                Text(
+                  'Cash on Delivery',
+                  style: AppTypography.bodySmall.copyWith(
+                    color: const Color(0xFF16A34A),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Amount to pay on delivery',
+            style: AppTypography.bodyMedium.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Rs $_total',
+            style: AppTypography.pricePrimary.copyWith(
+              color: const Color(0xFFEA580C),
+              fontSize: 40,
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Divider(height: 1, color: AppColors.divider),
+          const SizedBox(height: 14),
+
+          // Subtotal row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Subtotal',
+                  style: AppTypography.bodyMedium
+                      .copyWith(color: AppColors.textSecondary)),
+              Text('Rs $_subtotal',
+                  style: AppTypography.bodyMedium
+                      .copyWith(color: AppColors.textPrimary)),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          // Delivery row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Delivery',
+                  style: AppTypography.bodyMedium
+                      .copyWith(color: AppColors.textSecondary)),
+              Text('Rs $_delivery',
+                  style: AppTypography.bodyMedium
+                      .copyWith(color: AppColors.textPrimary)),
+            ],
+          ),
+          const SizedBox(height: 14),
+          const Divider(height: 1, color: AppColors.divider),
+          const SizedBox(height: 14),
+
+          // Helper text
+          Text(
+            'Keep Rs $_total in cash ready — pay the rider\nwhen your order arrives.',
+            textAlign: TextAlign.center,
+            style: AppTypography.bodySmall.copyWith(
+              color: AppColors.textDisabled,
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Invoice Number Banner ──────────────────────────────────────────────
+  Widget _buildInvoiceBanner() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 18),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFDECE1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: AppColors.primary.withValues(alpha: 0.25),
+        ),
+      ),
+      child: Column(
+        children: [
+          Text(
+            'Invoice Number',
+            style: AppTypography.bodySmall.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _invoice,
+            style: const TextStyle(
+              fontFamily: 'Roboto Mono',
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFFEA580C),
+              letterSpacing: 1.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Order Items Card ───────────────────────────────────────────────────
+  Widget _buildOrderItemsCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: AppDimensions.radiusLg,
+        boxShadow: AppDimensions.cardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: const BoxDecoration(
+                  color: AppColors.primary,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.inventory_2_outlined,
+                    color: Colors.white, size: 18),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                'In this order',
+                style:
+                    AppTypography.sectionHeading.copyWith(fontSize: 15),
+              ),
+              const Spacer(),
+              Text(
+                '1 item',
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textDisabled,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Product row
+          Row(
+            children: [
+              Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF5F5F5),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.divider),
+                ),
+                child: Icon(_productIcon,
+                    color: AppColors.textDisabled, size: 28),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _productName,
+                      style: AppTypography.bodyMedium.copyWith(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Qty $_productQty',
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Rs $_productPrice',
+                style: AppTypography.labelLarge.copyWith(fontSize: 15),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Sticky Bottom CTA ─────────────────────────────────────────────────
+  Widget _buildBottomCta() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 12,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+          child: SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                context.go('/orders');
+              },
+              icon: const Icon(Icons.inventory_2_outlined, size: 20),
+              label: Text(
+                'Track Order',
+                style: AppTypography.buttonText
+                    .copyWith(color: Colors.white, fontSize: 16),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

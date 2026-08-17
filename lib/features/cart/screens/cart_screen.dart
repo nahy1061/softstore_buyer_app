@@ -9,8 +9,10 @@ import '../../../app/router.dart';
 import '../cubit/cart_cubit.dart';
 import '../cubit/cart_state.dart';
 import '../models/cart_item.dart';
+import '../../orders/models/order_model.dart';
 // Shared bottom navigation bar used across all main screens
 import '../../../core/widgets/app_bottom_nav_bar.dart';
+import '../../../core/utils/validators.dart';
 
 class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
@@ -206,8 +208,11 @@ class _CartScreenState extends State<CartScreen> {
                   context.read<CartCubit>().addItem(
                         CartItem(
                           id: productId,
-                          name: p['name'] as String,
-                          price: p['price'] as int,
+                          productId: productId,
+                          productName: p['name'] as String,
+                          quantity: 1,
+                          unitPriceSnapshot: p['price'] as int,
+                          subtotalSnapshot: p['price'] as int,
                           iconCodePoint: iconData.codePoint,
                         ),
                       );
@@ -225,15 +230,7 @@ class _CartScreenState extends State<CartScreen> {
   // ── Cart items view ──────────────────────────────────────────────────────
 
   void _showCheckoutSheet(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => BlocProvider.value(
-        value: context.read<CartCubit>(),
-        child: const CartCheckoutSheet(),
-      ),
-    );
+    context.go('/checkout');
   }
 
   Widget _buildCartView(BuildContext context, CartState state) {
@@ -321,8 +318,11 @@ class _CartScreenState extends State<CartScreen> {
                               context.read<CartCubit>().addItem(
                                     CartItem(
                                       id: productId,
-                                      name: p['name'] as String,
-                                      price: p['price'] as int,
+                                      productId: productId,
+                                      productName: p['name'] as String,
+                                      quantity: 1,
+                                      unitPriceSnapshot: p['price'] as int,
+                                      subtotalSnapshot: p['price'] as int,
                                       iconCodePoint: iconData.codePoint,
                                     ),
                                   );
@@ -365,12 +365,42 @@ class _CartScreenState extends State<CartScreen> {
                       style: AppTypography.bodyMedium
                           .copyWith(color: AppColors.textSecondary)),
                   Text(
-                    'PKR ${state.totalPrice}',
+                    'PKR ${state.subtotal}',
                     style: AppTypography.pricePrimary.copyWith(
                       color: AppColors.primary,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Delivery',
+                      style: AppTypography.bodySmall
+                          .copyWith(color: AppColors.textSecondary)),
+                  if (state.quoteLoading)
+                    const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 1.5),
+                    )
+                  else if (state.freeDelivery)
+                    Text(
+                      'Free',
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.success,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    )
+                  else
+                    Text(
+                      'PKR ${state.deliveryFee}',
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
                 ],
               ),
               const SizedBox(height: 12),
@@ -388,7 +418,7 @@ class _CartScreenState extends State<CartScreen> {
                     ),
                   ),
                   child: Text(
-                    'Checkout (${state.itemCount})',
+                    'Checkout (${state.itemCount})  —  PKR ${state.total}',
                     style: const TextStyle(
                         fontWeight: FontWeight.bold, fontSize: 16),
                   ),
@@ -535,26 +565,82 @@ class _CartItemTile extends StatelessWidget {
 // ── Checkout bottom sheet ──────────────────────────────────────────────────
 
 class CartCheckoutSheet extends StatefulWidget {
-  const CartCheckoutSheet();
+  const CartCheckoutSheet({super.key});
 
   @override
   State<CartCheckoutSheet> createState() => _CartCheckoutSheetState();
 }
 
 class _CartCheckoutSheetState extends State<CartCheckoutSheet> {
-  static const int _shippingFee = 275;
   static const int _otherFees = 10;
   static const int _platformFee = 10;
 
-  String get _deliveryRange {
-    final now = DateTime.now();
-    final start = now.add(const Duration(days: 5));
-    final end = now.add(const Duration(days: 9));
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    return '${months[start.month - 1]} ${start.day}–${end.day}';
+  // Active delivery address state
+  String _recipientName = 'Muhammad Khalid';
+  String _recipientPhone = '03408014187';
+  String _addressLabel = 'HOME';
+  String _streetAddress = 'House 12, Street 4, Model Town';
+  String _city = 'Lahore';
+  String _province = 'Punjab';
+
+  // Delivery method state
+  DeliveryOption? _selectedDeliveryOption;
+  late final List<DeliveryOption> _deliveryOptions;
+
+  @override
+  void initState() {
+    super.initState();
+    _deliveryOptions = DeliveryOption.getDeliveryOptions();
+  }
+
+  void _openEditLocationSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _CheckoutLocationEditSheet(
+        initialName: _recipientName,
+        initialPhone: _recipientPhone,
+        initialLabel: _addressLabel,
+        initialStreet: _streetAddress,
+        initialCity: _city,
+        initialProvince: _province,
+        onSave: ({
+          required String name,
+          required String phone,
+          required String label,
+          required String street,
+          required String city,
+          required String province,
+        }) {
+          setState(() {
+            _recipientName = name;
+            _recipientPhone = phone;
+            _addressLabel = label;
+            _streetAddress = street;
+            _city = city;
+            _province = province;
+          });
+        },
+      ),
+    );
+  }
+
+  void _openDeliveryMethodPickerSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _DeliveryOptionPickerSheet(
+        options: _deliveryOptions,
+        initialSelected: _selectedDeliveryOption,
+        onSelect: (DeliveryOption option) {
+          setState(() {
+            _selectedDeliveryOption = option;
+          });
+        },
+      ),
+    );
   }
 
   @override
@@ -563,8 +649,9 @@ class _CartCheckoutSheetState extends State<CartCheckoutSheet> {
 
     return BlocBuilder<CartCubit, CartState>(
       builder: (context, state) {
+        final shippingFee = _selectedDeliveryOption?.fee ?? 0;
         final grandTotal =
-            state.totalPrice + _shippingFee + _otherFees + _platformFee;
+            state.totalPrice + shippingFee + _otherFees + _platformFee;
 
         return Container(
           height: MediaQuery.of(context).size.height * 0.92,
@@ -608,72 +695,106 @@ class _CartCheckoutSheetState extends State<CartCheckoutSheet> {
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Icon(Icons.location_on,
-                                color: AppColors.primary, size: 20),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'Muhammad Khalid, 03408014187',
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 14),
-                                  ),
-                                  const SizedBox(height: 5),
-                                  Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: AppColors.primary
-                                              .withValues(alpha: 0.12),
-                                          borderRadius:
-                                              BorderRadius.circular(3),
-                                        ),
-                                        child: Text(
-                                          'HOME',
-                                          style: TextStyle(
-                                            color: AppColors.primary,
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Expanded(
-                                        child: Text(
-                                          'House 12, Street 4, Model Town, Lahore, Punjab',
-                                          style: const TextStyle(
-                                              fontSize: 12,
-                                              color: Color(0xFF666666)),
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
+                            Container(
+                              margin: const EdgeInsets.only(top: 2),
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary
+                                    .withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(
+                                Icons.location_on,
+                                color: AppColors.primary,
+                                size: 20,
                               ),
                             ),
-                            TextButton(
-                              onPressed: () {},
-                              style: TextButton.styleFrom(
-                                padding: EdgeInsets.zero,
-                                minimumSize: Size.zero,
-                                tapTargetSize:
-                                    MaterialTapTargetSize.shrinkWrap,
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: InkWell(
+                                onTap: _openEditLocationSheet,
+                                borderRadius: BorderRadius.circular(6),
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '$_recipientName, $_recipientPhone',
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14),
+                                    ),
+                                    const SizedBox(height: 5),
+                                    Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Container(
+                                          padding:
+                                              const EdgeInsets.symmetric(
+                                                  horizontal: 6,
+                                                  vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.primary
+                                                .withValues(alpha: 0.12),
+                                            borderRadius:
+                                                BorderRadius.circular(3),
+                                          ),
+                                          child: Text(
+                                            _addressLabel.toUpperCase(),
+                                            style: const TextStyle(
+                                              color: AppColors.primary,
+                                              fontSize: 10,
+                                              fontWeight:
+                                                  FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Expanded(
+                                          child: Text(
+                                            '$_streetAddress, $_city, $_province',
+                                            style: const TextStyle(
+                                                fontSize: 12,
+                                                color: Color(0xFF666666)),
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
                               ),
-                              child: Text(
+                            ),
+                            const SizedBox(width: 8),
+                            // Edit button in front of location
+                            OutlinedButton.icon(
+                              onPressed: _openEditLocationSheet,
+                              icon: const Icon(
+                                Icons.edit_outlined,
+                                size: 14,
+                                color: AppColors.primary,
+                              ),
+                              label: const Text(
                                 'EDIT',
                                 style: TextStyle(
                                   color: AppColors.primary,
                                   fontWeight: FontWeight.bold,
-                                  fontSize: 13,
+                                  fontSize: 12,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(
+                                    color: AppColors.primary, width: 1.2),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 6),
+                                minimumSize: Size.zero,
+                                tapTargetSize:
+                                    MaterialTapTargetSize.shrinkWrap,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(6),
                                 ),
                               ),
                             ),
@@ -804,32 +925,8 @@ class _CartCheckoutSheetState extends State<CartCheckoutSheet> {
                               ],
                             )),
 
-                            // Guaranteed delivery row
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 12),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      'Guaranteed by $_deliveryRange',
-                                      style:
-                                          const TextStyle(fontSize: 13),
-                                    ),
-                                  ),
-                                  Text(
-                                    'PKR $_shippingFee',
-                                    style: const TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w500),
-                                  ),
-                                  const SizedBox(width: 2),
-                                  const Icon(Icons.chevron_right,
-                                      size: 18,
-                                      color: Color(0xFF888888)),
-                                ],
-                              ),
-                            ),
+                            // ── Delivery Method Selector ───────────────────
+                            _buildDeliveryMethodSection(),
                           ],
                         ),
                       ),
@@ -886,7 +983,14 @@ class _CartCheckoutSheetState extends State<CartCheckoutSheet> {
                                 color: Color(0xFFEEEEEE)),
 
                             _summaryRow(
-                                'Shipping Fee Total', 'PKR $_shippingFee'),
+                              'Shipping Fee Total',
+                              _selectedDeliveryOption == null
+                                  ? 'Not selected'
+                                  : 'PKR ${_selectedDeliveryOption!.fee}',
+                              valueColor: _selectedDeliveryOption == null
+                                  ? AppColors.error
+                                  : null,
+                            ),
                             const SizedBox(height: 10),
                             _summaryRow('Other Fees', 'PKR $_otherFees'),
                             const SizedBox(height: 10),
@@ -915,7 +1019,7 @@ class _CartCheckoutSheetState extends State<CartCheckoutSheet> {
                       const SizedBox(height: 8),
 
                       // ── Invoice row ───────────────────────────────────
-                      Container(
+                      Material(
                         color: Colors.white,
                         child: ListTile(
                           dense: true,
@@ -953,13 +1057,31 @@ class _CartCheckoutSheetState extends State<CartCheckoutSheet> {
                         width: double.infinity,
                         child: ElevatedButton(
                           onPressed: () {
+                            if (_selectedDeliveryOption == null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                      'Please select a delivery method before proceeding to pay'),
+                                  backgroundColor: AppColors.error,
+                                  behavior: SnackBarBehavior.floating,
+                                  duration: Duration(seconds: 3),
+                                ),
+                              );
+                              _openDeliveryMethodPickerSheet();
+                              return;
+                            }
+
                             showModalBottomSheet(
                               context: context,
                               isScrollControlled: true,
                               backgroundColor: Colors.transparent,
                               builder: (_) => BlocProvider.value(
                                 value: context.read<CartCubit>(),
-                                child: const _PaymentMethodSheet(),
+                                child: _PaymentMethodSheet(
+                                  shippingFee: _selectedDeliveryOption!.fee,
+                                  deliveryMethodTitle:
+                                      _selectedDeliveryOption!.title,
+                                ),
                               ),
                             );
                           },
@@ -1004,6 +1126,206 @@ class _CartCheckoutSheetState extends State<CartCheckoutSheet> {
     );
   }
 
+  Widget _buildDeliveryMethodSection() {
+    final option = _selectedDeliveryOption;
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.local_shipping_outlined,
+                  size: 18, color: Color(0xFF444444)),
+              const SizedBox(width: 8),
+              const Text(
+                'Delivery Method',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                  color: Color(0xFF222222),
+                ),
+              ),
+              const SizedBox(width: 6),
+              if (option == null)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.error.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Text(
+                    'REQUIRED',
+                    style: TextStyle(
+                      color: AppColors.error,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              const Spacer(),
+              TextButton(
+                onPressed: _openDeliveryMethodPickerSheet,
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: Text(
+                  option == null ? 'SELECT' : 'CHANGE',
+                  style: const TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Material(
+            color: option == null
+                ? AppColors.error.withValues(alpha: 0.04)
+                : const Color(0xFFFAFAFA),
+            borderRadius: BorderRadius.circular(8),
+            child: InkWell(
+              onTap: _openDeliveryMethodPickerSheet,
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: option == null
+                        ? AppColors.error.withValues(alpha: 0.4)
+                        : const Color(0xFFE0E0E0),
+                    width: option == null ? 1.2 : 1,
+                  ),
+                ),
+                child: option == null
+                    ? Row(
+                        children: [
+                          const Icon(Icons.warning_amber_rounded,
+                              color: AppColors.error, size: 22),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: const [
+                                Text(
+                                  'Please select a delivery method',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.error,
+                                  ),
+                                ),
+                                SizedBox(height: 2),
+                                Text(
+                                  'Choose Standard, Express, Collection Point, or Saver',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Color(0xFF777777),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(Icons.chevron_right,
+                              color: AppColors.error, size: 20),
+                        ],
+                      )
+                    : Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(
+                              option.icon,
+                              color: AppColors.primary,
+                              size: 20,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text(
+                                      option.title,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                        color: Color(0xFF222222),
+                                      ),
+                                    ),
+                                    if (option.badge != null) ...[
+                                      const SizedBox(width: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 5, vertical: 1.5),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.primary
+                                              .withValues(alpha: 0.12),
+                                          borderRadius:
+                                              BorderRadius.circular(3),
+                                        ),
+                                        child: Text(
+                                          option.badge!,
+                                          style: const TextStyle(
+                                            color: AppColors.primary,
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  option.estimatedDelivery,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFF555555),
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  option.description,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: Color(0xFF888888),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Text(
+                            'PKR ${option.fee}',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF222222),
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _summaryRow(String label, String value, {Color? valueColor}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1023,10 +1345,876 @@ class _CartCheckoutSheetState extends State<CartCheckoutSheet> {
   }
 }
 
+// ── Checkout Location Edit Sheet ───────────────────────────────────────────
+
+class _CheckoutLocationEditSheet extends StatefulWidget {
+  final String initialName;
+  final String initialPhone;
+  final String initialLabel;
+  final String initialStreet;
+  final String initialCity;
+  final String initialProvince;
+  final void Function({
+    required String name,
+    required String phone,
+    required String label,
+    required String street,
+    required String city,
+    required String province,
+  }) onSave;
+
+  const _CheckoutLocationEditSheet({
+    required this.initialName,
+    required this.initialPhone,
+    required this.initialLabel,
+    required this.initialStreet,
+    required this.initialCity,
+    required this.initialProvince,
+    required this.onSave,
+  });
+
+  @override
+  State<_CheckoutLocationEditSheet> createState() =>
+      _CheckoutLocationEditSheetState();
+}
+
+class _CheckoutLocationEditSheetState
+    extends State<_CheckoutLocationEditSheet> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _phoneCtrl;
+  late final TextEditingController _streetCtrl;
+  late final TextEditingController _cityCtrl;
+  late final TextEditingController _provinceCtrl;
+  late String _selectedLabel;
+
+  static final List<Map<String, String>> _savedAddresses = [
+    {
+      'id': '1',
+      'label': 'HOME',
+      'name': 'Muhammad Khalid',
+      'phone': '03408014187',
+      'street': 'House 12, Street 4, Model Town',
+      'city': 'Lahore',
+      'province': 'Punjab',
+    },
+    {
+      'id': '2',
+      'label': 'OFFICE',
+      'name': 'Muhammad Khalid',
+      'phone': '03408014187',
+      'street': 'Office 401, Plaza 33, Main Boulevard, Gulberg III',
+      'city': 'Lahore',
+      'province': 'Punjab',
+    },
+    {
+      'id': '3',
+      'label': 'OTHER',
+      'name': 'Muhammad Khalid',
+      'phone': '03001234567',
+      'street': 'House 45, Street 10, Sector F-10/2',
+      'city': 'Islamabad',
+      'province': 'Federal Capital',
+    },
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _nameCtrl = TextEditingController(text: widget.initialName);
+    _phoneCtrl = TextEditingController(text: widget.initialPhone);
+    _streetCtrl = TextEditingController(text: widget.initialStreet);
+    _cityCtrl = TextEditingController(text: widget.initialCity);
+    _provinceCtrl = TextEditingController(text: widget.initialProvince);
+    _selectedLabel = widget.initialLabel.toUpperCase();
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _phoneCtrl.dispose();
+    _streetCtrl.dispose();
+    _cityCtrl.dispose();
+    _provinceCtrl.dispose();
+    super.dispose();
+  }
+
+  void _applySavedAddress(Map<String, String> address) {
+    setState(() {
+      _nameCtrl.text = address['name'] ?? '';
+      _phoneCtrl.text = address['phone'] ?? '';
+      _streetCtrl.text = address['street'] ?? '';
+      _cityCtrl.text = address['city'] ?? '';
+      _provinceCtrl.text = address['province'] ?? '';
+      _selectedLabel = (address['label'] ?? 'HOME').toUpperCase();
+    });
+  }
+
+  void _save() {
+    if (!_formKey.currentState!.validate()) return;
+    widget.onSave(
+      name: _nameCtrl.text.trim(),
+      phone: _phoneCtrl.text.trim(),
+      label: _selectedLabel,
+      street: _streetCtrl.text.trim(),
+      city: _cityCtrl.text.trim(),
+      province: _provinceCtrl.text.trim(),
+    );
+    Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+    final viewInsets = MediaQuery.of(context).viewInsets.bottom;
+
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.9,
+      decoration: const BoxDecoration(
+        color: Color(0xFFF7F7F7),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      child: Column(
+        children: [
+          // ── Drag Handle + Header ──────────────────────────────────────
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+              border: Border(bottom: BorderSide(color: Color(0xFFEEEEEE))),
+            ),
+            child: Column(
+              children: [
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFDDDDDD),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Edit Delivery Location',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF222222),
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () => Navigator.of(context).pop(),
+                      borderRadius: BorderRadius.circular(20),
+                      child: const Padding(
+                        padding: EdgeInsets.all(4),
+                        child: Icon(Icons.close, color: Color(0xFF777777), size: 22),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // ── Content ───────────────────────────────────────────────────
+          Expanded(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(16, 16, 16, viewInsets + 16),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Saved addresses quick pick
+                    const Text(
+                      'Saved Addresses',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF333333),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    ..._savedAddresses.map((addr) {
+                      final isSelected = _streetCtrl.text.trim() == addr['street'] &&
+                          _cityCtrl.text.trim() == addr['city'];
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        child: Material(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                          child: InkWell(
+                            onTap: () => _applySavedAddress(addr),
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 10),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: isSelected
+                                      ? AppColors.primary
+                                      : const Color(0xFFE0E0E0),
+                                  width: isSelected ? 1.5 : 1,
+                                ),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 2),
+                                    child: Icon(
+                                      isSelected
+                                          ? Icons.radio_button_checked
+                                          : Icons.radio_button_off,
+                                      size: 20,
+                                      color: isSelected
+                                          ? AppColors.primary
+                                          : const Color(0xFF999999),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Text(
+                                              addr['name'] ?? '',
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 13,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                  horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: AppColors.primary
+                                                    .withValues(alpha: 0.1),
+                                                borderRadius:
+                                                    BorderRadius.circular(4),
+                                              ),
+                                              child: Text(
+                                                addr['label'] ?? '',
+                                                style: const TextStyle(
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: AppColors.primary,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          '${addr['street']}, ${addr['city']}, ${addr['province']}\nPhone: ${addr['phone']}',
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: Color(0xFF666666),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+
+                    const SizedBox(height: 16),
+                    const Divider(color: Color(0xFFE0E0E0)),
+                    const SizedBox(height: 12),
+
+                    // Manual Edit Section
+                    const Text(
+                      'Location Details',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF333333),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Address Label Selector
+                    const Text(
+                      'Address Label',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF666666),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: ['HOME', 'OFFICE', 'OTHER'].map((label) {
+                        final isSelected = _selectedLabel == label;
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ChoiceChip(
+                            label: Text(label),
+                            selected: isSelected,
+                            onSelected: (selected) {
+                              if (selected) {
+                                setState(() => _selectedLabel = label);
+                              }
+                            },
+                            selectedColor: AppColors.primary.withValues(alpha: 0.15),
+                            labelStyle: TextStyle(
+                              color: isSelected
+                                  ? AppColors.primary
+                                  : const Color(0xFF555555),
+                              fontWeight: isSelected
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                              fontSize: 12,
+                            ),
+                            side: BorderSide(
+                              color: isSelected
+                                  ? AppColors.primary
+                                  : const Color(0xFFDDDDDD),
+                            ),
+                            backgroundColor: Colors.white,
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Recipient Name
+                    _buildInputField(
+                      controller: _nameCtrl,
+                      label: 'Full Name',
+                      hint: 'Recipient\'s name',
+                      icon: Icons.person_outline,
+                      validator: Validators.fullName,
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Contact Phone
+                    _buildInputField(
+                      controller: _phoneCtrl,
+                      label: 'Phone Number',
+                      hint: '03XXXXXXXXX',
+                      icon: Icons.phone_outlined,
+                      keyboardType: TextInputType.phone,
+                      validator: (v) => (v?.isEmpty ?? true)
+                          ? 'Phone is required'
+                          : Validators.pakistaniPhone(v),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Street Address
+                    _buildInputField(
+                      controller: _streetCtrl,
+                      label: 'Street Address',
+                      hint: 'House/Flat no, Street, Area',
+                      icon: Icons.home_outlined,
+                      maxLines: 2,
+                      validator: Validators.address,
+                    ),
+                    const SizedBox(height: 14),
+
+                    // City and Province Row
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildInputField(
+                            controller: _cityCtrl,
+                            label: 'City',
+                            hint: 'e.g. Lahore',
+                            icon: Icons.location_city_outlined,
+                            validator: Validators.city,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _buildInputField(
+                            controller: _provinceCtrl,
+                            label: 'Province / State',
+                            hint: 'e.g. Punjab',
+                            icon: Icons.map_outlined,
+                            validator: (v) => (v?.isEmpty ?? true)
+                                ? 'Province is required'
+                                : null,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // ── Bottom Action Button ──────────────────────────────────────
+          Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              border: Border(top: BorderSide(color: Color(0xFFEEEEEE))),
+            ),
+            padding: EdgeInsets.fromLTRB(16, 12, 16, bottomPadding + 12),
+            child: SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _save,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: const Text(
+                  'Save Location',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInputField({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    required IconData icon,
+    int maxLines = 1,
+    TextInputType? keyboardType,
+    String? Function(String?)? validator,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: Color(0xFF666666),
+          ),
+        ),
+        const SizedBox(height: 6),
+        TextFormField(
+          controller: controller,
+          maxLines: maxLines,
+          keyboardType: keyboardType,
+          validator: validator,
+          style: const TextStyle(fontSize: 13),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: const TextStyle(fontSize: 13, color: Color(0xFFAAAAAA)),
+            prefixIcon: Icon(icon, size: 20, color: const Color(0xFF777777)),
+            filled: true,
+            fillColor: Colors.white,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: Color(0xFFDDDDDD)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: Color(0xFFDDDDDD)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: AppColors.error),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Delivery Option Model & Picker Sheet ───────────────────────────────────
+
+class DeliveryOption {
+  final String id;
+  final String title;
+  final String estimatedDelivery;
+  final int fee;
+  final IconData icon;
+  final String description;
+  final String? badge;
+
+  const DeliveryOption({
+    required this.id,
+    required this.title,
+    required this.estimatedDelivery,
+    required this.fee,
+    required this.icon,
+    required this.description,
+    this.badge,
+  });
+
+  static List<DeliveryOption> getDeliveryOptions() {
+    final now = DateTime.now();
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+
+    final stdStart = now.add(const Duration(days: 5));
+    final stdEnd = now.add(const Duration(days: 9));
+    final stdRange =
+        '${months[stdStart.month - 1]} ${stdStart.day}–${stdEnd.day}';
+
+    final expStart = now.add(const Duration(days: 2));
+    final expEnd = now.add(const Duration(days: 3));
+    final expRange =
+        '${months[expStart.month - 1]} ${expStart.day}–${expEnd.day}';
+
+    final pickStart = now.add(const Duration(days: 4));
+    final pickEnd = now.add(const Duration(days: 7));
+    final pickRange =
+        '${months[pickStart.month - 1]} ${pickStart.day}–${pickEnd.day}';
+
+    final ecoStart = now.add(const Duration(days: 7));
+    final ecoEnd = now.add(const Duration(days: 12));
+    final ecoRange =
+        '${months[ecoStart.month - 1]} ${ecoStart.day}–${ecoEnd.day}';
+
+    return [
+      DeliveryOption(
+        id: 'standard',
+        title: 'Standard Delivery',
+        estimatedDelivery: 'Guaranteed by $stdRange',
+        fee: 275,
+        icon: Icons.local_shipping_outlined,
+        description: 'Doorstep delivery via standard courier network',
+        badge: 'POPULAR',
+      ),
+      DeliveryOption(
+        id: 'express',
+        title: 'Express Delivery',
+        estimatedDelivery: 'Guaranteed by $expRange',
+        fee: 450,
+        icon: Icons.electric_bolt_outlined,
+        description: 'Priority fast delivery to your address',
+        badge: 'FASTEST',
+      ),
+      DeliveryOption(
+        id: 'pickup',
+        title: 'Collection Point / Pickup Station',
+        estimatedDelivery: 'Available for pickup by $pickRange',
+        fee: 150,
+        icon: Icons.storefront_outlined,
+        description: 'Self pick-up at nearest SoftStore service station',
+        badge: 'SAVE PKR 125',
+      ),
+      DeliveryOption(
+        id: 'economy',
+        title: 'Economy Saver',
+        estimatedDelivery: 'Estimated by $ecoRange',
+        fee: 180,
+        icon: Icons.savings_outlined,
+        description: 'Economical delivery for non-urgent parcels',
+        badge: 'SAVER',
+      ),
+    ];
+  }
+}
+
+class _DeliveryOptionPickerSheet extends StatefulWidget {
+  final List<DeliveryOption> options;
+  final DeliveryOption? initialSelected;
+  final ValueChanged<DeliveryOption> onSelect;
+
+  const _DeliveryOptionPickerSheet({
+    required this.options,
+    this.initialSelected,
+    required this.onSelect,
+  });
+
+  @override
+  State<_DeliveryOptionPickerSheet> createState() =>
+      _DeliveryOptionPickerSheetState();
+}
+
+class _DeliveryOptionPickerSheetState
+    extends State<_DeliveryOptionPickerSheet> {
+  late DeliveryOption? _current;
+
+  @override
+  void initState() {
+    super.initState();
+    _current = widget.initialSelected;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: Color(0xFFF7F7F7),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Header
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+              border: Border(bottom: BorderSide(color: Color(0xFFEEEEEE))),
+            ),
+            child: Column(
+              children: [
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFDDDDDD),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Select Delivery Method',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF222222),
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () => Navigator.of(context).pop(),
+                      borderRadius: BorderRadius.circular(20),
+                      child: const Padding(
+                        padding: EdgeInsets.all(4),
+                        child: Icon(Icons.close,
+                            color: Color(0xFF777777), size: 22),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // Options List
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: widget.options.map((opt) {
+                  final isSelected = _current?.id == opt.id;
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    child: Material(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      child: InkWell(
+                        onTap: () {
+                          setState(() => _current = opt);
+                        },
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: isSelected
+                                  ? AppColors.primary
+                                  : const Color(0xFFE0E0E0),
+                              width: isSelected ? 1.8 : 1,
+                            ),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Icon(
+                                  isSelected
+                                      ? Icons.radio_button_checked
+                                      : Icons.radio_button_off,
+                                  color: isSelected
+                                      ? AppColors.primary
+                                      : const Color(0xFF999999),
+                                  size: 20,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Flexible(
+                                          child: Text(
+                                            opt.title,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 13,
+                                              color: Color(0xFF222222),
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        if (opt.badge != null) ...[
+                                          const SizedBox(width: 6),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 5, vertical: 1.5),
+                                            decoration: BoxDecoration(
+                                              color: AppColors.primary
+                                                  .withValues(alpha: 0.12),
+                                              borderRadius:
+                                                  BorderRadius.circular(3),
+                                            ),
+                                            child: Text(
+                                              opt.badge!,
+                                              style: const TextStyle(
+                                                color: AppColors.primary,
+                                                fontSize: 9,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      opt.estimatedDelivery,
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500,
+                                        color: Color(0xFF444444),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      opt.description,
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: Color(0xFF888888),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'PKR ${opt.fee}',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                  color: isSelected
+                                      ? AppColors.primary
+                                      : const Color(0xFF222222),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+
+          // Bottom confirm button
+          Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              border: Border(top: BorderSide(color: Color(0xFFEEEEEE))),
+            ),
+            padding: EdgeInsets.fromLTRB(16, 12, 16, bottomPadding + 12),
+            child: SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _current == null
+                    ? null
+                    : () {
+                        widget.onSelect(_current!);
+                        Navigator.of(context).pop();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                                'Delivery method selected: ${_current!.title}'),
+                            backgroundColor: AppColors.primary,
+                            behavior: SnackBarBehavior.floating,
+                            duration: const Duration(seconds: 2),
+                          ),
+                        );
+                      },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: const Text(
+                  'Confirm Delivery Method',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ── Payment method sheet ───────────────────────────────────────────────────
 
 class _PaymentMethodSheet extends StatefulWidget {
-  const _PaymentMethodSheet();
+  final int shippingFee;
+  final String deliveryMethodTitle;
+
+  const _PaymentMethodSheet({
+    super.key,
+    this.shippingFee = 275,
+    this.deliveryMethodTitle = 'Standard Delivery',
+  });
 
   @override
   State<_PaymentMethodSheet> createState() => _PaymentMethodSheetState();
@@ -1035,7 +2223,6 @@ class _PaymentMethodSheet extends StatefulWidget {
 class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
   String _selected = 'card';
 
-  static const int _shippingFee = 275;
   static const int _otherFees = 10;
   static const int _platformFee = 10;
 
@@ -1046,7 +2233,7 @@ class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
     return BlocBuilder<CartCubit, CartState>(
       builder: (context, state) {
         final total =
-            state.totalPrice + _shippingFee + _otherFees + _platformFee;
+            state.totalPrice + widget.shippingFee + _otherFees + _platformFee;
 
         return Container(
           height: MediaQuery.of(context).size.height * 0.92,
@@ -1113,7 +2300,7 @@ class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
 
                       const SizedBox(height: 10),
 
-                      // ── Payment methods ────────────────────────────
+                      // ── Payment methods ────────────────────
                       Container(
                         color: Colors.white,
                         child: Column(
@@ -1133,7 +2320,9 @@ class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
                                   backgroundColor: Colors.transparent,
                                   builder: (_) => BlocProvider.value(
                                     value: context.read<CartCubit>(),
-                                    child: const _CardDetailSheet(),
+                                    child: _CardDetailSheet(
+                                      shippingFee: widget.shippingFee,
+                                    ),
                                   ),
                                 );
                               },
@@ -1158,7 +2347,9 @@ class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
                                   backgroundColor: Colors.transparent,
                                   builder: (_) => BlocProvider.value(
                                     value: context.read<CartCubit>(),
-                                    child: const _CodDetailSheet(),
+                                    child: _CodDetailSheet(
+                                      shippingFee: widget.shippingFee,
+                                    ),
                                   ),
                                 );
                               },
@@ -1220,17 +2411,11 @@ class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
                       width: double.infinity,
                       child: ElevatedButton(
                         onPressed: () {
-                          Navigator.of(context).pop();
-                          Navigator.of(context).pop();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content:
-                                  Text('Order placed successfully!'),
-                              backgroundColor: AppColors.primary,
-                              behavior: SnackBarBehavior.floating,
-                              duration: Duration(seconds: 2),
-                            ),
-                          );
+                          final nav = Navigator.of(context);
+                          nav.pop();
+                          nav.pop();
+                          final ref = dummyOrders.first.referenceNumber;
+                          context.go('/order-confirmation/$ref');
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
@@ -1370,9 +2555,13 @@ class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
 // ── Cash on Delivery detail sheet ─────────────────────────────────────────
 
 class _CodDetailSheet extends StatelessWidget {
-  const _CodDetailSheet();
+  final int shippingFee;
 
-  static const int _shippingFee = 275;
+  const _CodDetailSheet({
+    super.key,
+    this.shippingFee = 275,
+  });
+
   static const int _otherFees = 10;
   static const int _platformFee = 10;
 
@@ -1399,7 +2588,7 @@ class _CodDetailSheet extends StatelessWidget {
     return BlocBuilder<CartCubit, CartState>(
       builder: (context, state) {
         final subtotal =
-            state.totalPrice + _shippingFee + _otherFees + _platformFee;
+            state.totalPrice + shippingFee + _otherFees + _platformFee;
         final codFee = (subtotal * 0.07).round().clamp(0, 100);
         final total = subtotal + codFee;
 
@@ -1551,17 +2740,11 @@ class _CodDetailSheet extends StatelessWidget {
                       child: ElevatedButton(
                         onPressed: () {
                           final nav = Navigator.of(context);
-                          final msg =
-                              ScaffoldMessenger.of(context);
                           nav.pop();
                           nav.pop();
                           nav.pop();
-                          msg.showSnackBar(const SnackBar(
-                            content: Text('Order placed successfully!'),
-                            backgroundColor: AppColors.primary,
-                            behavior: SnackBarBehavior.floating,
-                            duration: Duration(seconds: 2),
-                          ));
+                          final ref = dummyOrders.first.referenceNumber;
+                          context.go('/order-confirmation/$ref');
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
@@ -1614,14 +2797,18 @@ class _CodDetailSheet extends StatelessWidget {
 // ── Credit/Debit Card sheet ────────────────────────────────────────────────
 
 class _CardDetailSheet extends StatefulWidget {
-  const _CardDetailSheet();
+  final int shippingFee;
+
+  const _CardDetailSheet({
+    super.key,
+    this.shippingFee = 275,
+  });
 
   @override
   State<_CardDetailSheet> createState() => _CardDetailSheetState();
 }
 
 class _CardDetailSheetState extends State<_CardDetailSheet> {
-  static const int _shippingFee = 275;
   static const int _otherFees = 10;
   static const int _platformFee = 10;
 
@@ -1647,7 +2834,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> {
     return BlocBuilder<CartCubit, CartState>(
       builder: (context, state) {
         final total =
-            state.totalPrice + _shippingFee + _otherFees + _platformFee;
+            state.totalPrice + widget.shippingFee + _otherFees + _platformFee;
 
         return Container(
           height: MediaQuery.of(context).size.height * 0.92,
@@ -1887,17 +3074,11 @@ class _CardDetailSheetState extends State<_CardDetailSheet> {
                             return;
                           }
                           final nav = Navigator.of(context);
-                          final msg =
-                              ScaffoldMessenger.of(context);
                           nav.pop();
                           nav.pop();
                           nav.pop();
-                          msg.showSnackBar(const SnackBar(
-                            content: Text('Order placed successfully!'),
-                            backgroundColor: AppColors.primary,
-                            behavior: SnackBarBehavior.floating,
-                            duration: Duration(seconds: 2),
-                          ));
+                          final ref = dummyOrders.first.referenceNumber;
+                          context.go('/order-confirmation/$ref');
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
