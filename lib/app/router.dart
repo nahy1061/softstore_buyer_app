@@ -192,14 +192,27 @@ final GoRouter goRouter = GoRouter(
       path: AppRoutes.orderDetail,
       builder: (context, state) {
         final id = state.pathParameters['id'] ?? '';
-        final order = dummyOrders.firstWhere(
-          (o) => o.id == id,
-          orElse: () => dummyOrders.first,
-        );
-        // BlocProvider is required: OrderDetailScreen uses BlocListener
-        // and context.read<OrderCubit>() for the cancel order action.
+        final extraOrder = state.extra as Order?;
+        final order = extraOrder ??
+            Order(
+              id: id,
+              referenceNumber: id,
+              placedAt: DateTime.now(),
+              status: OrderStatus.pending,
+              items: const [],
+              deliveryAddress: const OrderAddress(
+                name: 'Buyer',
+                phone: '',
+                addressLine: 'Delivery Address',
+                city: 'Pakistan',
+              ),
+              subtotal: 0,
+              deliveryFee: 0,
+              storeName: 'SoftStore Merchant',
+            );
+
         return BlocProvider(
-          create: (_) => OrderCubit(),
+          create: (_) => OrderCubit()..loadOrderDetail(id),
           child: OrderDetailScreen(order: order),
         );
       },

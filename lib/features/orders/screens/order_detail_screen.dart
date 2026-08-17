@@ -34,6 +34,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   Widget build(BuildContext context) {
     return BlocListener<OrderCubit, OrderState>(
       listener: (context, state) {
+        if (state is OrderDetailLoaded) {
+          setState(() {
+            currentOrder = state.order;
+          });
+        }
         if (state is OrderCancelled) {
           // Update order status to cancelled
           setState(() {
@@ -65,6 +70,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
           // Reload orders to update the orders list, then navigate back
           Future.delayed(const Duration(seconds: 2), () {
+            if (!context.mounted) return;
             context.read<OrderCubit>().loadOrders();
             context.go('/orders');
           });

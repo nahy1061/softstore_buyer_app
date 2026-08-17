@@ -3,12 +3,108 @@ import 'package:softstore_buyer_app/features/orders/cubit/order_cubit.dart';
 import 'package:softstore_buyer_app/features/orders/cubit/order_state.dart';
 import 'package:softstore_buyer_app/features/orders/models/order_model.dart';
 
+import 'package:softstore_buyer_app/features/orders/data/order_service.dart';
+
+final kTestOrders = [
+  Order(
+    id: '1',
+    referenceNumber: 'SS-20240801-0042',
+    placedAt: DateTime(2024, 8, 1, 14, 30),
+    status: OrderStatus.confirmed,
+    storeName: 'TechZone Mobile Accessories',
+    storeCity: 'Lahore',
+    subtotal: 1200,
+    deliveryFee: 100,
+    deliveryAddress: const OrderAddress(
+      name: 'Ali Khan',
+      phone: '+92 300 1234567',
+      addressLine: 'Street 1, F-7',
+      city: 'Islamabad',
+    ),
+    items: const [
+      OrderItem(id: 'i1', name: 'Samsung Fast Charger 25W', quantity: 1, unitPrice: 1200),
+    ],
+  ),
+  Order(
+    id: '2',
+    referenceNumber: 'SS-20240805-0088',
+    placedAt: DateTime(2024, 8, 5, 9, 15),
+    status: OrderStatus.cancelled,
+    storeName: 'Fashion Hub',
+    storeCity: 'Karachi',
+    subtotal: 2500,
+    deliveryFee: 200,
+    deliveryAddress: const OrderAddress(
+      name: 'Ali Khan',
+      phone: '+92 300 1234567',
+      addressLine: 'Street 1, F-7',
+      city: 'Islamabad',
+    ),
+    items: const [
+      OrderItem(id: 'i2', name: 'Denim Jacket', quantity: 1, unitPrice: 2500),
+    ],
+  ),
+  Order(
+    id: '3',
+    referenceNumber: 'SS-20240810-0203',
+    placedAt: DateTime(2024, 8, 10, 16, 45),
+    status: OrderStatus.delivered,
+    storeName: 'Fresh Dairy Direct',
+    storeCity: 'Rawalpindi',
+    subtotal: 960,
+    deliveryFee: 100,
+    deliveryAddress: const OrderAddress(
+      name: 'Ali Khan',
+      phone: '+92 300 1234567',
+      addressLine: 'Street 1, F-7',
+      city: 'Islamabad',
+    ),
+    items: const [
+      OrderItem(id: 'i3', name: 'Milk 1L', quantity: 2, unitPrice: 480),
+    ],
+  ),
+  Order(
+    id: '4',
+    referenceNumber: 'SS-20240809-0117',
+    placedAt: DateTime(2024, 8, 9, 11, 0),
+    status: OrderStatus.processing,
+    storeName: 'Grocery Express',
+    storeCity: 'Islamabad',
+    subtotal: 550,
+    deliveryFee: 120,
+    deliveryAddress: const OrderAddress(
+      name: 'Ali Khan',
+      phone: '+92 300 1234567',
+      addressLine: 'Street 1, F-7',
+      city: 'Islamabad',
+    ),
+    items: const [
+      OrderItem(id: 'i4', name: 'Cooking Oil 1L', quantity: 1, unitPrice: 550),
+    ],
+  ),
+];
+
+class FakeOrderService extends OrderService {
+  @override
+  Future<List<Order>> fetchOrders() async {
+    return List<Order>.from(kTestOrders);
+  }
+
+  @override
+  Future<Order> fetchOrderDetail(String invoiceNumber) async {
+    return kTestOrders.firstWhere(
+      (o) => o.referenceNumber == invoiceNumber || o.id == invoiceNumber,
+      orElse: () => kTestOrders.first,
+    );
+  }
+}
+
 void main() {
   group('OrderCubit', () {
     late OrderCubit cubit;
 
     setUp(() {
-      cubit = OrderCubit();
+      cubit = OrderCubit(orderService: FakeOrderService());
     });
 
     tearDown(() {
