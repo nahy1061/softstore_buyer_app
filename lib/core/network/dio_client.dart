@@ -25,21 +25,23 @@ class DioClient {
 
   /// Initialize the Dio client. Call this once on app startup.
   Future<void> init() async {
+    // Setup cookie jar first
+    await _setupCookieJar();
+
     _dio = Dio(
       BaseOptions(
         baseUrl: EnvConfig.apiBaseUrl,
         connectTimeout: AppConfig.connectTimeout,
         receiveTimeout: AppConfig.receiveTimeout,
         sendTimeout: AppConfig.sendTimeout,
+        responseType: ResponseType.plain, // Enables smooth HTML scraping and JSON parsing
         headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'User-Agent': 'SoftStoreBuyerApp/1.0 (Flutter; Android/iOS)',
         },
+        validateStatus: (status) => status != null && status < 500,
       ),
     );
-
-    // Setup cookie jar
-    await _setupCookieJar();
 
     // Add interceptors in order: logging → auth → retry → cookie manager
     _dio.interceptors.add(LoggingInterceptor());
@@ -49,11 +51,18 @@ class DioClient {
   }
 
   Future<void> _setupCookieJar() async {
-    final appDocDir = await getApplicationDocumentsDirectory();
-    _cookieJar = PersistCookieJar(
-      storage: FileStorage('${appDocDir.path}/.cookies/'),
-    );
+    try {
+      final appDocDir = await getApplicationDocumentsDirectory();
+      _cookieJar = PersistCookieJar(
+        storage: FileStorage('${appDocDir.path}/.cookies/'),
+      );
+    } catch (_) {
+      // Fallback in-memory jar if storage fails
+      _cookieJar = PersistCookieJar();
+    }
   }
+
+  PersistCookieJar get cookieJar => _cookieJar;
 
   Dio get dio => _dio;
 

@@ -248,7 +248,7 @@ class _CartScreenState extends State<CartScreen> {
                   physics: const NeverScrollableScrollPhysics(),
                   padding: const EdgeInsets.all(AppSpacing.lg),
                   itemCount: state.items.length,
-                  separatorBuilder: (_, _) =>
+                  separatorBuilder: (context, index) =>
                       const SizedBox(height: AppSpacing.md),
                   itemBuilder: (context, index) {
                     final item = state.items[index];

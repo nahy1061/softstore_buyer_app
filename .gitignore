@@ -46,3 +46,34 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Secrets and environment files
+.env
+.env.local
+.env.*.local
+*.key
+credentials.json
+google-services.json
+GoogleService-Info.plist
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Generated files
+*.g.dart
+*.config.dart
+
+# OS files
+Thumbs.db
+
+# Private files
+docs/naheed-private/

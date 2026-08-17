@@ -111,7 +111,7 @@ class DealsScreen extends StatelessWidget {
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
                 itemCount: _sponsors.length,
-                separatorBuilder: (_, _) =>
+                separatorBuilder: (context, index) =>
                     const SizedBox(width: AppSpacing.md),
                 itemBuilder: (context, i) => _SponsorCard(data: _sponsors[i]),
               ),

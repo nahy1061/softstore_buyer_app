@@ -9,15 +9,36 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # State Management
+  flutter_bloc: ^8.1.5
+  bloc: ^8.1.2
+  equatable: ^2.0.5
+  provider: ^6.1.2
+
+  # Navigation
+  go_router: ^14.2.0
+
+  # Networking
   dio: ^5.7.0
   cookie_jar: ^4.0.8
   dio_cookie_manager: ^3.1.1
+
+  # Storage
   shared_preferences: ^2.3.2
-  cached_network_image: ^3.4.1
-  provider: ^6.1.2
   flutter_secure_storage: ^9.2.2
+
+  # HTML Parsing
+  html: ^0.15.4
+
+  # UI
+  cached_network_image: ^3.4.1
   smooth_page_indicator: ^1.2.0+3
   shimmer: ^3.0.0
+
+  # Utils
   url_launcher: ^6.3.1
   image_picker: ^1.1.2
   webview_flutter: ^4.10.0
@@ -27,6 +48,8 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+  bloc_test: ^9.1.6
+  mocktail: ^1.0.3
 
 flutter:
   uses-material-design: true

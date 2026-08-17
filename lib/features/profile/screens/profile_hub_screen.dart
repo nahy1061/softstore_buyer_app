@@ -5,7 +5,6 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_dimensions.dart';
 import '../../../app/router.dart';
-// Shared bottom navigation bar used across all main screens
 import '../../../core/widgets/app_bottom_nav_bar.dart';
 
 class ProfileHubScreen extends StatelessWidget {
@@ -119,7 +118,7 @@ class _ProfileHeader extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 40,
-            backgroundColor: AppColors.primary.withValues(alpha:0.1),
+            backgroundColor: AppColors.primary.withValues(alpha: 0.1),
             child: const Icon(Icons.person, size: 40, color: AppColors.primary),
           ),
           const SizedBox(height: AppSpacing.md),
@@ -127,7 +126,8 @@ class _ProfileHeader extends StatelessWidget {
           const SizedBox(height: AppSpacing.xs),
           Text(
             'Sign in to access your orders and profile',
-            style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary),
+            style: AppTypography.bodySmall.copyWith(
+                color: AppColors.textSecondary),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -172,7 +172,8 @@ class _ProfileMenuSection extends StatelessWidget {
                 AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.sm),
             child: Text(
               title,
-              style: AppTypography.labelLarge.copyWith(color: AppColors.textSecondary),
+              style: AppTypography.labelLarge
+                  .copyWith(color: AppColors.textSecondary),
             ),
           ),
           const Divider(height: 1),
@@ -214,7 +215,7 @@ class _MenuItem extends StatelessWidget {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha:0.08),
+                color: AppColors.primary.withValues(alpha: 0.08),
                 borderRadius: AppDimensions.radiusSm,
               ),
               child: Icon(icon, color: AppColors.primary, size: 20),
@@ -224,15 +225,18 @@ class _MenuItem extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(label, style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w500)),
+                  Text(label,
+                      style: AppTypography.bodyMedium
+                          .copyWith(fontWeight: FontWeight.w500)),
                   const SizedBox(height: 2),
                   Text(subtitle,
-                      style: AppTypography.bodySmall.copyWith(
-                          color: AppColors.textSecondary)),
+                      style: AppTypography.bodySmall
+                          .copyWith(color: AppColors.textSecondary)),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, color: AppColors.textSecondary, size: 20),
+            const Icon(Icons.chevron_right,
+                color: AppColors.textSecondary, size: 20),
           ],
         ),
       ),
@@ -272,13 +276,14 @@ class _SignOutButton extends StatelessWidget {
           );
         },
         icon: const Icon(Icons.logout, color: AppColors.error),
-        label: const Text('Sign Out', style: TextStyle(color: AppColors.error)),
+        label: const Text('Sign Out',
+            style: TextStyle(color: AppColors.error)),
         style: OutlinedButton.styleFrom(
           side: const BorderSide(color: AppColors.error),
-          minimumSize: const Size(double.infinity, AppDimensions.touchTarget),
+          minimumSize:
+              const Size(double.infinity, AppDimensions.touchTarget),
         ),
       ),
     );
   }
 }
-

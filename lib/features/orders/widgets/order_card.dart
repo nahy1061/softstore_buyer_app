@@ -3,8 +3,7 @@ import '../models/order_model.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/app_spacing.dart';
-import '../../../core/theme/app_dimensions.dart';
-import 'order_status_badge.dart';
+
 
 class OrderCard extends StatelessWidget {
   final Order order;
@@ -14,198 +13,175 @@ class OrderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: AppDimensions.radiusMd,
-        boxShadow: AppDimensions.cardShadow,
-        border: Border.all(color: AppColors.divider, width: 0.8),
-      ),
-      child: Column(
-        children: [
-          // ── Column headers ──────────────────────────────────────────
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.lg,
-              vertical: AppSpacing.sm,
+    final firstItem = order.items.isNotEmpty ? order.items.first : null;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: AppSpacing.md),
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
             ),
-            decoration: BoxDecoration(
-              color: AppColors.background,
-              borderRadius: BorderRadius.only(
-                topLeft: AppDimensions.radiusMd.topLeft,
-                topRight: AppDimensions.radiusMd.topRight,
-              ),
-            ),
-            child: Row(
+          ],
+          border: Border.all(
+            color: AppColors.divider.withValues(alpha: 0.5),
+            width: 0.8,
+          ),
+        ),
+        child: Column(
+          children: [
+            // ── Header: item count + status badge ──────────────────────
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Expanded(
-                  flex: 5,
-                  child: Text(
-                    'ORDER DETAILS',
-                    style: AppTypography.overline.copyWith(
-                      color: AppColors.textSecondary,
-                      letterSpacing: 0.8,
-                      fontWeight: FontWeight.w700,
-                    ),
+                Text(
+                  '${order.totalItems} Item${order.totalItems > 1 ? '(s)' : '(s)'}',
+                  style: AppTypography.sectionHeading.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
                   ),
                 ),
-                Expanded(
-                  flex: 3,
-                  child: Text(
-                    'STORE',
-                    style: AppTypography.overline.copyWith(
-                      color: AppColors.textSecondary,
-                      letterSpacing: 0.8,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  flex: 3,
-                  child: Text(
-                    'AMOUNT',
-                    style: AppTypography.overline.copyWith(
-                      color: AppColors.textSecondary,
-                      letterSpacing: 0.8,
-                      fontWeight: FontWeight.w700,
-                    ),
-                    textAlign: TextAlign.right,
-                  ),
-                ),
+                _StatusBadge(status: order.status),
               ],
             ),
-          ),
 
-          const Divider(height: 1, color: AppColors.divider),
+            const SizedBox(height: AppSpacing.md),
 
-          // ── Row data ─────────────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.md,
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
+            // ── Body: product image + details + total ──────────────────
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Order details column
+                // Product thumbnail
+                _buildProductThumbnail(firstItem),
+                const SizedBox(width: AppSpacing.md),
+
+                // Product details
                 Expanded(
-                  flex: 5,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '#${order.id}',
-                        style: AppTypography.sectionHeading.copyWith(
-                          color: AppColors.primary,
+                        firstItem?.name ?? order.storeName,
+                        style: AppTypography.bodyMedium.copyWith(
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w600,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 3),
+                      const SizedBox(height: 4),
                       Text(
                         _formatDate(order.placedAt),
                         style: AppTypography.bodySmall.copyWith(
                           color: AppColors.textSecondary,
                         ),
                       ),
-                      const SizedBox(height: 5),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.background,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: AppColors.divider),
-                        ),
-                        child: Text(
-                          '${order.totalItems} Item${order.totalItems > 1 ? 's' : ''}',
-                          style: AppTypography.labelSmall.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${order.totalItems} item${order.totalItems > 1 ? 's' : ''}',
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.textSecondary,
                         ),
                       ),
                     ],
                   ),
                 ),
 
-                // Store column
-                Expanded(
-                  flex: 3,
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Icon(
-                        Icons.storefront_rounded,
-                        size: 13,
+                // Total price
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'Total',
+                      style: AppTypography.bodySmall.copyWith(
                         color: AppColors.textSecondary,
                       ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          order.storeName,
-                          style: AppTypography.bodySmall.copyWith(
-                            color: AppColors.textPrimary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Rs ${order.total.toStringAsFixed(0)}',
+                      style: AppTypography.pricePrimary.copyWith(
+                        color: AppColors.primary,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+
+            const SizedBox(height: AppSpacing.md),
+
+            // ── Footer: View Details ──────────────────────────────────
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                GestureDetector(
+                  onTap: onTap,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'View Details',
+                        style: AppTypography.labelLarge.copyWith(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w600,
                         ),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(
+                        Icons.chevron_right_rounded,
+                        size: 18,
+                        color: AppColors.primary,
                       ),
                     ],
                   ),
                 ),
-
-                // Amount column
-                Expanded(
-                  flex: 3,
-                  child: Text(
-                    'PKR ${order.total.toStringAsFixed(2)}',
-                    style: AppTypography.labelLarge.copyWith(
-                      color: AppColors.textPrimary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                    textAlign: TextAlign.right,
-                  ),
-                ),
               ],
             ),
-          ),
+          ],
+        ),
+      ),
+    );
+  }
 
-          // ── Footer: status badge + action ────────────────────────────
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.md,
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                OrderStatusBadge(status: order.status, large: true),
-                OutlinedButton(
-                  onPressed: onTap,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.textPrimary,
-                    side: const BorderSide(color: AppColors.divider),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.lg,
-                      vertical: AppSpacing.xs,
-                    ),
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: AppDimensions.radiusSm,
-                    ),
-                  ),
-                  child: Text(
-                    'Details',
-                    style: AppTypography.labelMedium.copyWith(
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+  Widget _buildProductThumbnail(OrderItem? item) {
+    return Container(
+      width: 56,
+      height: 56,
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: AppColors.divider.withValues(alpha: 0.5),
+          width: 0.8,
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: item?.imageUrl != null && item!.imageUrl!.isNotEmpty
+          ? Image.network(
+              item.imageUrl!,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => _buildPlaceholderIcon(),
+            )
+          : _buildPlaceholderIcon(),
+    );
+  }
+
+  Widget _buildPlaceholderIcon() {
+    return const Center(
+      child: Icon(
+        Icons.shopping_bag_outlined,
+        size: 24,
+        color: AppColors.textDisabled,
       ),
     );
   }
@@ -223,5 +199,50 @@ class OrderCard extends StatelessWidget {
     final ampm = dt.hour >= 12 ? 'PM' : 'AM';
     final min = dt.minute.toString().padLeft(2, '0');
     return '${months[dt.month]} ${dt.day}, ${dt.year} $hour:$min $ampm';
+  }
+}
+
+class _StatusBadge extends StatelessWidget {
+  final OrderStatus status;
+
+  const _StatusBadge({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = status.color;
+    final isPending = status == OrderStatus.pending;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: color.withValues(alpha: 0.4),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (isPending)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: Icon(
+                Icons.schedule_rounded,
+                size: 13,
+                color: color,
+              ),
+            ),
+          Text(
+            status.shortLabel,
+            style: AppTypography.labelSmall.copyWith(
+              color: color,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

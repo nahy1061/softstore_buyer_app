@@ -9,7 +9,6 @@ import '../../../app/router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/app_spacing.dart';
-// Shared bottom navigation bar used across all main screens
 import '../../../core/widgets/app_bottom_nav_bar.dart';
 
 class OrdersScreen extends StatefulWidget {
@@ -19,27 +18,23 @@ class OrdersScreen extends StatefulWidget {
   State<OrdersScreen> createState() => _OrdersScreenState();
 }
 
-class _OrdersScreenState extends State<OrdersScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-  final TextEditingController _searchCtrl = TextEditingController();
-  String _searchQuery = '';
+class _OrdersScreenState extends State<OrdersScreen> {
+  int _selectedTab = 0;
+
+  static const _tabs = [
+    'All',
+    'Pending',
+    'Confirmed',
+    'Processing',
+    'Shipped',
+    'Delivered',
+    'Cancelled',
+  ];
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
-    _searchCtrl.addListener(() {
-      setState(() => _searchQuery = _searchCtrl.text.toLowerCase());
-    });
     context.read<OrderCubit>().loadOrders();
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    _searchCtrl.dispose();
-    super.dispose();
   }
 
   @override
@@ -50,29 +45,22 @@ class _OrdersScreenState extends State<OrdersScreen>
         backgroundColor: AppColors.surface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        centerTitle: false,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'My Orders',
-              style: AppTypography.screenTitle.copyWith(
-                color: AppColors.textPrimary,
-              ),
-            ),
-            Text(
-              'Track and manage your recent purchases',
-              style: AppTypography.bodySmall.copyWith(
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ],
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
+        centerTitle: true,
+        title: Text(
+          'My Orders',
+          style: AppTypography.screenTitle.copyWith(
+            color: AppColors.textPrimary,
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+          ),
         ),
         actions: [
-          TextButton.icon(
+          TextButton(
             onPressed: () => context.push(AppRoutes.orderLookup),
-            icon: const Icon(Icons.search_rounded, size: 16),
-            label: const Text('Track Order'),
             style: TextButton.styleFrom(
               foregroundColor: AppColors.primary,
               padding: const EdgeInsets.symmetric(
@@ -80,70 +68,74 @@ class _OrdersScreenState extends State<OrdersScreen>
                 vertical: AppSpacing.xs,
               ),
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              textStyle: AppTypography.labelMedium,
+            ),
+            child: Text(
+              'Track Order',
+              style: AppTypography.labelLarge.copyWith(
+                color: AppColors.primary,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
           const SizedBox(width: AppSpacing.xs),
         ],
       ),
-      // Shared bottom nav — index 1 = Orders (this screen)
       bottomNavigationBar: const AppBottomNavBar(currentIndex: 1),
       body: Column(
         children: [
-          // Search bar
+          // ── Filter tabs ──────────────────────────────────────────────
           Container(
             color: AppColors.surface,
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: TextField(
-              controller: _searchCtrl,
-              decoration: InputDecoration(
-                hintText: 'Search by invoice number...',
-                prefixIcon: const Icon(Icons.search_rounded,
-                    color: AppColors.textSecondary),
-                suffixIcon: _searchQuery.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.close_rounded,
-                            color: AppColors.textSecondary),
-                        onPressed: () {
-                          _searchCtrl.clear();
-                          setState(() => _searchQuery = '');
-                        },
-                      )
-                    : null,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: AppColors.divider),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg,
+              vertical: AppSpacing.sm,
+            ),
+            child: SizedBox(
+              height: 36,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: _tabs.length,
+                separatorBuilder: (context, index) => const SizedBox(width: 8),
+                itemBuilder: (context, index) {
+                  final isSelected = _selectedTab == index;
+                  return GestureDetector(
+                    onTap: () => setState(() => _selectedTab = index),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? AppColors.primary
+                            : AppColors.background,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: isSelected
+                              ? AppColors.primary
+                              : AppColors.divider,
+                          width: 1,
+                        ),
+                      ),
+                      child: Text(
+                        _tabs[index],
+                        style: AppTypography.labelMedium.copyWith(
+                          color: isSelected
+                              ? Colors.white
+                              : AppColors.textSecondary,
+                          fontWeight:
+                              isSelected ? FontWeight.w700 : FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
           ),
-          // Tab bar
-          Container(
-            color: AppColors.surface,
-            child: TabBar(
-              controller: _tabController,
-              labelStyle: AppTypography.labelMedium,
-              unselectedLabelStyle: AppTypography.labelMedium,
-              labelColor: AppColors.primary,
-              unselectedLabelColor: AppColors.textSecondary,
-              indicatorColor: AppColors.primary,
-              indicatorWeight: 2.5,
-              isScrollable: true,
-              tabAlignment: TabAlignment.start,
-              onTap: (index) {
-                // No filter change needed — we slice the loaded list in UI
-              },
-              tabs: const [
-                Tab(text: 'All'),
-                Tab(text: 'Active'),
-                Tab(text: 'Delivered'),
-                Tab(text: 'Cancelled'),
-              ],
-            ),
-          ),
-          const Divider(height: 1, color: AppColors.divider),
+
+          // ── Orders list ─────────────────────────────────────────────
           Expanded(
             child: BlocBuilder<OrderCubit, OrderState>(
               builder: (context, state) {
@@ -158,47 +150,38 @@ class _OrdersScreenState extends State<OrdersScreen>
                 if (state is OrderError) {
                   return _ErrorView(
                     message: state.message,
-                    onRetry: () => context.read<OrderCubit>().loadOrders(),
+                    onRetry: () =>
+                        context.read<OrderCubit>().loadOrders(),
                   );
                 }
                 if (state is OrderLoaded) {
-                  // Filter orders by search query
-                  List<Order> _filterOrders(List<Order> orders) {
-                    if (_searchQuery.isEmpty) return orders;
-                    return orders
-                        .where((o) => o.referenceNumber
-                            .toLowerCase()
-                            .contains(_searchQuery))
+                  final filtered = state.filtered;
+                  final tabName = _tabs[_selectedTab].toLowerCase();
+
+                  List<Order> displayOrders;
+                  if (tabName == 'all') {
+                    displayOrders = filtered;
+                  } else if (tabName == 'cancelled') {
+                    displayOrders = filtered
+                        .where((o) =>
+                            o.status == OrderStatus.cancelled ||
+                            o.status == OrderStatus.refunded)
+                        .toList();
+                  } else {
+                    final statusFilter = OrderStatus.values.firstWhere(
+                      (s) => s.name == tabName,
+                      orElse: () => OrderStatus.pending,
+                    );
+                    displayOrders = filtered
+                        .where((o) => o.status == statusFilter)
                         .toList();
                   }
 
-                  return TabBarView(
-                    controller: _tabController,
-                    children: [
-                      _OrderList(
-                        orders: _filterOrders(state.orders),
-                        onOrderTap: (o) =>
-                            context.push('/orders/${o.id}'),
-                      ),
-                      _OrderList(
-                        orders: _filterOrders(state.active),
-                        onOrderTap: (o) =>
-                            context.push('/orders/${o.id}'),
-                        emptyLabel: 'No active orders',
-                      ),
-                      _OrderList(
-                        orders: _filterOrders(state.delivered),
-                        onOrderTap: (o) =>
-                            context.push('/orders/${o.id}'),
-                        emptyLabel: 'No delivered orders',
-                      ),
-                      _OrderList(
-                        orders: _filterOrders(state.cancelled),
-                        onOrderTap: (o) =>
-                            context.push('/orders/${o.id}'),
-                        emptyLabel: 'No cancelled orders',
-                      ),
-                    ],
+                  return _OrderList(
+                    orders: displayOrders,
+                    onOrderTap: (o) =>
+                        context.push('/orders/${o.id}'),
+                    emptyLabel: 'No ${_tabs[_selectedTab].toLowerCase()} orders',
                   );
                 }
                 return const SizedBox.shrink();
@@ -225,52 +208,70 @@ class _OrderList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (orders.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.receipt_long_outlined,
-                size: 40,
-                color: AppColors.textDisabled,
+      return RefreshIndicator(
+        color: AppColors.primary,
+        onRefresh: () => context.read<OrderCubit>().loadOrders(),
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: SizedBox(
+            height: MediaQuery.of(context).size.height * 0.6,
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 80,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.receipt_long_outlined,
+                      size: 40,
+                      color: AppColors.textDisabled,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  Text(
+                    emptyLabel,
+                    style: AppTypography.sectionHeading.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    'Orders you place will appear here.',
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.textDisabled,
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: AppSpacing.lg),
-            Text(
-              emptyLabel,
-              style: AppTypography.sectionHeading.copyWith(
-                color: AppColors.textSecondary,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              'Orders you place will appear here.',
-              style: AppTypography.bodySmall.copyWith(
-                color: AppColors.textDisabled,
-              ),
-            ),
-          ],
+          ),
         ),
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      itemCount: orders.length,
-      itemBuilder: (context, index) {
-        final order = orders[index];
-        return Padding(
-          padding: const EdgeInsets.only(bottom: AppSpacing.md),
-          child: OrderCard(order: order, onTap: () => onOrderTap(order)),
-        );
-      },
+    return RefreshIndicator(
+      color: AppColors.primary,
+      onRefresh: () => context.read<OrderCubit>().loadOrders(),
+      child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg,
+          vertical: AppSpacing.md,
+        ),
+        itemCount: orders.length,
+        itemBuilder: (context, index) {
+          final order = orders[index];
+          return OrderCard(
+            order: order,
+            onTap: () => context.push('/orders/${order.id}', extra: order),
+          );
+        },
+      ),
     );
   }
 }
