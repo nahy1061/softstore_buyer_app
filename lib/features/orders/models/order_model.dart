@@ -3,6 +3,7 @@ import '../../../core/theme/app_colors.dart';
 
 enum OrderStatus {
   pending,
+  confirmed,
   processing,
   shipped,
   delivered,
@@ -14,6 +15,7 @@ extension OrderStatusExtension on OrderStatus {
   String get label {
     switch (this) {
       case OrderStatus.pending:      return 'Order Pending';
+      case OrderStatus.confirmed:    return 'Confirmed';
       case OrderStatus.processing:   return 'Processing';
       case OrderStatus.shipped:      return 'Shipped';
       case OrderStatus.delivered:    return 'Delivered';
@@ -25,6 +27,7 @@ extension OrderStatusExtension on OrderStatus {
   String get shortLabel {
     switch (this) {
       case OrderStatus.pending:      return 'Pending';
+      case OrderStatus.confirmed:    return 'Confirmed';
       case OrderStatus.processing:   return 'Processing';
       case OrderStatus.shipped:      return 'Shipped';
       case OrderStatus.delivered:    return 'Delivered';
@@ -37,6 +40,8 @@ extension OrderStatusExtension on OrderStatus {
     switch (this) {
       case OrderStatus.pending:
         return 'Your order has been placed and is awaiting seller confirmation.';
+      case OrderStatus.confirmed:
+        return 'The seller has confirmed your order and will begin processing soon.';
       case OrderStatus.processing:
         return 'Your order is being packed and prepared by the store.';
       case OrderStatus.shipped:
@@ -53,6 +58,7 @@ extension OrderStatusExtension on OrderStatus {
   Color get color {
     switch (this) {
       case OrderStatus.pending:      return AppColors.statusPending;
+      case OrderStatus.confirmed:    return AppColors.statusConfirmed;
       case OrderStatus.processing:   return AppColors.statusProcessing;
       case OrderStatus.shipped:      return AppColors.statusShipped;
       case OrderStatus.delivered:    return AppColors.statusDelivered;
@@ -67,6 +73,7 @@ extension OrderStatusExtension on OrderStatus {
   IconData get icon {
     switch (this) {
       case OrderStatus.pending:      return Icons.schedule_rounded;
+      case OrderStatus.confirmed:    return Icons.verified_rounded;
       case OrderStatus.processing:   return Icons.inventory_2_rounded;
       case OrderStatus.shipped:      return Icons.local_shipping_rounded;
       case OrderStatus.delivered:    return Icons.check_circle_rounded;
@@ -80,6 +87,7 @@ extension OrderStatusExtension on OrderStatus {
   int get fulfillmentStep {
     switch (this) {
       case OrderStatus.pending:      return 0;
+      case OrderStatus.confirmed:    return 1;
       case OrderStatus.processing:   return 2;
       case OrderStatus.shipped:      return 3;
       case OrderStatus.delivered:    return 4;
@@ -261,18 +269,18 @@ const List<String> cancellationReasons = [
 final List<Order> dummyOrders = [
   Order(
     id: '1',
-    referenceNumber: 'SS-20240801-0042',
-    placedAt: DateTime(2024, 8, 1, 14, 30),
-    status: OrderStatus.delivered,
-    storeName: 'Al-Fatah General Store',
+    referenceNumber: 'SS-20260817-0001',
+    placedAt: DateTime(2026, 8, 17, 13, 9),
+    status: OrderStatus.pending,
+    storeName: 'SoftStore General',
     storeCity: 'Islamabad',
     storeContact: '03001234567',
-    estimatedDelivery: 'Delivered on Aug 3',
-    subtotal: 1450,
-    deliveryFee: 150,
+    estimatedDelivery: 'Expected Aug 20',
+    subtotal: 400,
+    deliveryFee: 0,
     discount: 0,
     deliveryAddress: const OrderAddress(
-      name: 'Munaza Khan',
+      name: 'Naheed',
       phone: '+92 312 1234567',
       addressLine: 'House 12, Street 5, G-10/4',
       city: 'Islamabad',
@@ -280,92 +288,54 @@ final List<Order> dummyOrders = [
     items: const [
       OrderItem(
         id: 'i1',
-        name: 'Nestle Everyday Milk Powder 400g',
-        quantity: 2,
-        unitPrice: 650,
-        sku: 'SKU-01-NMP400',
-      ),
-      OrderItem(
-        id: 'i2',
-        name: 'Ariel Washing Powder 1kg',
+        name: 'FF6F00',
         quantity: 1,
-        unitPrice: 150,
-        sku: 'SKU-01-AWP1KG',
+        unitPrice: 400,
+        imageUrl: 'https://via.placeholder.com/112/FF6F00/FFFFFF?text=Coke',
+        sku: 'SKU-01-FF6F00',
       ),
     ],
     statusHistory: [
       OrderStatusEvent(
         status: OrderStatus.pending,
-        timestamp: DateTime(2024, 8, 1, 14, 30),
+        timestamp: DateTime(2026, 8, 17, 13, 9),
         note: 'Order placed by customer',
-      ),
-      OrderStatusEvent(
-        status: OrderStatus.processing,
-        timestamp: DateTime(2024, 8, 1, 16, 0),
-        note: 'Seller confirmed and started packing',
-      ),
-      OrderStatusEvent(
-        status: OrderStatus.shipped,
-        timestamp: DateTime(2024, 8, 2, 9, 0),
-        note: 'Dispatched via courier',
-      ),
-      OrderStatusEvent(
-        status: OrderStatus.delivered,
-        timestamp: DateTime(2024, 8, 3, 13, 45),
-        note: 'Delivered to customer',
       ),
     ],
   ),
   Order(
     id: '2',
-    referenceNumber: 'SS-20240809-0117',
-    placedAt: DateTime(2024, 8, 9, 10, 0),
-    status: OrderStatus.shipped,
-    storeName: 'TechZone Mobile Accessories',
-    storeCity: 'Rawalpindi',
-    storeContact: '03211234567',
-    estimatedDelivery: 'Expected Aug 12',
-    subtotal: 2800,
-    deliveryFee: 200,
-    discount: 300,
+    referenceNumber: 'SS-20260812-0002',
+    placedAt: DateTime(2026, 8, 12, 17, 1),
+    status: OrderStatus.pending,
+    storeName: 'SoftStore General',
+    storeCity: 'Islamabad',
+    storeContact: '03001234567',
+    estimatedDelivery: 'Expected Aug 15',
+    subtotal: 950,
+    deliveryFee: 0,
+    discount: 0,
     deliveryAddress: const OrderAddress(
-      name: 'Munaza Khan',
+      name: 'Naheed',
       phone: '+92 312 1234567',
       addressLine: 'House 12, Street 5, G-10/4',
       city: 'Islamabad',
     ),
     items: const [
       OrderItem(
-        id: 'i3',
-        name: 'Samsung Fast Charger 25W',
+        id: 'i2',
+        name: 'FF6F00',
         quantity: 1,
-        unitPrice: 1800,
-        variantLabel: 'White',
-        sku: 'SKU-02-SFC25W',
-      ),
-      OrderItem(
-        id: 'i4',
-        name: 'USB-C Cable 1m Braided',
-        quantity: 2,
-        unitPrice: 500,
-        sku: 'SKU-02-USBC1M',
+        unitPrice: 950,
+        imageUrl: 'https://via.placeholder.com/112/FF6F00/FFFFFF?text=Coke',
+        sku: 'SKU-02-FF6F00',
       ),
     ],
     statusHistory: [
       OrderStatusEvent(
         status: OrderStatus.pending,
-        timestamp: DateTime(2024, 8, 9, 10, 0),
+        timestamp: DateTime(2026, 8, 12, 17, 1),
         note: 'Order placed by customer',
-      ),
-      OrderStatusEvent(
-        status: OrderStatus.processing,
-        timestamp: DateTime(2024, 8, 9, 14, 30),
-        note: 'Seller confirmed order',
-      ),
-      OrderStatusEvent(
-        status: OrderStatus.shipped,
-        timestamp: DateTime(2024, 8, 10, 8, 0),
-        note: 'Dispatched via TCS courier',
       ),
     ],
   ),
@@ -373,11 +343,11 @@ final List<Order> dummyOrders = [
     id: '3',
     referenceNumber: 'SS-20240810-0203',
     placedAt: DateTime(2024, 8, 10, 16, 45),
-    status: OrderStatus.processing,
+    status: OrderStatus.delivered,
     storeName: 'Fresh Dairy Direct',
     storeCity: 'Islamabad',
     storeContact: '03451234567',
-    estimatedDelivery: 'Expected Aug 13',
+    estimatedDelivery: 'Delivered on Aug 13',
     subtotal: 960,
     deliveryFee: 100,
     deliveryAddress: const OrderAddress(
@@ -412,6 +382,11 @@ final List<Order> dummyOrders = [
         status: OrderStatus.processing,
         timestamp: DateTime(2024, 8, 10, 18, 0),
         note: 'Seller confirmed and is packing',
+      ),
+      OrderStatusEvent(
+        status: OrderStatus.delivered,
+        timestamp: DateTime(2024, 8, 13, 14, 0),
+        note: 'Delivered to customer',
       ),
     ],
   ),

@@ -12,10 +12,54 @@ class OrderCubit extends Cubit<OrderState> {
     emit(OrderLoaded(orders: dummyOrders));
   }
 
+  void updateSearchQuery(String query) {
+    final current = state;
+    if (current is OrderLoaded) {
+      emit(current.copyWith(searchQuery: query));
+    }
+  }
+
+  void updateStatusFilters(List<OrderStatus> statuses) {
+    final current = state;
+    if (current is OrderLoaded) {
+      emit(current.copyWith(statusFilters: statuses));
+    }
+  }
+
+  void updateSortOption(OrderSortOption sort) {
+    final current = state;
+    if (current is OrderLoaded) {
+      emit(current.copyWith(sortOption: sort));
+    }
+  }
+
+  void updateDateRange({DateTime? from, DateTime? to, bool clearFrom = false, bool clearTo = false}) {
+    final current = state;
+    if (current is OrderLoaded) {
+      emit(current.copyWith(dateFrom: from, dateTo: to, clearDateFrom: clearFrom, clearDateTo: clearTo));
+    }
+  }
+
+  void clearFilters() {
+    final current = state;
+    if (current is OrderLoaded) {
+      emit(current.copyWith(
+        searchQuery: '',
+        statusFilters: [],
+        sortOption: OrderSortOption.newestFirst,
+        clearDateFrom: true,
+        clearDateTo: true,
+      ));
+    }
+  }
+
   void filterByStatus(String? status) {
     final current = state;
     if (current is OrderLoaded) {
-      emit(OrderLoaded(orders: current.orders, activeFilter: status));
+      emit(current.copyWith(
+        activeFilter: status,
+        clearActiveFilter: status == null,
+      ));
     }
   }
 
