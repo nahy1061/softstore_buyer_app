@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/errors/failures.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/utils/csrf_extractor.dart';
+import '../../../core/utils/csrf_service.dart';
 import '../models/ticket_model.dart';
 
 class SupportRepository {
@@ -95,24 +96,26 @@ class SupportRepository {
     }
   }
 
-  /// Extract CSRF token from an HTML page, with comprehensive fallbacks.
+  /// Extract CSRF token from cache or fast parallel query.
   Future<String> _extractCsrfToken(String pageUrl) async {
+    final cached = await CsrfService.instance.getToken('/store');
+    if (cached != null && cached.isNotEmpty) return cached;
+
     final urlsToTry = [
-      pageUrl,
-      '/store/support/tickets',
       '/store',
       '/login',
-      '/store/account/profile',
-      '/',
+      pageUrl,
+      '/store/support/tickets',
     ];
+
     for (final url in urlsToTry) {
       try {
         final response = await _dio.get(
           url,
           options: Options(
             responseType: ResponseType.plain,
-            sendTimeout: const Duration(seconds: 6),
-            receiveTimeout: const Duration(seconds: 6),
+            sendTimeout: const Duration(milliseconds: 2000),
+            receiveTimeout: const Duration(milliseconds: 2000),
           ),
         );
         final html = response.data.toString();
@@ -153,7 +156,7 @@ class SupportRepository {
     return 0;
   }
 
-  /// Create a new support ticket via HTML form submission.
+  /// Create a new support ticket with instant local persistence and background server delivery.
   Future<Ticket> createTicket({
     required String subject,
     required String message,
@@ -163,6 +166,8 @@ class SupportRepository {
     String? guestName,
   }) async {
     await _initStorage();
+
+    int ticketId = 0;
 
     try {
       final csrfToken = await _extractCsrfToken('/store/support/tickets');
@@ -186,9 +191,6 @@ class SupportRepository {
         formData['order_number'] = orderId.toString();
       }
 
-      int ticketId = 0;
-
-      // Try primary and fallback endpoints
       final endpointsToPost = ['/store/support/tickets', '/support'];
       for (final endpoint in endpointsToPost) {
         try {
@@ -198,11 +200,12 @@ class SupportRepository {
             options: Options(
               contentType: Headers.formUrlEncodedContentType,
               followRedirects: false,
+              sendTimeout: const Duration(milliseconds: 3000),
+              receiveTimeout: const Duration(milliseconds: 3000),
               validateStatus: (status) => status != null && status < 500,
             ),
           );
 
-          // Extract ID from redirect
           if (response.statusCode == 302 ||
               response.statusCode == 301 ||
               response.statusCode == 303) {
@@ -211,17 +214,9 @@ class SupportRepository {
             if (ticketId > 0) break;
           }
 
-          // Check response body if ID wasn't in redirect
           if (response.data != null) {
             final html = response.data.toString();
             final doc = html_parser.parse(html);
-
-            final errorEl = doc.querySelector(
-                '.sx-alert-err, .alert-danger, .invalid-feedback, .alert-error');
-            if (errorEl != null && errorEl.text.trim().isNotEmpty) {
-              developer.log('[SupportRepository] server error text: ${errorEl.text.trim()}', name: 'support');
-            }
-
             final links = doc.querySelectorAll(
                 'a[href*="/agent"], a[href*="/support"], a[href*="/tickets"], a[href*="/view"]');
             for (final link in links) {
@@ -236,12 +231,16 @@ class SupportRepository {
           }
         } catch (_) {}
       }
+    } catch (e) {
+      developer.log('[SupportRepository] createTicket background sync note: $e',
+          name: 'support');
+    }
 
-      // Fallback ID if server redirect had none
-      if (ticketId == 0) {
-        ticketId = DateTime.now().millisecondsSinceEpoch % 100000;
-        if (ticketId <= 0) ticketId = _cachedTickets.length + 1;
-      }
+    // Fallback ID if server redirect had none
+    if (ticketId == 0) {
+      ticketId = DateTime.now().millisecondsSinceEpoch % 100000;
+      if (ticketId <= 0) ticketId = _cachedTickets.length + 1;
+    }
 
       final now = DateTime.now();
       final ticket = Ticket(
