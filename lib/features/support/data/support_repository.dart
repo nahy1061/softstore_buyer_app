@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
 
@@ -96,37 +97,29 @@ class SupportRepository {
     }
   }
 
-  /// Extract CSRF token from cache or fast parallel query.
+  /// Extract CSRF token from memory cache or fast single query.
   Future<String> _extractCsrfToken(String pageUrl) async {
     final cached = await CsrfService.instance.getToken('/store');
     if (cached != null && cached.isNotEmpty) return cached;
 
-    final urlsToTry = [
-      '/store',
-      '/login',
-      pageUrl,
-      '/store/support/tickets',
-    ];
+    try {
+      final response = await _dio.get(
+        pageUrl,
+        options: Options(
+          responseType: ResponseType.plain,
+          sendTimeout: const Duration(milliseconds: 1500),
+          receiveTimeout: const Duration(milliseconds: 1500),
+        ),
+      ).timeout(const Duration(milliseconds: 1800));
 
-    for (final url in urlsToTry) {
-      try {
-        final response = await _dio.get(
-          url,
-          options: Options(
-            responseType: ResponseType.plain,
-            sendTimeout: const Duration(milliseconds: 2000),
-            receiveTimeout: const Duration(milliseconds: 2000),
-          ),
-        );
-        final html = response.data.toString();
-        if (html.isNotEmpty) {
-          final token = CsrfExtractor.extract(html);
-          if (token != null && token.isNotEmpty) {
-            return token;
-          }
+      final html = response.data?.toString() ?? '';
+      if (html.isNotEmpty) {
+        final token = CsrfExtractor.extract(html);
+        if (token != null && token.isNotEmpty) {
+          return token;
         }
-      } catch (_) {}
-    }
+      }
+    } catch (_) {}
 
     return '';
   }
@@ -167,80 +160,9 @@ class SupportRepository {
   }) async {
     await _initStorage();
 
-    int ticketId = 0;
-
-    try {
-      final csrfToken = await _extractCsrfToken('/store/support/tickets');
-
-      final formData = {
-        if (csrfToken.isNotEmpty) ...{
-          '_csrf_token': csrfToken,
-          'csrf_token': csrfToken,
-        },
-        'subject': subject,
-        'message': message,
-        'category': category,
-      };
-      if (email != null && email.isNotEmpty) {
-        formData['email'] = email;
-      }
-      if (guestName != null && guestName.isNotEmpty) {
-        formData['guest_name'] = guestName;
-      }
-      if (orderId != null) {
-        formData['order_number'] = orderId.toString();
-      }
-
-      final endpointsToPost = ['/store/support/tickets', '/support'];
-      for (final endpoint in endpointsToPost) {
-        try {
-          final response = await _dio.post(
-            endpoint,
-            data: formData,
-            options: Options(
-              contentType: Headers.formUrlEncodedContentType,
-              followRedirects: false,
-              sendTimeout: const Duration(milliseconds: 3000),
-              receiveTimeout: const Duration(milliseconds: 3000),
-              validateStatus: (status) => status != null && status < 500,
-            ),
-          );
-
-          if (response.statusCode == 302 ||
-              response.statusCode == 301 ||
-              response.statusCode == 303) {
-            final location = response.headers.value('location') ?? '';
-            ticketId = _extractTicketId(location);
-            if (ticketId > 0) break;
-          }
-
-          if (response.data != null) {
-            final html = response.data.toString();
-            final doc = html_parser.parse(html);
-            final links = doc.querySelectorAll(
-                'a[href*="/agent"], a[href*="/support"], a[href*="/tickets"], a[href*="/view"]');
-            for (final link in links) {
-              final href = link.attributes['href'] ?? '';
-              final id = _extractTicketId(href);
-              if (id > 0) {
-                ticketId = id;
-                break;
-              }
-            }
-            if (ticketId > 0) break;
-          }
-        } catch (_) {}
-      }
-    } catch (e) {
-      developer.log('[SupportRepository] createTicket background sync note: $e',
-          name: 'support');
-    }
-
-    // Fallback ID if server redirect had none
-    if (ticketId == 0) {
-      ticketId = DateTime.now().millisecondsSinceEpoch % 100000;
-      if (ticketId <= 0) ticketId = _cachedTickets.length + 1;
-    }
+    // 1. Generate unique ticket ID immediately (<1ms)
+    int ticketId = DateTime.now().millisecondsSinceEpoch % 100000;
+    if (ticketId <= 0) ticketId = _cachedTickets.length + 1;
 
     final now = DateTime.now();
     final ticket = Ticket(
@@ -253,9 +175,8 @@ class SupportRepository {
       lastMessage: message,
     );
 
+    // 2. Persist locally to RAM and Disk immediately
     _cachedTickets.insert(0, ticket);
-
-    // Seed initial message into message cache
     _cachedMessages[ticketId] = [
       TicketMessage(
         id: 1,
@@ -268,7 +189,116 @@ class SupportRepository {
     await _persistTickets();
     await _persistMessages();
 
+    // 3. Fire-and-forget background sync to live server (completely non-blocking)
+    unawaited(_syncTicketToServer(
+      localTicketId: ticketId,
+      subject: subject,
+      message: message,
+      category: category,
+      orderId: orderId,
+      email: email,
+      guestName: guestName,
+    ));
+
+    // 4. Return ticket instantly so UI immediately displays success dialog
     return ticket;
+  }
+
+  /// Asynchronously syncs the ticket to the PHP server without blocking the caller.
+  Future<void> _syncTicketToServer({
+    required int localTicketId,
+    required String subject,
+    required String message,
+    required String category,
+    int? orderId,
+    String? email,
+    String? guestName,
+  }) async {
+    try {
+      final csrfToken = await _extractCsrfToken('/store/support/tickets');
+
+      final formData = {
+        if (csrfToken.isNotEmpty) ...{
+          '_csrf_token': csrfToken,
+          'csrf_token': csrfToken,
+        },
+        'subject': subject,
+        'message': message,
+        'category': category,
+        if (email != null && email.isNotEmpty) 'email': email,
+        if (guestName != null && guestName.isNotEmpty) 'guest_name': guestName,
+        if (orderId != null) 'order_number': orderId.toString(),
+      };
+
+      int serverTicketId = 0;
+      final endpointsToPost = ['/support', '/store/support/tickets'];
+
+      for (final endpoint in endpointsToPost) {
+        try {
+          final response = await _dio.post(
+            endpoint,
+            data: formData,
+            options: Options(
+              contentType: Headers.formUrlEncodedContentType,
+              followRedirects: false,
+              sendTimeout: const Duration(milliseconds: 2000),
+              receiveTimeout: const Duration(milliseconds: 2000),
+              validateStatus: (status) => status != null && status < 500,
+            ),
+          ).timeout(const Duration(milliseconds: 2500));
+
+          if (response.statusCode == 302 ||
+              response.statusCode == 301 ||
+              response.statusCode == 303) {
+            final location = response.headers.value('location') ?? '';
+            serverTicketId = _extractTicketId(location);
+            if (serverTicketId > 0) break;
+          }
+
+          if (response.data != null) {
+            final html = response.data.toString();
+            final doc = html_parser.parse(html);
+            final links = doc.querySelectorAll(
+                'a[href*="/agent"], a[href*="/support"], a[href*="/tickets"], a[href*="/view"]');
+            for (final link in links) {
+              final href = link.attributes['href'] ?? '';
+              final id = _extractTicketId(href);
+              if (id > 0) {
+                serverTicketId = id;
+                break;
+              }
+            }
+            if (serverTicketId > 0) break;
+          }
+        } catch (_) {}
+      }
+
+      // If server allocated a specific ID, update cache smoothly
+      if (serverTicketId > 0 && serverTicketId != localTicketId) {
+        final index = _cachedTickets.indexWhere((t) => t.id == localTicketId);
+        if (index != -1) {
+          final old = _cachedTickets[index];
+          _cachedTickets[index] = Ticket(
+            id: serverTicketId,
+            subject: old.subject,
+            category: old.category,
+            status: old.status,
+            createdAt: old.createdAt,
+            lastUpdatedAt: old.lastUpdatedAt,
+            lastMessage: old.lastMessage,
+          );
+          if (_cachedMessages.containsKey(localTicketId)) {
+            _cachedMessages[serverTicketId] =
+                _cachedMessages.remove(localTicketId)!;
+          }
+          await _persistTickets();
+          await _persistMessages();
+        }
+      }
+    } catch (e) {
+      developer.log('[SupportRepository] background server sync note: $e',
+          name: 'support');
+    }
   }
 
   /// Fetch all support tickets for the current user.
