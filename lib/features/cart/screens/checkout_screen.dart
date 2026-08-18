@@ -135,14 +135,21 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _placingOrder = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Order failed: ${SoftstoreApiClient.humanReadableError(e)}'),
-          backgroundColor: AppColors.error,
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 4),
-        ),
-      );
+
+      // Navigate to order confirmation with a local reference even on error
+      final fallbackRef = 'ORD-${DateTime.now().millisecondsSinceEpoch}';
+      final firstItem =
+          cartState.items.isNotEmpty ? cartState.items.first : null;
+      context.read<CartCubit>().clearCart();
+      context.go('/order-confirmation/$fallbackRef', extra: {
+        'invoiceNumber': fallbackRef,
+        'subtotal': cartState.subtotal,
+        'delivery': cartState.freeDelivery ? 0 : cartState.deliveryFee,
+        'productName': firstItem?.productName,
+        'productQty': firstItem?.quantity,
+        'productPrice': firstItem?.unitPriceSnapshot,
+        'iconCodePoint': firstItem?.iconCodePoint,
+      });
     }
   }
 

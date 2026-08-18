@@ -600,7 +600,7 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
         ),
         const SizedBox(height: AppSpacing.sm),
         DropdownButtonFormField<String>(
-          value: _selectedCategory,
+          initialValue: _selectedCategory,
           hint: Text('Select a category',
               style: AppTypography.bodyMedium
                   .copyWith(color: AppColors.textDisabled)),

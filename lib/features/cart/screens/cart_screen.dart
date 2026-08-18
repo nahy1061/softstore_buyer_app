@@ -1057,33 +1057,7 @@ class _CartCheckoutSheetState extends State<CartCheckoutSheet> {
                         width: double.infinity,
                         child: ElevatedButton(
                           onPressed: () {
-                            if (_selectedDeliveryOption == null) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                      'Please select a delivery method before proceeding to pay'),
-                                  backgroundColor: AppColors.error,
-                                  behavior: SnackBarBehavior.floating,
-                                  duration: Duration(seconds: 3),
-                                ),
-                              );
-                              _openDeliveryMethodPickerSheet();
-                              return;
-                            }
-
-                            showModalBottomSheet(
-                              context: context,
-                              isScrollControlled: true,
-                              backgroundColor: Colors.transparent,
-                              builder: (_) => BlocProvider.value(
-                                value: context.read<CartCubit>(),
-                                child: _PaymentMethodSheet(
-                                  shippingFee: _selectedDeliveryOption!.fee,
-                                  deliveryMethodTitle:
-                                      _selectedDeliveryOption!.title,
-                                ),
-                              ),
-                            );
+                            context.go(AppRoutes.checkout);
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primary,
@@ -2211,7 +2185,6 @@ class _PaymentMethodSheet extends StatefulWidget {
   final String deliveryMethodTitle;
 
   const _PaymentMethodSheet({
-    super.key,
     this.shippingFee = 275,
     this.deliveryMethodTitle = 'Standard Delivery',
   });
@@ -2516,40 +2489,6 @@ class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
       child: Icon(icon, color: fg, size: 22),
     );
   }
-
-  Widget _textIcon(String text, Color fg, Color bg,
-      {double fontSize = 13}) {
-    return Container(
-      width: 40,
-      height: 40,
-      decoration: BoxDecoration(
-          color: bg, borderRadius: BorderRadius.circular(8)),
-      child: Center(
-        child: Text(text,
-            style: TextStyle(
-                color: fg,
-                fontWeight: FontWeight.bold,
-                fontSize: fontSize)),
-      ),
-    );
-  }
-
-  Widget _securityBadge(String label) {
-    return Container(
-      padding:
-          const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      decoration: BoxDecoration(
-        border: Border.all(color: const Color(0xFFDDDDDD)),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(
-        label,
-        textAlign: TextAlign.center,
-        style:
-            const TextStyle(fontSize: 9, color: Color(0xFF666666)),
-      ),
-    );
-  }
 }
 
 // ── Cash on Delivery detail sheet ─────────────────────────────────────────
@@ -2558,7 +2497,6 @@ class _CodDetailSheet extends StatelessWidget {
   final int shippingFee;
 
   const _CodDetailSheet({
-    super.key,
     this.shippingFee = 275,
   });
 
@@ -2800,7 +2738,6 @@ class _CardDetailSheet extends StatefulWidget {
   final int shippingFee;
 
   const _CardDetailSheet({
-    super.key,
     this.shippingFee = 275,
   });
 

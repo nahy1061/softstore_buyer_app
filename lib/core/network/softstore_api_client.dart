@@ -206,7 +206,7 @@ class SoftstoreApiClient {
         data: jsonEncode(body),
         options: Options(
           contentType: _jsonOverTextPlain,
-          responseType: ResponseType.json,
+          responseType: ResponseType.plain,
         ),
       );
       return response;
