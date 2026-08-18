@@ -119,6 +119,12 @@ class OrderStatusEvent {
       note: json['note'] as String?,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'status': status.name,
+        'timestamp': timestamp.toIso8601String(),
+        if (note != null) 'note': note,
+      };
 }
 
 // ─── OrderItem ────────────────────────────────────────────────────────────────
@@ -146,15 +152,25 @@ class OrderItem {
 
   factory OrderItem.fromJson(Map<String, dynamic> json) {
     return OrderItem(
-      id: json['id'] as String,
-      name: json['name'] as String,
+      id: json['id']?.toString() ?? '',
+      name: json['name'] as String? ?? 'Item',
       imageUrl: json['image_url'] as String?,
-      quantity: json['quantity'] as int,
-      unitPrice: (json['unit_price'] as num).toDouble(),
+      quantity: (json['quantity'] as num?)?.toInt() ?? 1,
+      unitPrice: (json['unit_price'] as num?)?.toDouble() ?? 0.0,
       variantLabel: json['variant_label'] as String?,
       sku: json['sku'] as String?,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        if (imageUrl != null) 'image_url': imageUrl,
+        'quantity': quantity,
+        'unit_price': unitPrice,
+        if (variantLabel != null) 'variant_label': variantLabel,
+        if (sku != null) 'sku': sku,
+      };
 }
 
 // ─── OrderAddress ─────────────────────────────────────────────────────────────
@@ -174,12 +190,19 @@ class OrderAddress {
 
   factory OrderAddress.fromJson(Map<String, dynamic> json) {
     return OrderAddress(
-      name: json['name'] as String,
-      phone: json['phone'] as String,
-      addressLine: json['address_line'] as String,
-      city: json['city'] as String,
+      name: json['name'] as String? ?? '',
+      phone: json['phone'] as String? ?? '',
+      addressLine: json['address_line'] as String? ?? json['addressLine'] as String? ?? '',
+      city: json['city'] as String? ?? '',
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'phone': phone,
+        'address_line': addressLine,
+        'city': city,
+      };
 }
 
 // ─── Order ────────────────────────────────────────────────────────────────────
@@ -222,22 +245,26 @@ class Order {
 
   factory Order.fromJson(Map<String, dynamic> json) {
     return Order(
-      id: json['id'] as String,
-      referenceNumber: json['reference_number'] as String,
-      placedAt: DateTime.parse(json['placed_at'] as String),
+      id: json['id']?.toString() ?? '',
+      referenceNumber: json['reference_number']?.toString() ?? json['id']?.toString() ?? '',
+      placedAt: json['placed_at'] != null
+          ? (DateTime.tryParse(json['placed_at'] as String) ?? DateTime.now())
+          : DateTime.now(),
       status: OrderStatus.values.firstWhere(
-        (s) => s.name == (json['status'] as String).toLowerCase(),
+        (s) => s.name.toLowerCase() == (json['status'] as String? ?? 'pending').toLowerCase(),
         orElse: () => OrderStatus.pending,
       ),
-      items: (json['items'] as List)
+      items: (json['items'] as List? ?? [])
           .map((e) => OrderItem.fromJson(e as Map<String, dynamic>))
           .toList(),
-      deliveryAddress: OrderAddress.fromJson(
-          json['delivery_address'] as Map<String, dynamic>),
-      subtotal: (json['subtotal'] as num).toDouble(),
-      deliveryFee: (json['delivery_fee'] as num).toDouble(),
-      discount: (json['discount'] as num?)?.toDouble() ?? 0,
-      storeName: json['store_name'] as String,
+      deliveryAddress: json['delivery_address'] != null
+          ? OrderAddress.fromJson(
+              json['delivery_address'] as Map<String, dynamic>)
+          : const OrderAddress(name: '', phone: '', addressLine: '', city: ''),
+      subtotal: (json['subtotal'] as num?)?.toDouble() ?? 0.0,
+      deliveryFee: (json['delivery_fee'] as num?)?.toDouble() ?? 0.0,
+      discount: (json['discount'] as num?)?.toDouble() ?? 0.0,
+      storeName: json['store_name'] as String? ?? 'SoftStore Partner Store',
       storeCity: json['store_city'] as String?,
       storeContact: json['store_contact'] as String?,
       estimatedDelivery: json['estimated_delivery'] as String?,
@@ -246,6 +273,23 @@ class Order {
           .toList(),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'reference_number': referenceNumber,
+        'placed_at': placedAt.toIso8601String(),
+        'status': status.name,
+        'items': items.map((e) => e.toJson()).toList(),
+        'delivery_address': deliveryAddress.toJson(),
+        'subtotal': subtotal,
+        'delivery_fee': deliveryFee,
+        'discount': discount,
+        'store_name': storeName,
+        if (storeCity != null) 'store_city': storeCity,
+        if (storeContact != null) 'store_contact': storeContact,
+        if (estimatedDelivery != null) 'estimated_delivery': estimatedDelivery,
+        'status_history': statusHistory.map((e) => e.toJson()).toList(),
+      };
 }
 
 // ─── Cancellation Reasons ─────────────────────────────────────────────────────

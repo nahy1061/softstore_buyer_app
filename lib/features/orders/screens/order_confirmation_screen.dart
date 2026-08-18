@@ -4,6 +4,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/app_dimensions.dart';
 import '../../../core/widgets/app_bottom_nav_bar.dart';
+import '../models/order_model.dart';
+import '../repository/order_repository.dart';
 
 class OrderConfirmationScreen extends StatefulWidget {
   final String referenceNumber;
@@ -42,10 +44,10 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen>
   int get _subtotal => widget.subtotal ?? 200;
   int get _delivery => widget.delivery ?? 200;
   int get _total => _subtotal + _delivery;
-  String get _invoice => widget.invoiceNumber ?? 'MKT-1A7EFF74';
-  String get _productName => widget.productName ?? 'Coca Cola 1.5L Bottle';
+  String get _invoice => widget.invoiceNumber ?? widget.referenceNumber;
+  String get _productName => widget.productName ?? 'SoftStore Item';
   int get _productQty => widget.productQty ?? 1;
-  int get _productPrice => widget.productPrice ?? 200;
+  int get _productPrice => widget.productPrice ?? _subtotal;
   IconData get _productIcon {
     if (widget.iconCodePoint != null) {
       // ignore: non_const_argument_for_const_parameter
@@ -70,6 +72,47 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen>
       curve: const Interval(0.4, 1.0, curve: Curves.easeOut),
     );
     _animController.forward();
+    _ensureSavedLocally();
+  }
+
+  Future<void> _ensureSavedLocally() async {
+    final inv = _invoice;
+    final now = DateTime.now();
+    final order = Order(
+      id: inv,
+      referenceNumber: inv,
+      placedAt: now,
+      status: OrderStatus.pending,
+      items: [
+        OrderItem(
+          id: 'item-1',
+          name: _productName,
+          quantity: _productQty,
+          unitPrice: _productPrice.toDouble(),
+          sku: 'SKU-$inv',
+        ),
+      ],
+      deliveryAddress: const OrderAddress(
+        name: 'Customer',
+        phone: '03408014187',
+        addressLine: 'Delivery Address',
+        city: 'Lahore',
+      ),
+      subtotal: _subtotal.toDouble(),
+      deliveryFee: _delivery.toDouble(),
+      discount: 0,
+      storeName: 'SoftStore Official Partner',
+      storeCity: 'Lahore',
+      estimatedDelivery: 'Expected in 2-3 business days',
+      statusHistory: [
+        OrderStatusEvent(
+          status: OrderStatus.pending,
+          timestamp: now,
+          note: 'Order placed successfully',
+        ),
+      ],
+    );
+    await OrderRepository.instance.saveLocalOrder(order);
   }
 
   @override

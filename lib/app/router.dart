@@ -156,6 +156,7 @@ final GoRouter goRouter = GoRouter(
         final slug = state.pathParameters['slug'] ?? '';
         final extra = state.extra as Map<String, dynamic>? ?? {};
         return ProductDetailScreen(
+          id: extra['id'] as int?,
           slug: slug,
           name: extra['name'] as String? ?? slug,
           price: extra['price'] as int? ?? 0,

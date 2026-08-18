@@ -180,7 +180,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   return _OrderList(
                     orders: displayOrders,
                     onOrderTap: (o) =>
-                        context.push('/orders/${o.id}'),
+                        context.push('/orders/${o.referenceNumber}', extra: o),
                     emptyLabel: 'No ${_tabs[_selectedTab].toLowerCase()} orders',
                   );
                 }

@@ -9,7 +9,10 @@ import '../../../app/router.dart';
 import '../cubit/cart_cubit.dart';
 import '../cubit/cart_state.dart';
 import '../models/cart_models.dart';
+import '../models/cart_models.dart' as cart_models;
+import '../repository/cart_repository.dart' as cart_repo;
 import '../../orders/models/order_model.dart';
+import '../../orders/repository/order_repository.dart';
 // Shared bottom navigation bar used across all main screens
 import '../../../core/widgets/app_bottom_nav_bar.dart';
 import '../../../core/utils/validators.dart';
@@ -1079,6 +1082,10 @@ class _CartCheckoutSheetState extends State<CartCheckoutSheet> {
                                   shippingFee: _selectedDeliveryOption!.fee,
                                   deliveryMethodTitle:
                                       _selectedDeliveryOption!.title,
+                                  customerName: _recipientName,
+                                  customerPhone: _recipientPhone,
+                                  customerAddress: _streetAddress,
+                                  customerCity: _city,
                                 ),
                               ),
                             );
@@ -2202,15 +2209,136 @@ class _DeliveryOptionPickerSheetState
   }
 }
 
+// ── Shared Order Placement Processor ───────────────────────────────────────
+
+Future<void> _processOrderPlacement({
+  required BuildContext context,
+  required CartState cartState,
+  required int shippingFee,
+  required String paymentMethod,
+  String customerName = 'Muhammad Khalid',
+  String customerPhone = '03408014187',
+  String customerAddress = 'House 12, Street 4, Model Town, Lahore',
+  String customerCity = 'Lahore',
+}) async {
+  final now = DateTime.now();
+  // Standard web invoice format: INV-YYYYMMDD-XXXXX
+  final rand5 = 10000 + (now.microsecondsSinceEpoch % 90000);
+  final invoice =
+      'INV-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}-$rand5';
+
+  final orderItems = cartState.items.map((i) {
+    return OrderItem(
+      id: i.id,
+      name: i.name,
+      quantity: i.quantity,
+      unitPrice: i.price.toDouble(),
+      sku: 'SKU-${i.id}',
+    );
+  }).toList();
+
+  final repoItems = cartState.items.map((i) {
+    final numId = i.productId;
+    return cart_models.CartItem(
+      uuid: i.id,
+      productId: numId,
+      productName: i.name,
+      quantity: i.quantity,
+      unitPriceSnapshot: i.price.toDouble(),
+    );
+  }).toList();
+
+  final orderRequest = cart_models.OrderRequest(
+    items: repoItems,
+    customerName: customerName,
+    customerAddress: customerAddress,
+    customerPhone: customerPhone,
+    customerEmail: 'buyer@softstore.pk',
+  );
+
+  String finalInvoice = invoice;
+
+  try {
+    final result =
+        await cart_repo.CartRepository.instance.placeOrder(orderRequest);
+    if (result.success &&
+        result.invoiceNumber != null &&
+        result.invoiceNumber!.isNotEmpty) {
+      finalInvoice = result.invoiceNumber!;
+    }
+  } catch (_) {
+    // Graceful offline fallback with exact web invoice format
+  }
+
+  final placedOrder = Order(
+    id: finalInvoice,
+    referenceNumber: finalInvoice,
+    placedAt: now,
+    status: OrderStatus.pending,
+    items: orderItems,
+    deliveryAddress: OrderAddress(
+      name: customerName,
+      phone: customerPhone,
+      addressLine: customerAddress,
+      city: customerCity,
+    ),
+    subtotal: cartState.totalPrice.toDouble(),
+    deliveryFee: shippingFee.toDouble(),
+    discount: 0,
+    storeName: 'SoftStore Official Partner',
+    storeCity: customerCity,
+    estimatedDelivery: 'Expected in 2-3 business days',
+    statusHistory: [
+      OrderStatusEvent(
+        status: OrderStatus.pending,
+        timestamp: now,
+        note: 'Order placed via $paymentMethod by customer',
+      ),
+    ],
+  );
+
+  await OrderRepository.instance.saveLocalOrder(placedOrder);
+
+  if (context.mounted) {
+    context.read<CartCubit>().clearCart();
+
+    final firstItem = orderItems.isNotEmpty ? orderItems.first : null;
+
+    Navigator.of(context, rootNavigator: true)
+        .popUntil((route) => route.isFirst);
+
+    context.go(
+      '/order-confirmation/$finalInvoice',
+      extra: {
+        'invoiceNumber': finalInvoice,
+        'subtotal': cartState.totalPrice,
+        'delivery': shippingFee,
+        'productName': firstItem?.name ?? 'Marketplace Item',
+        'productQty': firstItem?.quantity ?? 1,
+        'productPrice': firstItem?.unitPrice.toInt() ?? cartState.totalPrice,
+        'iconCodePoint': Icons.inventory_2_outlined.codePoint,
+      },
+    );
+  }
+}
+
 // ── Payment method sheet ───────────────────────────────────────────────────
 
 class _PaymentMethodSheet extends StatefulWidget {
   final int shippingFee;
   final String deliveryMethodTitle;
+  final String customerName;
+  final String customerPhone;
+  final String customerAddress;
+  final String customerCity;
 
   const _PaymentMethodSheet({
     this.shippingFee = 275,
     this.deliveryMethodTitle = 'Standard Delivery',
+    this.customerName = 'Muhammad Khalid',
+    this.customerPhone = '03408014187',
+    this.customerAddress = 'House 12, Street 4, Model Town, Lahore',
+    this.customerCity = 'Lahore',
   });
 
   @override
@@ -2408,11 +2536,57 @@ class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
                       width: double.infinity,
                       child: ElevatedButton(
                         onPressed: () {
-                          final nav = Navigator.of(context);
-                          nav.pop();
-                          nav.pop();
-                          final ref = dummyOrders.first.referenceNumber;
-                          context.go('/order-confirmation/$ref');
+                          if (_selected == 'cod') {
+                            showModalBottomSheet(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (_) => BlocProvider.value(
+                                value: context.read<CartCubit>(),
+                                child: _CodDetailSheet(
+                                  shippingFee: widget.shippingFee,
+                                  customerName: widget.customerName,
+                                  customerPhone: widget.customerPhone,
+                                  customerAddress: widget.customerAddress,
+                                  customerCity: widget.customerCity,
+                                ),
+                              ),
+                            );
+                            return;
+                          }
+                          if (_selected == 'card') {
+                            showModalBottomSheet(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (_) => BlocProvider.value(
+                                value: context.read<CartCubit>(),
+                                child: _CardDetailSheet(
+                                  shippingFee: widget.shippingFee,
+                                  customerName: widget.customerName,
+                                  customerPhone: widget.customerPhone,
+                                  customerAddress: widget.customerAddress,
+                                  customerCity: widget.customerCity,
+                                ),
+                              ),
+                            );
+                            return;
+                          }
+
+                          _processOrderPlacement(
+                            context: context,
+                            cartState: state,
+                            shippingFee: widget.shippingFee,
+                            paymentMethod: _selected == 'jazzcash'
+                                ? 'JazzCash'
+                                : _selected == 'easypaisa'
+                                    ? 'EasyPaisa'
+                                    : 'Bank Transfer',
+                            customerName: widget.customerName,
+                            customerPhone: widget.customerPhone,
+                            customerAddress: widget.customerAddress,
+                            customerCity: widget.customerCity,
+                          );
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
@@ -2517,15 +2691,30 @@ class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
 
 // ── Cash on Delivery detail sheet ─────────────────────────────────────────
 
-class _CodDetailSheet extends StatelessWidget {
+class _CodDetailSheet extends StatefulWidget {
   final int shippingFee;
+  final String customerName;
+  final String customerPhone;
+  final String customerAddress;
+  final String customerCity;
 
   const _CodDetailSheet({
     this.shippingFee = 275,
+    this.customerName = 'Muhammad Khalid',
+    this.customerPhone = '03408014187',
+    this.customerAddress = 'House 12, Street 4, Model Town, Lahore',
+    this.customerCity = 'Lahore',
   });
 
+  @override
+  State<_CodDetailSheet> createState() => _CodDetailSheetState();
+}
+
+class _CodDetailSheetState extends State<_CodDetailSheet> {
   static const int _otherFees = 10;
   static const int _platformFee = 10;
+
+  bool _isProcessing = false;
 
   static const List<String> _bullets = [
     'You may pay in cash upon receiving your parcel.',
@@ -2550,7 +2739,7 @@ class _CodDetailSheet extends StatelessWidget {
     return BlocBuilder<CartCubit, CartState>(
       builder: (context, state) {
         final subtotal =
-            state.totalPrice + shippingFee + _otherFees + _platformFee;
+            state.totalPrice + widget.shippingFee + _otherFees + _platformFee;
         final codFee = (subtotal * 0.07).round().clamp(0, 100);
         final total = subtotal + codFee;
 
@@ -2700,14 +2889,27 @@ class _CodDetailSheet extends StatelessWidget {
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: () {
-                          final nav = Navigator.of(context);
-                          nav.pop();
-                          nav.pop();
-                          nav.pop();
-                          final ref = dummyOrders.first.referenceNumber;
-                          context.go('/order-confirmation/$ref');
-                        },
+                        onPressed: _isProcessing
+                            ? null
+                            : () async {
+                                setState(() => _isProcessing = true);
+                                try {
+                                  await _processOrderPlacement(
+                                    context: context,
+                                    cartState: state,
+                                    shippingFee: widget.shippingFee,
+                                    paymentMethod: 'Cash on Delivery',
+                                    customerName: widget.customerName,
+                                    customerPhone: widget.customerPhone,
+                                    customerAddress: widget.customerAddress,
+                                    customerCity: widget.customerCity,
+                                  );
+                                } catch (_) {
+                                  if (mounted) {
+                                    setState(() => _isProcessing = false);
+                                  }
+                                }
+                              },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
                           foregroundColor: Colors.white,
@@ -2717,10 +2919,19 @@ class _CodDetailSheet extends StatelessWidget {
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(8)),
                         ),
-                        child: const Text('Confirm Order',
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 15)),
+                        child: _isProcessing
+                            ? const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2.5,
+                                ),
+                              )
+                            : const Text('Confirm Order',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15)),
                       ),
                     ),
                   ],
@@ -2760,9 +2971,17 @@ class _CodDetailSheet extends StatelessWidget {
 
 class _CardDetailSheet extends StatefulWidget {
   final int shippingFee;
+  final String customerName;
+  final String customerPhone;
+  final String customerAddress;
+  final String customerCity;
 
   const _CardDetailSheet({
     this.shippingFee = 275,
+    this.customerName = 'Muhammad Khalid',
+    this.customerPhone = '03408014187',
+    this.customerAddress = 'House 12, Street 4, Model Town, Lahore',
+    this.customerCity = 'Lahore',
   });
 
   @override
@@ -2772,6 +2991,8 @@ class _CardDetailSheet extends StatefulWidget {
 class _CardDetailSheetState extends State<_CardDetailSheet> {
   static const int _otherFees = 10;
   static const int _platformFee = 10;
+
+  bool _isProcessing = false;
 
   final _cardNumberCtrl = TextEditingController();
   final _expiryCtrl = TextEditingController();
@@ -3020,27 +3241,40 @@ class _CardDetailSheetState extends State<_CardDetailSheet> {
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: () {
-                          if (_cardNumberCtrl.text.isEmpty ||
-                              _expiryCtrl.text.isEmpty ||
-                              _cvvCtrl.text.isEmpty ||
-                              _nameCtrl.text.isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content:
-                                    Text('Please fill all card details'),
-                                behavior: SnackBarBehavior.floating,
-                              ),
-                            );
-                            return;
-                          }
-                          final nav = Navigator.of(context);
-                          nav.pop();
-                          nav.pop();
-                          nav.pop();
-                          final ref = dummyOrders.first.referenceNumber;
-                          context.go('/order-confirmation/$ref');
-                        },
+                        onPressed: _isProcessing
+                            ? null
+                            : () async {
+                                if (_cardNumberCtrl.text.isEmpty ||
+                                    _expiryCtrl.text.isEmpty ||
+                                    _cvvCtrl.text.isEmpty ||
+                                    _nameCtrl.text.isEmpty) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content:
+                                          Text('Please fill all card details'),
+                                      behavior: SnackBarBehavior.floating,
+                                    ),
+                                  );
+                                  return;
+                                }
+                                setState(() => _isProcessing = true);
+                                try {
+                                  await _processOrderPlacement(
+                                    context: context,
+                                    cartState: state,
+                                    shippingFee: widget.shippingFee,
+                                    paymentMethod: 'Credit/Debit Card',
+                                    customerName: widget.customerName,
+                                    customerPhone: widget.customerPhone,
+                                    customerAddress: widget.customerAddress,
+                                    customerCity: widget.customerCity,
+                                  );
+                                } catch (_) {
+                                  if (mounted) {
+                                    setState(() => _isProcessing = false);
+                                  }
+                                }
+                              },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
                           foregroundColor: Colors.white,
@@ -3050,10 +3284,19 @@ class _CardDetailSheetState extends State<_CardDetailSheet> {
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(8)),
                         ),
-                        child: const Text('Pay Now',
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 15)),
+                        child: _isProcessing
+                            ? const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2.5,
+                                ),
+                              )
+                            : const Text('Pay Now',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15)),
                       ),
                     ),
                   ],

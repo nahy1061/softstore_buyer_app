@@ -12,9 +12,10 @@ class StorageKeys {
   static const String userEmail = 'user_email';
   static const String userPhone = 'user_phone';
 
-  // Cart - SharedPreferences
+  // Cart & Orders - SharedPreferences
   static const String cartItems = 'cart_items';
   static const String cartLastModified = 'cart_last_modified';
+  static const String savedOrders = 'saved_orders';
 
   // Wishlist - SharedPreferences (wishlist data cached locally)
   static const String wishlistItems = 'wishlist_items';

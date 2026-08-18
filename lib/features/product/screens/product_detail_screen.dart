@@ -11,6 +11,7 @@ import '../../cart/models/cart_models.dart';
 import '../../cart/screens/cart_screen.dart';
 
 class ProductDetailScreen extends StatelessWidget {
+  final int? id;
   final String slug;
   final String name;
   final int price;
@@ -20,6 +21,7 @@ class ProductDetailScreen extends StatelessWidget {
 
   const ProductDetailScreen({
     super.key,
+    this.id,
     required this.slug,
     required this.name,
     required this.price,
@@ -140,8 +142,10 @@ class ProductDetailScreen extends StatelessWidget {
           ],
         ),
         bottomNavigationBar: _BottomBar(
+          id: id,
           name: name,
           price: price,
+          imageUrl: imageUrl,
           iconCodePoint: iconCodePoint,
           slug: slug,
           colors: colors,
@@ -771,15 +775,19 @@ class _RecommendedTab extends StatelessWidget {
 // ── Bottom bar ───────────────────────────────────────────────────────────────
 
 class _BottomBar extends StatelessWidget {
+  final int? id;
   final String name;
   final int price;
+  final String? imageUrl;
   final int iconCodePoint;
   final String slug;
   final List<Map<String, dynamic>> colors;
 
   const _BottomBar({
+    this.id,
     required this.name,
     required this.price,
+    this.imageUrl,
     required this.iconCodePoint,
     required this.slug,
     required this.colors,
@@ -830,10 +838,12 @@ class _BottomBar extends StatelessWidget {
                   if (colors.isEmpty) {
                     context.read<CartCubit>().addItem(CartItem(
                           uuid: slug,
-                          productId: slug.hashCode.abs(),
+                          productId: id ?? slug.hashCode.abs(),
                           productName: name,
+                          productSlug: slug,
                           quantity: 1,
                           unitPriceSnapshot: price.toDouble(),
+                          imageUrl: imageUrl,
                         ));
                     _showCheckout(context);
                     return;
@@ -856,10 +866,13 @@ class _BottomBar extends StatelessWidget {
                     if (selectedColor != null && context.mounted) {
                       context.read<CartCubit>().addItem(CartItem(
                             uuid: '${slug}_$selectedColor',
-                            productId: slug.hashCode.abs(),
+                            productId: id ?? slug.hashCode.abs(),
                             productName: '$name ($selectedColor)',
+                            productSlug: slug,
+                            variantLabel: selectedColor,
                             quantity: 1,
                             unitPriceSnapshot: price.toDouble(),
+                            imageUrl: imageUrl,
                           ));
                       _showCheckout(context);
                     }
@@ -887,10 +900,12 @@ class _BottomBar extends StatelessWidget {
                   context.read<CartCubit>().addItem(
                         CartItem(
                           uuid: slug,
-                          productId: slug.hashCode.abs(),
+                          productId: id ?? slug.hashCode.abs(),
                           productName: name,
+                          productSlug: slug,
                           quantity: 1,
                           unitPriceSnapshot: price.toDouble(),
+                          imageUrl: imageUrl,
                         ),
                       );
                   ScaffoldMessenger.of(context).showSnackBar(
