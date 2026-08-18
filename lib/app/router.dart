@@ -316,19 +316,20 @@ final GoRouter goRouter = GoRouter(
               path: ':id',
               builder: (context, state) {
                 final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
-                final ticket = kMockTickets.firstWhere(
-                  (t) => t.id == id,
-                  orElse: () => Ticket(
-                    id: id,
-                    subject: 'Ticket #$id',
-                    category: '',
-                    status: TicketStatus.open,
-                    createdAt: DateTime.now(),
-                    lastUpdatedAt: DateTime.now(),
-                    lastMessage: '',
-                  ),
+                final ticket = state.extra as Ticket? ??
+                    Ticket(
+                      id: id,
+                      subject: 'Ticket #$id',
+                      category: '',
+                      status: TicketStatus.open,
+                      createdAt: DateTime.now(),
+                      lastUpdatedAt: DateTime.now(),
+                      lastMessage: '',
+                    );
+                return BlocProvider(
+                  create: (_) => SupportCubit(repository: SupportRepository()),
+                  child: TicketChatScreen(ticket: ticket),
                 );
-                return TicketChatScreen(ticket: ticket);
               },
             ),
           ],
