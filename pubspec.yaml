@@ -47,7 +47,12 @@ dependencies:
   dio: ^5.3.1
   cookie_jar: ^4.0.7
   dio_cookie_manager: ^3.0.0
+
+  # HTML parsing (SoftStore returns HTML for most endpoints)
   html: ^0.15.4
+
+  # reCAPTCHA v3 (required for login/register)
+  recaptcha_v3: ^0.2.1
 
   # Storage (F22-F24)
   shared_preferences: ^2.2.2
@@ -78,11 +83,9 @@ dev_dependencies:
 
 # The following section is specific to Flutter packages.
 flutter:
-
-  # The following line ensures that the Material Icons font is
-  # included with your application, so that you can use the icons in
-  # the material Icons class.
   uses-material-design: true
+  assets:
+    - assets/images/logo.jpeg
 
   # To add assets to your application, add an assets section, like this:
   # assets:
