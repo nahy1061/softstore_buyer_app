@@ -3,7 +3,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/router.dart';
-import '../../../core/config/env_config.dart';
 import '../cubit/auth_cubit.dart';
 import '../cubit/auth_state.dart';
 

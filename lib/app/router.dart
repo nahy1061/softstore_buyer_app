@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import '../core/widgets/app_bottom_nav_bar.dart';
 
 // Feature screen imports
 import '../features/auth/screens/login_screen.dart';

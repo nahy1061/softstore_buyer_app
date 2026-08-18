@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:softstore_buyer/features/cart/cubit/cart_cubit.dart';
-import 'package:softstore_buyer/features/cart/models/cart_item.dart';
-import 'package:softstore_buyer/features/cart/screens/cart_screen.dart';
+import 'package:softstore_buyer_app/features/cart/cubit/cart_cubit.dart';
+import 'package:softstore_buyer_app/features/cart/models/cart_item.dart';
+import 'package:softstore_buyer_app/features/cart/screens/cart_screen.dart';
 
 void main() {
   testWidgets(

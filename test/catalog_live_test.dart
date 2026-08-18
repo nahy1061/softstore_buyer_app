@@ -1,10 +1,9 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/services.dart';
-import 'package:dio/dio.dart';
-import 'package:softstore_buyer/core/network/dio_client.dart';
-import 'package:softstore_buyer/core/network/http_overrides.dart';
-import 'package:softstore_buyer/features/catalog/repository/catalog_repository.dart';
+import 'package:softstore_buyer_app/core/network/dio_client.dart';
+import 'package:softstore_buyer_app/core/network/http_overrides.dart';
+import 'package:softstore_buyer_app/features/catalog/repository/catalog_repository.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

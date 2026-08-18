@@ -9,7 +9,6 @@ import '../../../core/constants/storage_keys.dart';
 import '../../../core/errors/failures.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/utils/csrf_service.dart';
-import '../../../core/utils/html_parser_util.dart';
 import '../models/cart_models.dart';
 
 /// Manages the local cart and handles cart-related server calls.

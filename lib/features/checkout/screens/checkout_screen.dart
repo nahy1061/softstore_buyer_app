@@ -2,15 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../auth/cubit/auth_cubit.dart';
 import '../../auth/cubit/auth_state.dart';
-import '../../auth/models/user_model.dart';
 import '../../cart/cubit/cart_cubit.dart';
-import '../../cart/cubit/cart_state.dart';
 import '../../cart/models/cart_models.dart';
 import '../../cart/repository/cart_repository.dart';
 
