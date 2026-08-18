@@ -18,6 +18,7 @@ import '../features/checkout/screens/checkout_screen.dart';
 import '../features/deals/screens/deals_screen.dart';
 
 import '../features/home/screens/home_screen.dart';
+import '../features/messages/screens/messages_screen.dart';
 
 import '../features/orders/cubit/order_cubit.dart';
 import '../features/orders/models/order_model.dart';
@@ -82,6 +83,7 @@ abstract final class AppRoutes {
   static const String login = '/login';
   static const String register = '/register';
   static const String home = '/home';
+  static const String messages = '/messages';
   static const String categories = '/categories';
   static const String categoryProducts = '/category-products/:slug';
   static const String productDetail = '/product/:slug';
@@ -130,6 +132,10 @@ final GoRouter goRouter = GoRouter(
     GoRoute(
       path: AppRoutes.home,
       builder: (context, state) => const HomeScreen(),
+    ),
+    GoRoute(
+      path: AppRoutes.messages,
+      builder: (context, state) => const MessagesScreen(),
     ),
     GoRoute(
       path: AppRoutes.categories,

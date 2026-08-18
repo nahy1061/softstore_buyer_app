@@ -7,7 +7,6 @@ import '../../../../core/theme/app_dimensions.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/validators.dart';
-import '../../models/support_category.dart';
 import '../../models/support_ticket_form.dart';
 import '../../models/ticket_model.dart';
 import '../cubits/support_cubit.dart';
@@ -44,7 +43,6 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
   final _subjectController = TextEditingController();
   final _messageController = TextEditingController();
 
-  String? _selectedCategory;
   bool _isSubmitting = false;
   String? _submitError;
 
@@ -57,7 +55,6 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
     if (widget.initialSubject != null) {
       _subjectController.text = widget.initialSubject!;
     }
-    _selectedCategory = widget.initialCategoryLabel;
     if (_mockIsLoggedIn) {
       _nameController.text = _mockLoggedInUserName;
       _emailController.text = _mockLoggedInUserEmail;
@@ -91,17 +88,12 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
     _messageController.clear();
     _orderNumberController.clear();
     setState(() {
-      _selectedCategory = null;
       _submitError = null;
     });
   }
 
   Future<void> _submitTicket() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_selectedCategory == null) {
-      setState(() => _submitError = 'Please select a category');
-      return;
-    }
 
     setState(() {
       _isSubmitting = true;
@@ -112,7 +104,7 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
       final submitData = SupportTicketSubmitData.fromForm(
         subject: _subjectController.text,
         message: _messageController.text,
-        categoryLabel: _selectedCategory!,
+        categoryLabel: widget.initialCategoryLabel,
         orderId: _resolvedOrderId,
       );
 
@@ -376,8 +368,6 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
                     ),
                   ],
                   const SizedBox(height: AppSpacing.lg),
-                  _buildDropdown(),
-                  const SizedBox(height: AppSpacing.lg),
                   _buildTextField(
                     controller: _subjectController,
                     label: 'Subject',
@@ -602,80 +592,6 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
             errorStyle:
                 AppTypography.errorText.copyWith(color: AppColors.error),
           ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDropdown() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text('Category',
-                style: AppTypography.labelLarge
-                    .copyWith(color: AppColors.textPrimary)),
-            Text(' *',
-                style: AppTypography.labelLarge
-                    .copyWith(color: AppColors.error)),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        DropdownButtonFormField<String>(
-          initialValue: _selectedCategory,
-          hint: Text('Select a category',
-              style: AppTypography.bodyMedium
-                  .copyWith(color: AppColors.textDisabled)),
-          items: kSupportCategories.map((category) {
-            return DropdownMenuItem(
-              value: category.label,
-              child: Text(category.label,
-                  style: AppTypography.bodyMedium
-                      .copyWith(color: AppColors.textPrimary)),
-            );
-          }).toList(),
-          onChanged: (value) => setState(() {
-            _selectedCategory = value;
-            _submitError = null;
-          }),
-          validator: (value) =>
-              value == null ? 'Please select a category' : null,
-          decoration: InputDecoration(
-            prefixIcon: const Icon(Icons.category_outlined,
-                color: AppColors.textSecondary, size: 20),
-            filled: true,
-            fillColor: const Color(0xFFF7F7F7),
-            contentPadding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.md, vertical: AppSpacing.md),
-            border: OutlineInputBorder(
-              borderRadius: AppDimensions.radiusMd,
-              borderSide: const BorderSide(color: Color(0xFFEEEEEE)),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: AppDimensions.radiusMd,
-              borderSide: const BorderSide(color: Color(0xFFEEEEEE)),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: AppDimensions.radiusMd,
-              borderSide:
-                  const BorderSide(color: AppColors.primary, width: 1.5),
-            ),
-            errorBorder: OutlineInputBorder(
-              borderRadius: AppDimensions.radiusMd,
-              borderSide: const BorderSide(color: AppColors.error),
-            ),
-            focusedErrorBorder: OutlineInputBorder(
-              borderRadius: AppDimensions.radiusMd,
-              borderSide:
-                  const BorderSide(color: AppColors.error, width: 1.5),
-            ),
-            errorStyle:
-                AppTypography.errorText.copyWith(color: AppColors.error),
-          ),
-          dropdownColor: Colors.white,
-          icon: const Icon(Icons.keyboard_arrow_down,
-              color: AppColors.textSecondary),
         ),
       ],
     );

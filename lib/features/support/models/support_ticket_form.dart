@@ -17,13 +17,11 @@ class SupportTicketSubmitData {
   factory SupportTicketSubmitData.fromForm({
     required String subject,
     required String message,
-    required String categoryLabel,
+    String? categoryLabel,
     int? orderId,
   }) {
-    final apiCategory = supportCategoryApiValue(categoryLabel);
-    if (apiCategory == null) {
-      throw ArgumentError('Unknown support category: $categoryLabel');
-    }
+    final apiCategory = (categoryLabel != null ? supportCategoryApiValue(categoryLabel) : null) ??
+        (orderId != null ? 'order' : 'general');
     return SupportTicketSubmitData(
       subject: subject.trim(),
       message: message.trim(),

@@ -17,7 +17,7 @@ class AppBottomNavBar extends StatelessWidget {
         context.go(AppRoutes.home);
         break;
       case 1:
-        context.go(AppRoutes.support);
+        context.go(AppRoutes.messages);
         break;
       case 2:
         context.go(AppRoutes.categories);
