@@ -43,6 +43,13 @@ class ApiEndpoints {
   static const String search = '/store';
   static const String searchProducts = '/store/search';
 
+  /// GET ?q=... — live search suggestions JSON {products, categories}
+  static const String searchSuggest = '/api/store/search-suggest';
+
+  /// POST form {tenant_id, _csrf_token} — follow / unfollow seller store
+  static const String followStore = '/store/follow';
+  static const String unfollowStore = '/store/unfollow';
+
   /// GET /product/{slug} — product detail HTML with JSON-LD
   static const String productDetail = '/product/';
 
@@ -55,6 +62,9 @@ class ApiEndpoints {
   /// GET /store/{slug} — seller/store profile HTML
   static const String sellerProfile = '/store/';
   static const String sellerStore = '/store';
+
+  /// POST form {_csrf_token, product_id, rating, review_text}
+  static const String submitReview = '/store/account/reviews';
 
   // ─── Cart / Checkout ────────────────────────────────────────────────────────
   /// POST JSON {items:[{id,qty}]} → {delivery_fee, free, currency}

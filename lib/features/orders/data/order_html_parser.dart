@@ -404,4 +404,35 @@ class OrderHtmlParser {
 
     return DateTime.now();
   }
+
+  /// Parses returns list HTML from `/store/account/returns`.
+  static List<Map<String, dynamic>> parseReturnsList(String html) {
+    if (html.isEmpty) return [];
+    final doc = html_parser.parse(html);
+    final List<Map<String, dynamic>> returns = [];
+
+    final rows = doc.querySelectorAll('table tbody tr, .return-card, [class*="return-item"]');
+    for (final row in rows) {
+      try {
+        final idMatch = RegExp(r'#?(\d+)').firstMatch(row.text);
+        final id = idMatch != null ? int.tryParse(idMatch.group(1)!) ?? 0 : 0;
+        final statusEl = row.querySelector('.badge, [class*="status"]');
+        final status = statusEl?.text.trim() ?? 'Pending';
+        final reasonEl = row.querySelector('[class*="reason"], td:nth-child(3)');
+        final reason = reasonEl?.text.trim() ?? '';
+        final dateEl = row.querySelector('[class*="date"], time, td:nth-child(4)');
+        final date = dateEl?.text.trim() ?? '';
+
+        if (id > 0 || reason.isNotEmpty) {
+          returns.add({
+            'id': id,
+            'status': status,
+            'reason': reason,
+            'created_at': date,
+          });
+        }
+      } catch (_) {}
+    }
+    return returns;
+  }
 }

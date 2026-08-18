@@ -108,22 +108,44 @@ class WishlistRepository {
     try {
       // Fetch CSRF from the product page (as documented)
       final csrfToken = await _csrf.fetchToken(
-          '${ApiEndpoints.productDetail}$productSlug');
+          '${ApiEndpoints.productDetail}$productSlug') ??
+          await _csrf.fetchToken(ApiEndpoints.homepage);
 
-      final response = await _client.post<Map<String, dynamic>>(
-        ApiEndpoints.toggleWishlist,
-        data: {
-          if (csrfToken != null) '_csrf_token': csrfToken,
-          'product_id': productId,
-        },
-        options: Options(
-          contentType: 'application/x-www-form-urlencoded',
-        ),
-      );
+      try {
+        final response = await _client.post<Map<String, dynamic>>(
+          ApiEndpoints.toggleWishlist,
+          data: {
+            if (csrfToken != null) ...{
+              '_csrf_token': csrfToken,
+              'csrf_token': csrfToken,
+            },
+            'product_id': productId,
+          },
+          options: Options(
+            contentType: 'application/x-www-form-urlencoded',
+          ),
+        );
 
-      final data = response.data;
-      if (data == null) return false;
-      return data['added'] == true;
+        final data = response.data;
+        if (data != null) return data['added'] == true;
+      } catch (_) {
+        final fallbackRes = await _client.post<Map<String, dynamic>>(
+          '/api/marketplace/wishlist/toggle',
+          data: {
+            if (csrfToken != null) ...{
+              '_csrf_token': csrfToken,
+              'csrf_token': csrfToken,
+            },
+            'product_id': productId,
+          },
+          options: Options(
+            contentType: 'application/x-www-form-urlencoded',
+          ),
+        );
+        final fallbackData = fallbackRes.data;
+        if (fallbackData != null) return fallbackData['added'] == true;
+      }
+      return false;
     } on DioException catch (e) {
       throw _mapError(e);
     }

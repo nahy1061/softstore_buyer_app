@@ -47,13 +47,16 @@ class AddressService {
       await _dio.post(
         ApiEndpoints.addAddress,
         data: {
-          if (csrfToken.isNotEmpty) '_csrf_token': csrfToken,
+          if (csrfToken.isNotEmpty) ...{
+            '_csrf_token': csrfToken,
+            'csrf_token': csrfToken,
+          },
           ...address.toJson(),
         },
         options: Options(
           contentType: 'application/x-www-form-urlencoded',
           followRedirects: false,
-          validateStatus: (status) => status != null && status < 400,
+          validateStatus: (status) => status != null && status < 500,
         ),
       );
     } on DioException {
@@ -69,17 +72,19 @@ class AddressService {
       final csrfToken = await _getCsrfToken(ApiEndpoints.getAddresses);
 
       // Step 2: POST delete with CSRF token
-      final path = ApiEndpoints.deleteAddress
-          .replaceAll(':id', addressId.toString());
+      final path = '${ApiEndpoints.deleteAddress}/$addressId${ApiEndpoints.deleteAddressSuffix}';
       await _dio.post(
         path,
         data: {
-          if (csrfToken.isNotEmpty) '_csrf_token': csrfToken,
+          if (csrfToken.isNotEmpty) ...{
+            '_csrf_token': csrfToken,
+            'csrf_token': csrfToken,
+          },
         },
         options: Options(
           contentType: 'application/x-www-form-urlencoded',
           followRedirects: false,
-          validateStatus: (status) => status != null && status < 400,
+          validateStatus: (status) => status != null && status < 500,
         ),
       );
     } on DioException {

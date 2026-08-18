@@ -49,7 +49,10 @@ class ProfileService {
       await _dio.post(
         ApiEndpoints.updateProfile,
         data: {
-          if (csrfToken.isNotEmpty) '_csrf_token': csrfToken,
+          if (csrfToken.isNotEmpty) ...{
+            '_csrf_token': csrfToken,
+            'csrf_token': csrfToken,
+          },
           'first_name': firstName,
           'last_name': lastName,
           'phone': phone,
@@ -57,7 +60,7 @@ class ProfileService {
         options: Options(
           contentType: 'application/x-www-form-urlencoded',
           followRedirects: false,
-          validateStatus: (status) => status != null && status < 400,
+          validateStatus: (status) => status != null && status < 500,
         ),
       );
     } on DioException {
@@ -79,14 +82,17 @@ class ProfileService {
       await _dio.post(
         ApiEndpoints.changePassword,
         data: {
-          if (csrfToken.isNotEmpty) '_csrf_token': csrfToken,
+          if (csrfToken.isNotEmpty) ...{
+            '_csrf_token': csrfToken,
+            'csrf_token': csrfToken,
+          },
           'current_password': currentPassword,
           'new_password': newPassword,
         },
         options: Options(
           contentType: 'application/x-www-form-urlencoded',
           followRedirects: false,
-          validateStatus: (status) => status != null && status < 400,
+          validateStatus: (status) => status != null && status < 500,
         ),
       );
     } on DioException {

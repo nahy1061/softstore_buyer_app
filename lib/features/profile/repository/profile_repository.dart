@@ -77,7 +77,10 @@ class ProfileRepository {
       await _client.post<String>(
         ApiEndpoints.updateProfile,
         data: {
-          if (csrfToken != null) '_csrf_token': csrfToken,
+          if (csrfToken != null) ...{
+            '_csrf_token': csrfToken,
+            'csrf_token': csrfToken,
+          },
           'first_name': firstName.trim(),
           'last_name': lastName.trim(),
           'phone': phone.trim(),
@@ -104,7 +107,10 @@ class ProfileRepository {
       final response = await _client.post<String>(
         ApiEndpoints.changePassword,
         data: {
-          if (csrfToken != null) '_csrf_token': csrfToken,
+          if (csrfToken != null) ...{
+            '_csrf_token': csrfToken,
+            'csrf_token': csrfToken,
+          },
           'current_password': currentPassword,
           'new_password': newPassword,
         },
@@ -158,6 +164,9 @@ class ProfileRepository {
     required String phone,
     required String address,
     String? label,
+    String? city,
+    String? state,
+    String? postalCode,
     bool setDefault = false,
   }) async {
     try {
@@ -166,12 +175,23 @@ class ProfileRepository {
       await _client.post<String>(
         ApiEndpoints.addresses,
         data: {
-          if (csrfToken != null) '_csrf_token': csrfToken,
+          if (csrfToken != null) ...{
+            '_csrf_token': csrfToken,
+            'csrf_token': csrfToken,
+          },
           if (label != null) 'label': label,
           'name': name.trim(),
+          'recipient_name': name.trim(),
           'phone': phone.trim(),
           'address': address.trim(),
-          if (setDefault) 'set_default': 'true',
+          'address_line1': address.trim(),
+          if (city != null && city.isNotEmpty) 'city': city.trim(),
+          if (state != null && state.isNotEmpty) 'state': state.trim(),
+          if (postalCode != null && postalCode.isNotEmpty) 'postal_code': postalCode.trim(),
+          if (setDefault) ...{
+            'is_default': '1',
+            'set_default': 'true',
+          },
         },
         options: Options(
           contentType: 'application/x-www-form-urlencoded',
@@ -192,7 +212,12 @@ class ProfileRepository {
 
       await _client.post<String>(
         path,
-        data: {if (csrfToken != null) '_csrf_token': csrfToken},
+        data: {
+          if (csrfToken != null) ...{
+            '_csrf_token': csrfToken,
+            'csrf_token': csrfToken,
+          },
+        },
         options: Options(
           contentType: 'application/x-www-form-urlencoded',
           responseType: ResponseType.plain,
@@ -202,6 +227,44 @@ class ProfileRepository {
       );
     } on DioException catch (e) {
       throw _mapError(e);
+    }
+  }
+
+  // ─── Reviews ───────────────────────────────────────────────────────────────
+
+  Future<bool> submitReview({
+    required int productId,
+    required int rating,
+    required String reviewText,
+  }) async {
+    try {
+      final csrfToken = await _csrf.fetchToken('/product/$productId') ??
+          await _csrf.fetchToken(ApiEndpoints.homepage);
+
+      final response = await _client.post(
+        ApiEndpoints.submitReview,
+        data: {
+          if (csrfToken != null) ...{
+            '_csrf_token': csrfToken,
+            'csrf_token': csrfToken,
+          },
+          'product_id': productId,
+          'rating': rating,
+          'review_text': reviewText.trim(),
+        },
+        options: Options(
+          contentType: 'application/x-www-form-urlencoded',
+          validateStatus: (s) => s != null && s < 500,
+        ),
+      );
+      final data = response.data;
+      if (data is Map) {
+        return data['success'] == true;
+      }
+      return response.statusCode == 200 || response.statusCode == 302;
+    } catch (e) {
+      developer.log('[ProfileRepository] submitReview error: $e', name: 'profile');
+      return false;
     }
   }
 

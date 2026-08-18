@@ -52,9 +52,11 @@ class AuthRepository {
         ApiEndpoints.loginPage,
         data: {
           '_csrf_token': csrfToken,
+          'csrf_token': csrfToken,
           'email': email.trim(),
           'password': password,
           'recaptcha_token': recaptchaToken,
+          'g-recaptcha-response': recaptchaToken,
         },
         options: Options(
           contentType: 'application/x-www-form-urlencoded',
@@ -117,12 +119,14 @@ class AuthRepository {
         ApiEndpoints.registerPage,
         data: {
           '_csrf_token': csrfToken,
+          'csrf_token': csrfToken,
           'first_name': firstName.trim(),
           if (lastName != null) 'last_name': lastName.trim(),
           'email': email.trim(),
           'password': password,
           if (phone != null) 'phone': phone.trim(),
           'recaptcha_token': recaptchaToken,
+          'g-recaptcha-response': recaptchaToken,
         },
         options: Options(
           contentType: 'application/x-www-form-urlencoded',
@@ -167,7 +171,10 @@ class AuthRepository {
       await _client.post<String>(
         ApiEndpoints.logout,
         data: {
-          if (csrfToken != null) '_csrf_token': csrfToken,
+          if (csrfToken != null) ...{
+            '_csrf_token': csrfToken,
+            'csrf_token': csrfToken,
+          },
         },
         options: Options(
           contentType: 'application/x-www-form-urlencoded',
