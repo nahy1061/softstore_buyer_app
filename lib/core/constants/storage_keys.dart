@@ -38,4 +38,13 @@ class StorageKeys {
   // Feature flags - SharedPreferences
   static const String useMockRepositories = 'use_mock_repositories';
   static const String enableDetailedLogs = 'enable_detailed_logs';
+
+  // Messaging - SharedPreferences (productId → threadUrl cache)
+  static const String conversationCache = 'conversation_cache';
+
+  // Recently viewed products - SharedPreferences
+  static const String recentlyViewed = 'recently_viewed';
+
+  // Followed stores - SharedPreferences (client-side only)
+  static const String followedStores = 'followed_stores';
 }

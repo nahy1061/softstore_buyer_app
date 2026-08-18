@@ -7,12 +7,28 @@ class TicketMessage {
   final String text;
   final MessageSender sender;
   final DateTime sentAt;
+  final String? timestamp;
 
   const TicketMessage({
     required this.id,
     required this.text,
     required this.sender,
     required this.sentAt,
+    this.timestamp,
+  });
+}
+
+class TicketDetail {
+  final String id;
+  final String subject;
+  final String status;
+  final List<TicketMessage> messages;
+
+  const TicketDetail({
+    required this.id,
+    required this.subject,
+    required this.status,
+    this.messages = const [],
   });
 
   factory TicketMessage.fromJson(Map<String, dynamic> json) {

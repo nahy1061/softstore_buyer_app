@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_dimensions.dart';
 import '../../../app/router.dart';
+import '../../../features/auth/cubit/auth_cubit.dart';
+import '../../../features/auth/cubit/auth_state.dart';
+import '../../../features/auth/models/user_model.dart';
 // Shared bottom navigation bar used across all main screens
 import '../../../core/widgets/app_bottom_nav_bar.dart';
 
@@ -75,129 +79,178 @@ class _ProfileHeaderState extends State<_ProfileHeader>
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.08),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
+    return BlocBuilder<AuthCubit, AuthState>(
+      builder: (context, authState) {
+        final bool isAuthenticated = authState is AuthAuthenticated;
+        final User? user = isAuthenticated ? authState.user : null;
+
+        return Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withValues(alpha: 0.08),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.lg,
-          AppSpacing.xl,
-          AppSpacing.lg,
-          AppSpacing.xl,
-        ),
-        child: Column(
-          children: [
-            // Avatar with scale animation
-            ScaleTransition(
-              scale: _scaleAnimation,
-              child: Container(
-                width: 92,
-                height: 92,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      AppColors.primary,
-                      AppColors.primary.withOpacity(0.8),
-                    ],
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.primary.withOpacity(0.3),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.xl,
+              AppSpacing.lg,
+              AppSpacing.xl,
+            ),
+            child: Column(
+              children: [
+                // Avatar with scale animation
+                ScaleTransition(
+                  scale: _scaleAnimation,
+                  child: Container(
+                    width: 92,
+                    height: 92,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          AppColors.primary,
+                          AppColors.primary.withValues(alpha: 0.8),
+                        ],
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primary.withValues(alpha: 0.3),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-                child: const Center(
-                  child: Icon(
-                    Icons.person,
-                    size: 48,
-                    color: AppColors.surface,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            // Username
-            Text(
-              'Arwah Imran',
-              style: AppTypography.sectionHeading.copyWith(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            // Email
-            Text(
-              'arwah@example.com',
-              style: AppTypography.bodySmall.copyWith(
-                color: AppColors.textSecondary,
-                fontSize: 13,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            // Edit Profile Button - Enhanced
-            Container(
-              width: double.infinity,
-              height: 44,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    AppColors.primary,
-                    AppColors.primary.withOpacity(0.9),
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.primary.withOpacity(0.2),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () => context.go(AppRoutes.editProfile),
-                  borderRadius: BorderRadius.circular(12),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(
-                        Icons.edit_outlined,
-                        size: 18,
+                    child: Center(
+                      child: Icon(
+                        isAuthenticated ? Icons.person : Icons.person_outline,
+                        size: 48,
                         color: AppColors.surface,
                       ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Text(
-                        'Edit Profile',
-                        style: AppTypography.buttonText.copyWith(
-                          color: AppColors.surface,
-                          fontSize: 14,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                // Username / Header
+                Text(
+                  isAuthenticated
+                      ? (user?.fullName.isNotEmpty == true
+                          ? user!.fullName
+                          : 'SoftStore Buyer')
+                      : 'Welcome Guest',
+                  style: AppTypography.sectionHeading.copyWith(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                // Email or description
+                Text(
+                  isAuthenticated
+                      ? (user?.email ?? '')
+                      : 'Sign in to access your profile, orders & addresses',
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                // Action Buttons
+                if (isAuthenticated)
+                  Container(
+                    width: double.infinity,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          AppColors.primary,
+                          AppColors.primary.withValues(alpha: 0.9),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primary.withValues(alpha: 0.2),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () => context.push(AppRoutes.editProfile),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(
+                              Icons.edit_outlined,
+                              size: 18,
+                              color: AppColors.surface,
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                            Text(
+                              'Edit Profile',
+                              style: AppTypography.buttonText.copyWith(
+                                color: AppColors.surface,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  Row(
+                    children: [
+                      Expanded(
+                        child: SizedBox(
+                          height: 44,
+                          child: FilledButton(
+                            onPressed: () => context.push(AppRoutes.login),
+                            style: FilledButton.styleFrom(
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: const Text('Sign In'),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: SizedBox(
+                          height: 44,
+                          child: OutlinedButton(
+                            onPressed: () => context.push(AppRoutes.register),
+                            style: OutlinedButton.styleFrom(
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: const Text('Sign Up'),
+                          ),
                         ),
                       ),
                     ],
                   ),
-                ),
-              ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }
@@ -973,7 +1026,7 @@ class _QuickActionCardEnhancedState extends State<_QuickActionCardEnhanced>
           TextButton(
             onPressed: () {
               Navigator.pop(widget.context);
-              widget.context.go(AppRoutes.login);
+              widget.context.read<AuthCubit>().logout();
             },
             child: const Text(
               'Sign Out',

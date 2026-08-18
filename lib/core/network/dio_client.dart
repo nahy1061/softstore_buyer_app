@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
 import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio_cookie_manager/dio_cookie_manager.dart';
 import 'package:path_provider/path_provider.dart';
@@ -34,13 +36,25 @@ class DioClient {
         connectTimeout: AppConfig.connectTimeout,
         receiveTimeout: AppConfig.receiveTimeout,
         sendTimeout: AppConfig.sendTimeout,
-        responseType: ResponseType.plain, // Enables smooth HTML scraping and JSON parsing
-        headers: {
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'User-Agent': 'SoftStoreBuyerApp/1.0 (Flutter; Android/iOS)',
-        },
+        followRedirects: false,
         validateStatus: (status) => status != null && status < 500,
+        headers: {
+          'Accept': 'text/html,application/xhtml+xml,application/json,application/xml;q=0.9,*/*;q=0.8',
+          'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        },
       ),
+    );
+
+    // SSL certificate handler
+    _dio.httpClientAdapter = IOHttpClientAdapter(
+      createHttpClient: () {
+        final client = HttpClient();
+        client.badCertificateCallback =
+            (X509Certificate cert, String host, int port) => true;
+        return client;
+      },
+      validateCertificate: (cert, host, port) => true,
     );
 
     // Add interceptors in order: logging → auth → retry → cookie manager
