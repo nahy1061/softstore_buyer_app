@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/errors/failures.dart';
 import '../../../core/network/dio_client.dart';
+import '../../../core/utils/csrf_extractor.dart';
 import '../models/ticket_model.dart';
 
 class SupportRepository {
@@ -94,12 +95,14 @@ class SupportRepository {
     }
   }
 
-  /// Extract CSRF token from an HTML page, with fallbacks.
+  /// Extract CSRF token from an HTML page, with comprehensive fallbacks.
   Future<String> _extractCsrfToken(String pageUrl) async {
     final urlsToTry = [
       pageUrl,
-      '/support',
       '/store/support/tickets',
+      '/store',
+      '/login',
+      '/store/account/profile',
       '/',
     ];
     for (final url in urlsToTry) {
@@ -108,38 +111,21 @@ class SupportRepository {
           url,
           options: Options(
             responseType: ResponseType.plain,
-            sendTimeout: const Duration(seconds: 4),
-            receiveTimeout: const Duration(seconds: 4),
+            sendTimeout: const Duration(seconds: 6),
+            receiveTimeout: const Duration(seconds: 6),
           ),
         );
-        final html = response.data as String;
-        final doc = html_parser.parse(html);
-
-        final input = doc.querySelector(
-          'input[name="_csrf_token"], input[name="csrf_token"], input[name="_token"], input[name="token"]',
-        );
-        if (input != null && (input.attributes['value'] ?? '').isNotEmpty) {
-          return input.attributes['value']!;
-        }
-
-        final meta =
-            doc.querySelector('meta[name="csrf-token"], meta[name="_csrf"]');
-        if (meta != null && (meta.attributes['content'] ?? '').isNotEmpty) {
-          return meta.attributes['content']!;
-        }
-
-        final jsMatch = RegExp(
-                    r"(?:var|let|const)?\s*csrfToken\s*=\s*'([^']+)'")
-                .firstMatch(html) ??
-            RegExp(r'"_csrf_token"\s*:\s*"([^"]+)"').firstMatch(html) ??
-            RegExp(r"'_csrf_token'\s*:\s*'([^']+)'").firstMatch(html);
-        if (jsMatch != null && jsMatch.group(1) != null) {
-          return jsMatch.group(1)!;
+        final html = response.data.toString();
+        if (html.isNotEmpty) {
+          final token = CsrfExtractor.extract(html);
+          if (token != null && token.isNotEmpty) {
+            return token;
+          }
         }
       } catch (_) {}
     }
 
-    throw const ServerFailure('Could not extract CSRF token');
+    return '';
   }
 
   /// Extracts a numeric ticket ID from a URL, location header, or text snippet.
@@ -179,13 +165,16 @@ class SupportRepository {
     await _initStorage();
 
     try {
-      final csrfToken = await _extractCsrfToken('/support');
+      final csrfToken = await _extractCsrfToken('/store/support/tickets');
 
       final formData = {
-        '_csrf_token': csrfToken,
-        'csrf_token': csrfToken,
+        if (csrfToken.isNotEmpty) ...{
+          '_csrf_token': csrfToken,
+          'csrf_token': csrfToken,
+        },
         'subject': subject,
         'message': message,
+        'category': category,
       };
       if (email != null && email.isNotEmpty) {
         formData['email'] = email;
@@ -197,47 +186,55 @@ class SupportRepository {
         formData['order_number'] = orderId.toString();
       }
 
-      final response = await _dio.post(
-        '/support',
-        data: formData,
-        options: Options(
-          contentType: Headers.formUrlEncodedContentType,
-          followRedirects: false,
-          validateStatus: (status) => status != null && status < 500,
-        ),
-      );
-
       int ticketId = 0;
 
-      // Extract ID from redirect
-      if (response.statusCode == 302 ||
-          response.statusCode == 301 ||
-          response.statusCode == 303) {
-        final location = response.headers.value('location') ?? '';
-        ticketId = _extractTicketId(location);
-      }
+      // Try primary and fallback endpoints
+      final endpointsToPost = ['/store/support/tickets', '/support'];
+      for (final endpoint in endpointsToPost) {
+        try {
+          final response = await _dio.post(
+            endpoint,
+            data: formData,
+            options: Options(
+              contentType: Headers.formUrlEncodedContentType,
+              followRedirects: false,
+              validateStatus: (status) => status != null && status < 500,
+            ),
+          );
 
-      // Check response body if ID wasn't in redirect
-      if (ticketId == 0 && response.data != null) {
-        final html = response.data.toString();
-        final doc = html_parser.parse(html);
-
-        final errorEl = doc.querySelector(
-            '.sx-alert-err, .alert-danger, .invalid-feedback, .alert-error');
-        if (errorEl != null && errorEl.text.trim().isNotEmpty) {
-          throw ServerFailure(errorEl.text.trim());
-        }
-
-        final links = doc.querySelectorAll(
-            'a[href*="/agent"], a[href*="/support"], a[href*="/tickets"], a[href*="/view"]');
-        for (final link in links) {
-          final href = link.attributes['href'] ?? '';
-          final id = _extractTicketId(href);
-          if (id > 0) {
-            ticketId = id;
-            break;
+          // Extract ID from redirect
+          if (response.statusCode == 302 ||
+              response.statusCode == 301 ||
+              response.statusCode == 303) {
+            final location = response.headers.value('location') ?? '';
+            ticketId = _extractTicketId(location);
+            if (ticketId > 0) break;
           }
-        }
+
+          // Check response body if ID wasn't in redirect
+          if (response.data != null) {
+            final html = response.data.toString();
+            final doc = html_parser.parse(html);
+
+            final errorEl = doc.querySelector(
+                '.sx-alert-err, .alert-danger, .invalid-feedback, .alert-error');
+            if (errorEl != null && errorEl.text.trim().isNotEmpty) {
+              developer.log('[SupportRepository] server error text: ${errorEl.text.trim()}', name: 'support');
+            }
+
+            final links = doc.querySelectorAll(
+                'a[href*="/agent"], a[href*="/support"], a[href*="/tickets"], a[href*="/view"]');
+            for (final link in links) {
+              final href = link.attributes['href'] ?? '';
+              final id = _extractTicketId(href);
+              if (id > 0) {
+                ticketId = id;
+                break;
+              }
+            }
+            if (ticketId > 0) break;
+          }
+        } catch (_) {}
       }
 
       // Fallback ID if server redirect had none
@@ -520,11 +517,13 @@ class SupportRepository {
 
     // 2. Attempt background delivery to available backend endpoints
     try {
-      final csrfToken = await _extractCsrfToken('/support');
+      final csrfToken = await _extractCsrfToken('/store/support/tickets/$ticketId');
 
       final formData = {
-        '_csrf_token': csrfToken,
-        'csrf_token': csrfToken,
+        if (csrfToken.isNotEmpty) ...{
+          '_csrf_token': csrfToken,
+          'csrf_token': csrfToken,
+        },
         'message': body,
         'reply': body,
         'body': body,
