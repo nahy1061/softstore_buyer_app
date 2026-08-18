@@ -946,6 +946,7 @@ class _ColorSheetState extends State<_ColorSheet> {
   int _selectedIndex = 0;
   int _quantity = 1;
 
+  // ignore: non_const_argument_for_const_parameter
   IconData get _icon => IconData(widget.iconCodePoint,
       fontFamily: 'MaterialIcons');
 
