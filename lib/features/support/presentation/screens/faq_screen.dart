@@ -53,10 +53,21 @@ class _FaqScreenState extends State<FaqScreen> {
         elevation: 0,
         scrolledUnderElevation: 1,
         shadowColor: Colors.black12,
-        leading: const BackButton(color: AppColors.textPrimary),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded,
+              color: AppColors.textPrimary),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(AppRoutes.support);
+            }
+          },
+        ),
         title: Text(
           'Help Centre',
-          style: AppTypography.screenTitle.copyWith(color: AppColors.textPrimary),
+          style: AppTypography.screenTitle
+              .copyWith(color: AppColors.textPrimary),
         ),
       ),
       body: Column(

@@ -21,7 +21,7 @@ class SoftstoreBuyerApp extends StatelessWidget {
       ],
       child: MaterialApp.router(
         title: 'Softstore Buyer',
-        theme: AppTheme.light,
+        theme: buildLightTheme(),
         routerConfig: goRouter,
         debugShowCheckedModeBanner: false,
       ),

@@ -44,6 +44,9 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
+# Widget Preview related
+.widget_preview/
+
 # Secrets and environment files
 .env
 .env.local
@@ -69,12 +72,13 @@ yarn-error.log
 *.g.dart
 *.config.dart
 
+# Auto-generated platform files
+linux/flutter/generated_plugin_registrant.cc
+linux/flutter/generated_plugins.cmake
+macos/Flutter/GeneratedPluginRegistrant.swift
+
 # OS files
 Thumbs.db
-.DS_Store
 
 # Private files
 docs/naheed-private/
-
-# Widget Preview related
-.widget_preview/

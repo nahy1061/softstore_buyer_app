@@ -5,18 +5,16 @@ import '../../../app/router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/app_spacing.dart';
-import '../../auth/cubit/auth_cubit.dart';
-import '../../auth/cubit/auth_state.dart';
-import '../../auth/screens/auth_screen.dart';
 import '../../cart/cubit/cart_cubit.dart';
 import '../../cart/cubit/cart_state.dart';
-import '../../cart/models/cart_item.dart';
+import '../../cart/models/cart_models.dart';
 import '../../cart/screens/cart_screen.dart';
 
 class ProductDetailScreen extends StatelessWidget {
   final String slug;
   final String name;
   final int price;
+  final String? imageUrl;
   final int iconCodePoint;
   final List<Map<String, dynamic>> colors;
 
@@ -25,6 +23,7 @@ class ProductDetailScreen extends StatelessWidget {
     required this.slug,
     required this.name,
     required this.price,
+    this.imageUrl,
     required this.iconCodePoint,
     this.colors = const [],
   });
@@ -126,7 +125,12 @@ class ProductDetailScreen extends StatelessWidget {
             Expanded(
               child: TabBarView(
                 children: [
-                  _OverviewTab(name: name, price: price, icon: _icon),
+                  _OverviewTab(
+                    name: name,
+                    price: price,
+                    imageUrl: imageUrl,
+                    icon: _icon,
+                  ),
                   const _RatingsTab(),
                   _ProductDetailsTab(name: name),
                   _RecommendedTab(currentSlug: slug),
@@ -153,10 +157,15 @@ class ProductDetailScreen extends StatelessWidget {
 class _OverviewTab extends StatelessWidget {
   final String name;
   final int price;
+  final String? imageUrl;
   final IconData icon;
 
-  const _OverviewTab(
-      {required this.name, required this.price, required this.icon});
+  const _OverviewTab({
+    required this.name,
+    required this.price,
+    this.imageUrl,
+    required this.icon,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -169,9 +178,17 @@ class _OverviewTab extends StatelessWidget {
             width: double.infinity,
             height: 280,
             color: Colors.white,
-            child: Center(
-              child: Icon(icon, size: 100, color: AppColors.primary),
-            ),
+            child: imageUrl != null && imageUrl!.isNotEmpty
+                ? Image.network(
+                    imageUrl!,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => Center(
+                      child: Icon(icon, size: 100, color: AppColors.primary),
+                    ),
+                  )
+                : Center(
+                    child: Icon(icon, size: 100, color: AppColors.primary),
+                  ),
           ),
 
           const Divider(height: 1, color: AppColors.divider),
@@ -780,63 +797,6 @@ class _BottomBar extends StatelessWidget {
     );
   }
 
-  /// Check auth before proceeding with Buy Now.
-  /// If not authenticated, shows auth screen. On success, retries Buy Now.
-  Future<void> _buyNow(BuildContext context) async {
-    final authState = context.read<AuthCubit>().state;
-    final isAuthenticated = authState is AuthAuthenticated;
-
-    if (!isAuthenticated) {
-      final result = await Navigator.of(context).push<bool>(
-        MaterialPageRoute(
-          fullscreenDialog: true,
-          builder: (_) => BlocProvider.value(
-            value: context.read<AuthCubit>(),
-            child: const AuthScreen(),
-          ),
-        ),
-      );
-      if (result != true || !context.mounted) return;
-    }
-
-    // User is authenticated — proceed with Buy Now
-    if (colors.isEmpty) {
-      context.read<CartCubit>().addItem(CartItem(
-            id: slug,
-            name: name,
-            price: price,
-            iconCodePoint: iconCodePoint,
-          ));
-      _showCheckout(context);
-      return;
-    }
-    showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => BlocProvider.value(
-        value: context.read<CartCubit>(),
-        child: _ColorSheet(
-          name: name,
-          price: price,
-          iconCodePoint: iconCodePoint,
-          slug: slug,
-          colors: colors,
-        ),
-      ),
-    ).then((selectedColor) {
-      if (selectedColor != null && context.mounted) {
-        context.read<CartCubit>().addItem(CartItem(
-              id: '${slug}_$selectedColor',
-              name: '$name ($selectedColor)',
-              price: price,
-              iconCodePoint: iconCodePoint,
-            ));
-        _showCheckout(context);
-      }
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -866,7 +826,45 @@ class _BottomBar extends StatelessWidget {
             child: SizedBox(
               height: 46,
               child: OutlinedButton(
-                onPressed: () => _buyNow(context),
+                onPressed: () {
+                  if (colors.isEmpty) {
+                    context.read<CartCubit>().addItem(CartItem(
+                          uuid: slug,
+                          productId: slug.hashCode.abs(),
+                          productName: name,
+                          quantity: 1,
+                          unitPriceSnapshot: price.toDouble(),
+                        ));
+                    _showCheckout(context);
+                    return;
+                  }
+                  showModalBottomSheet<String>(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) => BlocProvider.value(
+                      value: context.read<CartCubit>(),
+                      child: _ColorSheet(
+                        name: name,
+                        price: price,
+                        iconCodePoint: iconCodePoint,
+                        slug: slug,
+                        colors: colors,
+                      ),
+                    ),
+                  ).then((selectedColor) {
+                    if (selectedColor != null && context.mounted) {
+                      context.read<CartCubit>().addItem(CartItem(
+                            uuid: '${slug}_$selectedColor',
+                            productId: slug.hashCode.abs(),
+                            productName: '$name ($selectedColor)',
+                            quantity: 1,
+                            unitPriceSnapshot: price.toDouble(),
+                          ));
+                      _showCheckout(context);
+                    }
+                  });
+                },
                 style: OutlinedButton.styleFrom(
                   side: const BorderSide(color: AppColors.primary),
                   foregroundColor: AppColors.primary,
@@ -888,10 +886,11 @@ class _BottomBar extends StatelessWidget {
                 onPressed: () {
                   context.read<CartCubit>().addItem(
                         CartItem(
-                          id: slug,
-                          name: name,
-                          price: price,
-                          iconCodePoint: iconCodePoint,
+                          uuid: slug,
+                          productId: slug.hashCode.abs(),
+                          productName: name,
+                          quantity: 1,
+                          unitPriceSnapshot: price.toDouble(),
                         ),
                       );
                   ScaffoldMessenger.of(context).showSnackBar(

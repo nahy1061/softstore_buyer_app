@@ -32,6 +32,7 @@ abstract final class AppColors {
 
   // Status Badge Colors
   static const Color statusPending = Color(0xFFFFB300);
+  static const Color statusConfirmed = Color(0xFF1565C0);
   static const Color statusProcessing = Color(0xFFFF6F00);
   static const Color statusShipped = Color(0xFFE65100);
   static const Color statusDelivered = Color(0xFF1B5E20);

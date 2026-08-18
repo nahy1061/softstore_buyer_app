@@ -1,87 +1,136 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../services/auth_service.dart';
+
+import '../../../core/errors/failures.dart';
+import '../repository/auth_repository.dart';
 import 'auth_state.dart';
 
+/// Manages authentication state for the entire app.
+///
+/// Inject via [BlocProvider] at the top level in [main.dart] so all screens
+/// can access the current auth status.
 class AuthCubit extends Cubit<AuthState> {
-  final AuthService _service = AuthService();
-
   AuthCubit() : super(const AuthInitial());
 
-  /// Check if user has an existing session (call on app start).
-  /// Only checks locally stored email — does NOT make network calls
-  /// because the backend returns 200 HTML even for anonymous users.
-  Future<void> checkSession() async {
-    emit(const AuthChecking());
+  final AuthRepository _repo = AuthRepository.instance;
+
+  // ─── Session Restoration ─────────────────────────────────────────────────
+
+  /// Called on app launch. Checks if a persisted session cookie is valid.
+  /// Emits [AuthAuthenticated] or [AuthUnauthenticated].
+  Future<void> restoreSession() async {
+    emit(const AuthLoading());
     try {
-      final email = await _service.getStoredEmail();
-      if (email != null && email.isNotEmpty) {
-        // Found stored email — assume session may be valid.
-        // Profile screen will verify on load and handle failures.
-        emit(AuthAuthenticated(email: email));
+      final user = await _repo.restoreSession();
+      if (user != null) {
+        developer.log('[AuthCubit] Session restored: ${user.email}', name: 'auth');
+        emit(AuthAuthenticated(user));
       } else {
         emit(const AuthUnauthenticated());
       }
-    } catch (_) {
+    } catch (e) {
+      developer.log('[AuthCubit] Session restore failed: $e', name: 'auth');
       emit(const AuthUnauthenticated());
     }
   }
 
-  /// Login with email + password
+  // ─── Login ────────────────────────────────────────────────────────────────
+
   Future<void> login({
     required String email,
     required String password,
+    required String recaptchaToken,
   }) async {
-    emit(const AuthLoggingIn());
+    emit(const AuthLoading());
     try {
-      await _service.login(email: email, password: password);
-      emit(const AuthLoginSuccess());
-      emit(AuthAuthenticated(email: email));
-    } catch (e) {
-      final message = _parseError(e);
-      emit(AuthError(message));
-      emit(const AuthUnauthenticated());
-    }
-  }
-
-  /// Register new account
-  Future<void> register({
-    required String firstName,
-    required String lastName,
-    required String email,
-    required String password,
-  }) async {
-    emit(const AuthRegistering());
-    try {
-      await _service.register(
-        firstName: firstName,
-        lastName: lastName,
+      final user = await _repo.login(
         email: email,
         password: password,
+        recaptchaToken: recaptchaToken,
       );
-      emit(const AuthLoginSuccess());
-      emit(AuthAuthenticated(email: email));
+      emit(AuthAuthenticated(user));
+    } on AuthFailure catch (e) {
+      emit(AuthError(e.message));
+    } on NetworkFailure catch (e) {
+      emit(AuthError(e.message));
     } catch (e) {
-      final message = _parseError(e);
-      emit(AuthError(message));
-      emit(const AuthUnauthenticated());
+      emit(AuthError(e.toString()));
     }
   }
 
-  /// Logout
+  // ─── Register ─────────────────────────────────────────────────────────────
+
+  Future<void> register({
+    required String firstName,
+    required String email,
+    required String password,
+    String? lastName,
+    String? phone,
+    required String recaptchaToken,
+  }) async {
+    emit(const AuthLoading());
+    try {
+      final user = await _repo.register(
+        firstName: firstName,
+        email: email,
+        password: password,
+        lastName: lastName,
+        phone: phone,
+        recaptchaToken: recaptchaToken,
+      );
+      emit(AuthAuthenticated(user));
+    } on AuthFailure catch (e) {
+      emit(AuthError(e.message));
+    } on NetworkFailure catch (e) {
+      emit(AuthError(e.message));
+    } catch (e) {
+      emit(AuthError(e.toString()));
+    }
+  }
+
+  // ─── Logout ───────────────────────────────────────────────────────────────
+
   Future<void> logout() async {
-    await _service.logout();
+    await _repo.logout();
     emit(const AuthUnauthenticated());
   }
 
-  /// Reset to unauthenticated (used when auth screen is dismissed)
-  void resetToUnauthenticated() {
-    emit(const AuthUnauthenticated());
-  }
+  // ─── Email Verification ───────────────────────────────────────────────────
 
-  String _parseError(dynamic error) {
-    if (error is Exception) {
-      return error.toString().replaceFirst('Exception: ', '');
+  Future<void> sendVerificationCode(String email) async {
+    emit(const AuthLoading());
+    try {
+      await _repo.sendVerificationCode(email);
+      emit(AuthOtpSent(email));
+    } on AuthFailure catch (e) {
+      emit(AuthError(e.message));
+    } on NetworkFailure catch (e) {
+      emit(AuthError(e.message));
+    } catch (e) {
+      emit(AuthError(e.toString()));
     }
-    return 'Something went wrong. Please try again.';
   }
+
+  Future<void> verifyCode(String code) async {
+    emit(const AuthLoading());
+    try {
+      final success = await _repo.verifyCode(code);
+      if (success) {
+        emit(const AuthOtpVerified());
+      } else {
+        emit(const AuthError('Invalid or expired verification code.'));
+      }
+    } on AuthFailure catch (e) {
+      emit(AuthError(e.message));
+    } catch (e) {
+      emit(AuthError(e.toString()));
+    }
+  }
+
+  // ─── Helpers ──────────────────────────────────────────────────────────────
+
+  /// Returns the currently authenticated user, or null.
+  dynamic get currentUser =>
+      state is AuthAuthenticated ? (state as AuthAuthenticated).user : null;
 }

@@ -1,89 +1,140 @@
 /// API endpoint paths for all backend requests.
-/// Organized by feature area. Base URL is configured in env_config.dart.
+/// Base URL: https://beta.softstore.pk (set in env_config.dart)
+///
+/// IMPORTANT: Most endpoints return HTML, not JSON.
+/// JSON endpoints are only under /api/store/* and specific POST actions.
 class ApiEndpoints {
-  // Auth endpoints
-  static const String login = '/auth/login';
-  static const String register = '/auth/register';
-  static const String logout = '/auth/logout';
-  static const String googleAuth = '/auth/google';
-  static const String verifyOtp = '/auth/verify-otp';
-  static const String resendOtp = '/auth/resend-otp';
-  static const String forgotPassword = '/auth/forgot-password';
-  static const String resetPassword = '/auth/reset-password';
-  static const String checkSession = '/auth/me';
-  static const String refreshToken = '/auth/refresh-token';
+  // ─── Authentication ─────────────────────────────────────────────────────────
+  /// GET to extract CSRF; POST with form data to authenticate
+  static const String loginPage = '/login';
+  static const String login = '/login';
 
-  // Products endpoints
-  static const String getProducts = '/products';
-  static const String getProductDetail = '/products/:slug';
-  static const String getProductReviews = '/products/:slug/reviews';
-  static const String getRelatedProducts = '/products/:slug/related';
+  /// GET to extract CSRF; POST with form data to register
+  static const String registerPage = '/register';
+  static const String register = '/register';
 
-  // Categories endpoints
-  static const String getCategories = '/categories';
-  static const String getCategoryProducts = '/categories/:slug/products';
+  /// POST with CSRF to clear session cookie
+  static const String logout = '/logout';
 
-  // Search endpoints
-  static const String getSearchSuggestions = '/search/suggestions';
-  static const String searchProducts = '/search';
+  /// POST JSON {id_token} — Google OAuth callback
+  static const String googleCallback = '/auth/google/callback';
+  static const String googleAuth = '/auth/google/callback';
 
-  // Seller endpoints
-  static const String getSellerStore = '/sellers/:slug';
-  static const String getSellerProducts = '/sellers/:slug/products';
-  static const String followSeller = '/sellers/:slug/follow';
-  static const String unfollowSeller = '/sellers/:slug/unfollow';
+  // ─── Email Verification (Checkout OTP) ──────────────────────────────────────
+  /// POST JSON {email} — sends 6-digit OTP
+  static const String sendVerificationCode = '/store/checkout/send-code';
+  static const String sendCheckoutOtp = '/store/checkout/send-code';
 
-  // Cart endpoints
-  static const String validateCartItem = '/cart/validate-item';
-  static const String validateCart = '/cart/validate';
+  /// POST JSON {code} — verifies OTP
+  static const String verifyCode = '/store/checkout/verify-code';
+  static const String verifyCheckoutOtp = '/store/checkout/verify-code';
 
-  // Profile endpoints (API Mapping #22-#25)
-  static const String getProfile = '/store/account/profile';
+  // ─── Session Restoration ────────────────────────────────────────────────────
+  /// GET — parse user profile from HTML form inputs; 302→/login means expired
+  static const String profilePage = '/store/account/profile';
+  static const String checkSession = '/store/account/profile';
+
+  // ─── Catalog ────────────────────────────────────────────────────────────────
+  /// GET — homepage HTML with hero banners, categories, product rails
+  static const String homepage = '/store';
+  static const String storeHome = '/store';
+
+  /// GET ?search=&category=&sort=&page= — product search results HTML
+  static const String search = '/store';
+  static const String searchProducts = '/store/search';
+
+  /// GET /product/{slug} — product detail HTML with JSON-LD
+  static const String productDetail = '/product/';
+
+  /// GET /store/categories — categories list HTML
+  static const String categories = '/store/categories';
+
+  /// GET /store/category/{slug} — products filtered by category
+  static const String categoryProducts = '/store/category/';
+
+  /// GET /store/{slug} — seller/store profile HTML
+  static const String sellerProfile = '/store/';
+  static const String sellerStore = '/store';
+
+  // ─── Cart / Checkout ────────────────────────────────────────────────────────
+  /// POST JSON {items:[{id,qty}]} → {delivery_fee, free, currency}
+  static const String shippingQuote = '/api/store/shipping-quote';
+
+  /// POST JSON {code, subtotal} → {valid, discount_amount, message}
+  static const String validateCoupon = '/api/store/validate-coupon';
+
+  /// GET — extract CSRF for checkout POST
+  static const String checkoutPage = '/store/checkout';
+  static const String checkout = '/store/checkout';
+
+  /// POST JSON body (with _csrf_token + csrf_token) → {success, invoice_number}
+  static const String placeOrder = '/store/checkout';
+
+  // ─── Orders ─────────────────────────────────────────────────────────────────
+  /// GET — orders list HTML
+  static const String ordersList = '/store/account/orders';
+  static const String getOrders = '/store/account/orders';
+
+  /// GET /store/account/orders/{invoiceNumber} — order detail HTML
+  static const String orderDetail = '/store/account/orders/';
+  static const String getOrderDetail = '/store/account/orders';
+
+  /// POST (with CSRF) {invoice_number, phone} — guest order tracking HTML
+  static const String trackOrder = '/store/track-order';
+
+  /// POST multipart /store/account/orders/{invoice}/return
+  static const String requestReturnSuffix = '/return';
+  static const String requestReturn = '/store/account/orders';
+  static const String getReturns = '/store/account/returns';
+
+  /// GET — returns list HTML
+  static const String returnsList = '/store/account/returns';
+
+  // ─── Profile ────────────────────────────────────────────────────────────────
+  /// POST form to profile page (same as GET profilePage)
   static const String updateProfile = '/store/account/profile';
+  static const String profile = '/store/account/profile';
+
+  /// POST form {current_password, new_password}
   static const String changePassword = '/store/account/password';
-  static const String getDashboard = '/store/account/dashboard';
 
-  // Addresses endpoints (API Mapping #26-#28)
-  static const String getAddresses = '/store/account/addresses';
-  static const String addAddress = '/store/account/addresses';
-  static const String deleteAddress = '/store/account/addresses/:id/delete';
+  /// GET — dashboard stats HTML
+  static const String dashboard = '/store/account/dashboard';
+  static const String dashboardStats = '/store/account/dashboard';
 
-  // Wishlist endpoints (API Mapping #36-#37)
-  static const String getWishlist = '/store/account/wishlist';
+  // ─── Addresses ──────────────────────────────────────────────────────────────
+  /// GET — addresses list HTML; POST form to add
+  static const String addresses = '/store/account/addresses';
+
+  /// POST /store/account/addresses/{id}/delete — delete address
+  static const String deleteAddressSuffix = '/delete';
+  static const String deleteAddress = '/store/account/addresses';
+
+  // ─── Wishlist ───────────────────────────────────────────────────────────────
+  /// GET — wishlist HTML (parse mpToggleWishlist(ID) onclick)
+  static const String wishlistPage = '/store/account/wishlist';
+  static const String wishlist = '/store/account/wishlist';
+
+  /// POST form {product_id} → JSON {success, added}
   static const String toggleWishlist = '/store/wishlist/toggle';
 
-  // Checkout endpoints
-  static const String sendCheckoutOtp = '/checkout/send-otp';
-  static const String verifyCheckoutOtp = '/checkout/verify-otp';
-  static const String validateCoupon = '/checkout/validate-coupon';
-  static const String placeOrder = '/checkout/place-order';
-  static const String getCheckoutRecommendations = '/checkout/recommendations';
+  // ─── Messaging ──────────────────────────────────────────────────────────────
+  /// GET — conversations list HTML
+  static const String messagesList = '/store/messages';
+  static const String messages = '/store/messages';
 
-  // Orders endpoints (API Mapping #17-#21)
-  static const String getOrders = '/store/account/orders';
-  static const String getOrderDetail = '/store/account/orders/:id';
-  static const String trackOrder = '/store/track-order';
-  static const String cancelOrder = '/orders/:id/cancel';
-  static const String requestReturn = '/store/account/orders/:id/return';
-  static const String getReturns = '/store/account/returns';
-  static const String getReturnDetail = '/returns/:id';
-  static const String submitReturn = '/returns';
-  static const String uploadReturnEvidence = '/returns/:id/upload-evidence';
-
-  // Messages endpoints (API Mapping #29-#32)
-  static const String getMessages = '/store/messages';
+  /// POST form {product_id, message} → 302 to threadUrl
   static const String newMessage = '/store/messages/new';
 
-  // Support endpoints (API Mapping #33-#35)
-  static const String getSupportTickets = '/store/support/tickets';
+  // ─── Support ────────────────────────────────────────────────────────────────
+  /// GET — tickets list HTML; POST form to create ticket
+  static const String ticketsList = '/store/support/tickets';
+  static const String supportTickets = '/store/support/tickets';
   static const String createSupportTicket = '/store/support/tickets';
-  static const String getSupportTicketDetail = '/store/support/tickets/:id';
-  static const String getSupportTicketMessages = '/store/support/tickets/:id/messages';
-  static const String sendSupportMessage = '/store/support/tickets/:id/messages';
+  static const String getSupportTickets = '/store/support/tickets';
 
-  // Notifications endpoints
-  static const String getNotifications = '/notifications';
-  static const String markNotificationRead = '/notifications/:id/read';
-  static const String markAllNotificationsRead = '/notifications/read-all';
-  static const String registerFcmToken = '/notifications/register-token';
+  /// GET /store/support/tickets/{id} — ticket detail; POST to reply
+  static const String ticketDetail = '/store/support/tickets/';
+  static const String getSupportTicketMessages = '/store/support/tickets';
+  static const String sendSupportMessage = '/store/support/tickets';
 }
