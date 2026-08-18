@@ -1,12 +1,17 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/router.dart';
+import '../../../core/errors/failures.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_bottom_nav_bar.dart';
 import '../../auth/cubit/auth_cubit.dart';
 import '../../auth/cubit/auth_state.dart';
+import '../../auth/repository/auth_repository.dart';
 import '../../cart/cubit/cart_cubit.dart';
 import '../../cart/models/cart_models.dart';
 import '../../cart/repository/cart_repository.dart';
@@ -145,14 +150,22 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       );
     }).toList();
 
+    final authState = context.read<AuthCubit>().state;
+    String userEmail = _emailCtrl.text.trim();
+    if (userEmail.isEmpty && authState is AuthAuthenticated) {
+      userEmail = authState.user.email.trim();
+      _emailCtrl.text = userEmail;
+    }
+    if (userEmail.isEmpty) {
+      userEmail = 'buyer@softstore.pk';
+    }
+
     final request = OrderRequest(
       items: repoItems,
       customerName: _nameCtrl.text.trim(),
       customerAddress: _addressCtrl.text.trim(),
       customerPhone: _phoneCtrl.text.trim(),
-      customerEmail: _emailCtrl.text.trim().isNotEmpty
-          ? _emailCtrl.text.trim()
-          : 'buyer@softstore.pk',
+      customerEmail: userEmail,
       notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
       couponCode:
           _couponCtrl.text.trim().isEmpty ? null : _couponCtrl.text.trim(),
@@ -168,6 +181,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             'ORD-${DateTime.now().millisecondsSinceEpoch}';
         context.go('/order-confirmation/$invoice');
       } else {
+        final msg = result.message?.toLowerCase() ?? '';
+        if (result.message == 'email_unverified' ||
+            msg.contains('verify your email') ||
+            msg.contains('unverified') ||
+            msg.contains('email verification')) {
+          await _promptEmailVerification(userEmail);
+          return;
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(result.message ?? 'Order placement failed.'),
@@ -175,16 +196,63 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           ),
         );
       }
+    } on AuthFailure catch (e) {
+      if (!mounted) return;
+      final msg = e.message.toLowerCase();
+      if (e.message == 'email_unverified' ||
+          msg.contains('verify your email') ||
+          msg.contains('unverified') ||
+          msg.contains('email verification')) {
+        await _promptEmailVerification(userEmail);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.message),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.toString()),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      final str = e.toString().toLowerCase();
+      if (str.contains('verify your email') ||
+          str.contains('unverified') ||
+          str.contains('email_unverified')) {
+        await _promptEmailVerification(userEmail);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString()),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  Future<void> _promptEmailVerification(String email) async {
+    final verified = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => _EmailVerificationOtpDialog(
+        initialEmail: email,
+        onEmailUpdated: (newEmail) {
+          _emailCtrl.text = newEmail;
+        },
+      ),
+    );
+
+    if (verified == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Email verified successfully! Placing your order...'),
+          backgroundColor: Color(0xFF15803D),
+        ),
+      );
+      // Retry placing order with verified session
+      await _submitOrder();
     }
   }
 
@@ -759,6 +827,551 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       errorBorder: InputBorder.none,
       disabledBorder: InputBorder.none,
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+    );
+  }
+}
+
+class _EmailVerificationOtpDialog extends StatefulWidget {
+  final String initialEmail;
+  final ValueChanged<String> onEmailUpdated;
+
+  const _EmailVerificationOtpDialog({
+    required this.initialEmail,
+    required this.onEmailUpdated,
+  });
+
+  @override
+  State<_EmailVerificationOtpDialog> createState() =>
+      _EmailVerificationOtpDialogState();
+}
+
+class _EmailVerificationOtpDialogState
+    extends State<_EmailVerificationOtpDialog> {
+  final AuthRepository _authRepo = AuthRepository.instance;
+  late TextEditingController _emailCtrl;
+  late List<TextEditingController> _digitCtrls;
+  late List<FocusNode> _focusNodes;
+
+  Timer? _countdownTimer;
+  int _secondsRemaining = 60;
+  bool _isSendingCode = false;
+  bool _isVerifying = false;
+  String? _errorMessage;
+  String? _successMessage;
+  bool _isEditingEmail = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _emailCtrl = TextEditingController(text: widget.initialEmail);
+    _digitCtrls = List.generate(6, (_) => TextEditingController());
+    _focusNodes = List.generate(6, (_) => FocusNode());
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final email = _emailCtrl.text.trim();
+      if (email.contains('@') && email != 'buyer@softstore.pk') {
+        _sendCode();
+      } else {
+        setState(() {
+          _isEditingEmail = true;
+          _errorMessage =
+              'Please enter your email to receive the 6-digit verification code.';
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _countdownTimer?.cancel();
+    _emailCtrl.dispose();
+    for (final c in _digitCtrls) {
+      c.dispose();
+    }
+    for (final f in _focusNodes) {
+      f.dispose();
+    }
+    super.dispose();
+  }
+
+  void _startTimer() {
+    _countdownTimer?.cancel();
+    setState(() => _secondsRemaining = 60);
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_secondsRemaining > 1) {
+        setState(() => _secondsRemaining--);
+      } else {
+        setState(() => _secondsRemaining = 0);
+        timer.cancel();
+      }
+    });
+  }
+
+  Future<void> _sendCode() async {
+    final email = _emailCtrl.text.trim();
+    if (email.isEmpty || !email.contains('@')) {
+      setState(() {
+        _errorMessage = 'Please enter a valid email address';
+      });
+      return;
+    }
+
+    setState(() {
+      _isSendingCode = true;
+      _errorMessage = null;
+      _successMessage = null;
+    });
+
+    try {
+      await _authRepo.sendVerificationCode(email);
+      widget.onEmailUpdated(email);
+      if (!mounted) return;
+      setState(() {
+        _isEditingEmail = false;
+        _successMessage = 'Verification code sent to $email';
+        _isSendingCode = false;
+      });
+      _startTimer();
+      _focusNodes[0].requestFocus();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = e is AuthFailure ? e.message : e.toString();
+        _isSendingCode = false;
+      });
+    }
+  }
+
+  Future<void> _verifyOtp() async {
+    final code = _digitCtrls.map((c) => c.text.trim()).join();
+    if (code.length < 6) {
+      setState(() {
+        _errorMessage = 'Please enter the complete 6-digit code';
+      });
+      return;
+    }
+
+    setState(() {
+      _isVerifying = true;
+      _errorMessage = null;
+      _successMessage = null;
+    });
+
+    try {
+      final success = await _authRepo.verifyCode(code);
+      if (!mounted) return;
+      if (success) {
+        Navigator.of(context).pop(true);
+      } else {
+        setState(() {
+          _errorMessage =
+              'Invalid or expired verification code. Please try again.';
+          _isVerifying = false;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = e is AuthFailure ? e.message : e.toString();
+        _isVerifying = false;
+      });
+    }
+  }
+
+  void _onDigitChanged(int index, String value) {
+    if (value.length > 1) {
+      final clean = value.replaceAll(RegExp(r'\D'), '');
+      if (clean.isNotEmpty) {
+        for (int i = 0; i < 6 && i < clean.length; i++) {
+          _digitCtrls[i].text = clean[i];
+        }
+        final nextIndex = clean.length < 6 ? clean.length : 5;
+        _focusNodes[nextIndex].requestFocus();
+        if (clean.length >= 6) {
+          _verifyOtp();
+        }
+        return;
+      }
+    }
+
+    if (value.isNotEmpty) {
+      if (index < 5) {
+        _focusNodes[index + 1].requestFocus();
+      } else {
+        _focusNodes[index].unfocus();
+        final fullCode = _digitCtrls.map((c) => c.text.trim()).join();
+        if (fullCode.length == 6) {
+          _verifyOtp();
+        }
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      backgroundColor: Colors.white,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Top Badge Icon
+            Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFF5722).withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Center(
+                child: Icon(
+                  Icons.mark_email_unread_outlined,
+                  color: Color(0xFFFF5722),
+                  size: 30,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Title
+            const Text(
+              'Verify Your Email',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF111827),
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            // Subtitle
+            Text(
+              _isEditingEmail
+                  ? 'Enter the email address to receive your 6-digit verification code.'
+                  : 'Please enter the 6-digit verification code sent to:',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 14,
+                color: Color(0xFF6B7280),
+                height: 1.4,
+              ),
+            ),
+
+            // Email Display / Edit Field
+            if (!_isEditingEmail) ...[
+              Container(
+                margin: const EdgeInsets.symmetric(vertical: 10),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3F4F6),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.email_outlined,
+                        size: 16, color: Color(0xFF4B5563)),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        _emailCtrl.text.trim(),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1F2937),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    GestureDetector(
+                      onTap: () {
+                        setState(() => _isEditingEmail = true);
+                      },
+                      child: const Icon(Icons.edit_outlined,
+                          size: 16, color: Color(0xFFFF5722)),
+                    ),
+                  ],
+                ),
+              ),
+            ] else ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        controller: _emailCtrl,
+                        keyboardType: TextInputType.emailAddress,
+                        style: const TextStyle(fontSize: 14),
+                        decoration: InputDecoration(
+                          hintText: 'Enter your email',
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 12),
+                          filled: true,
+                          fillColor: const Color(0xFFF3F4F6),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide:
+                                const BorderSide(color: Color(0xFFE5E7EB)),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide:
+                                const BorderSide(color: Color(0xFFE5E7EB)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(
+                                color: Color(0xFFFF5722), width: 1.5),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: _isSendingCode ? null : _sendCode,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFFF5722),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
+                      ),
+                      child: _isSendingCode
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Text(
+                              'Send Code',
+                              style: TextStyle(
+                                  fontSize: 13, fontWeight: FontWeight.bold),
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            // Success feedback message
+            if (_successMessage != null)
+              Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDCFCE7),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.check_circle_outline,
+                        color: Color(0xFF15803D), size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _successMessage!,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF15803D),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+            // Error feedback message
+            if (_errorMessage != null)
+              Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEE2E2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.error_outline,
+                        color: Color(0xFFDC2626), size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _errorMessage!,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFFDC2626),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+            const SizedBox(height: 8),
+
+            // 6-Digit OTP Input Row
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: List.generate(6, (i) {
+                return SizedBox(
+                  width: 44,
+                  height: 52,
+                  child: KeyboardListener(
+                    focusNode: FocusNode(),
+                    onKeyEvent: (event) {
+                      if (event is KeyDownEvent &&
+                          event.logicalKey == LogicalKeyboardKey.backspace) {
+                        if (_digitCtrls[i].text.isEmpty && i > 0) {
+                          _focusNodes[i - 1].requestFocus();
+                        }
+                      }
+                    },
+                    child: TextFormField(
+                      controller: _digitCtrls[i],
+                      focusNode: _focusNodes[i],
+                      keyboardType: TextInputType.number,
+                      textAlign: TextAlign.center,
+                      maxLength: 1,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF111827),
+                      ),
+                      decoration: InputDecoration(
+                        counterText: '',
+                        contentPadding: EdgeInsets.zero,
+                        filled: true,
+                        fillColor: const Color(0xFFF9FAFB),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide:
+                              const BorderSide(color: Color(0xFFE5E7EB)),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide:
+                              const BorderSide(color: Color(0xFFE5E7EB)),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                              color: Color(0xFFFF5722), width: 1.8),
+                        ),
+                      ),
+                      onChanged: (val) => _onDigitChanged(i, val),
+                    ),
+                  ),
+                );
+              }),
+            ),
+
+            // Resend timer row
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text(
+                    "Didn't receive the code? ",
+                    style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+                  ),
+                  if (_secondsRemaining > 0)
+                    Text(
+                      "Resend in ${_secondsRemaining}s",
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF9CA3AF),
+                      ),
+                    )
+                  else
+                    GestureDetector(
+                      onTap: _isSendingCode ? null : _sendCode,
+                      child: const Text(
+                        "Resend Code",
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFFFF5722),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 6),
+
+            // Verify Button
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                onPressed: (_isVerifying || _isSendingCode) ? null : _verifyOtp,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFFF5722),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                child: _isVerifying
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Text(
+                        'Verify & Place Order',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            // Cancel Button
+            SizedBox(
+              width: double.infinity,
+              height: 40,
+              child: TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF6B7280),
+                ),
+                child: const Text(
+                  'Cancel',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
