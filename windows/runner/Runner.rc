@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.softstore" "\0"
-            VALUE "FileDescription", "softstore_buyer_app" "\0"
+            VALUE "CompanyName", "pk.softstore" "\0"
+            VALUE "FileDescription", "softstore_buyer" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "softstore_buyer_app" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.softstore. All rights reserved." "\0"
-            VALUE "OriginalFilename", "softstore_buyer_app.exe" "\0"
-            VALUE "ProductName", "softstore_buyer_app" "\0"
+            VALUE "InternalName", "softstore_buyer" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 pk.softstore. All rights reserved." "\0"
+            VALUE "OriginalFilename", "softstore_buyer.exe" "\0"
+            VALUE "ProductName", "softstore_buyer" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

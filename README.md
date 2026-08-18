@@ -1,6 +1,6 @@
-# softstore_buyer_app
+# softstore_buyer
 
-A Flutter app for Softstore buyers
+A new Flutter project.
 
 ## Getting Started
 

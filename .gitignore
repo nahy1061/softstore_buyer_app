@@ -59,7 +59,6 @@ GoogleService-Info.plist
 *.swp
 *.swo
 *~
-.DS_Store
 
 # Node
 node_modules/
@@ -76,3 +75,6 @@ Thumbs.db
 
 # Private files
 docs/naheed-private/
+
+# Widget Preview related
+.widget_preview/

@@ -28,9 +28,8 @@ import '../features/support/models/ticket_model.dart';
 // Placeholder screens (will be replaced with actual screens)
 class PlaceholderScreen extends StatelessWidget {
   final String label;
-  final int? navIndex;
 
-  const PlaceholderScreen({super.key, required this.label, this.navIndex});
+  const PlaceholderScreen({super.key, required this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -43,7 +42,7 @@ class PlaceholderScreen extends StatelessWidget {
             const Icon(Icons.construction, size: 64, color: Colors.grey),
             const SizedBox(height: 16),
             Text(
-              '$label\n(Coming Soon)',
+              '$label\n(Placeholder)',
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 18),
             ),
