@@ -155,7 +155,12 @@ class CartRepository {
     }
     final result = PlacedOrderResult.fromJson(data);
 
-    if (!result.success && result.message == 'email_unverified') {
+    final msg = result.message?.toLowerCase() ?? '';
+    if (!result.success &&
+        (result.message == 'email_unverified' ||
+            msg.contains('verify your email') ||
+            msg.contains('unverified') ||
+            msg.contains('email verification'))) {
       throw const AuthFailure('email_unverified');
     }
 
@@ -166,6 +171,17 @@ class CartRepository {
 
   Failure _mapError(DioException e) {
     developer.log('[Cart] DioException: ${e.message}', name: 'cart');
+    final respData = e.response?.data;
+    if (respData is Map) {
+      final msg =
+          (respData['message'] ?? respData['error'] ?? '').toString().toLowerCase();
+      if (msg == 'email_unverified' ||
+          msg.contains('verify your email') ||
+          msg.contains('unverified') ||
+          msg.contains('email verification')) {
+        return const AuthFailure('email_unverified');
+      }
+    }
     if (e.type == DioExceptionType.connectionError) {
       return const NetworkFailure('No internet connection.');
     }

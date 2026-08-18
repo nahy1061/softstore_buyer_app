@@ -20,9 +20,9 @@ abstract final class Validators {
   }
 
   static String? pakistaniPhone(String? value) {
-    if (value == null || value.isEmpty) return null;
-    final phoneRegex = RegExp(r'^03\d{9}$');
-    if (!phoneRegex.hasMatch(value)) return 'Enter a valid Pakistani phone number';
+    if (value == null || value.trim().isEmpty) return null;
+    final digits = value.replaceAll(RegExp(r'\D'), '');
+    if (digits.length < 11) return 'Phone number must be at least 11 digits';
     return null;
   }
 
