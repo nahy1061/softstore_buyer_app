@@ -1057,7 +1057,33 @@ class _CartCheckoutSheetState extends State<CartCheckoutSheet> {
                         width: double.infinity,
                         child: ElevatedButton(
                           onPressed: () {
-                            context.go(AppRoutes.checkout);
+                            if (_selectedDeliveryOption == null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                      'Please select a delivery method before proceeding to pay'),
+                                  backgroundColor: AppColors.error,
+                                  behavior: SnackBarBehavior.floating,
+                                  duration: Duration(seconds: 3),
+                                ),
+                              );
+                              _openDeliveryMethodPickerSheet();
+                              return;
+                            }
+
+                            showModalBottomSheet(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (_) => BlocProvider.value(
+                                value: context.read<CartCubit>(),
+                                child: _PaymentMethodSheet(
+                                  shippingFee: _selectedDeliveryOption!.fee,
+                                  deliveryMethodTitle:
+                                      _selectedDeliveryOption!.title,
+                                ),
+                              ),
+                            );
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primary,
