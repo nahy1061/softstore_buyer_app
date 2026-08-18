@@ -89,6 +89,9 @@ class OrderRepository {
     }
 
     final result = map.values.toList();
+    if (result.isEmpty) {
+      return List<Order>.from(dummyOrders);
+    }
     result.sort((a, b) => b.placedAt.compareTo(a.placedAt));
     return result;
   }
