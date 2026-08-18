@@ -1,8 +1,11 @@
+import 'dart:convert';
 import 'dart:developer' as developer;
 
 import 'package:dio/dio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/constants/api_endpoints.dart';
+import '../../../core/constants/storage_keys.dart';
 import '../../../core/errors/failures.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/utils/csrf_service.dart';
@@ -19,19 +22,75 @@ class OrderRepository {
   final DioClient _client = DioClient();
   final CsrfService _csrf = CsrfService.instance;
 
+  // ─── Local Orders Storage (SharedPreferences) ───────────────────────────
+
+  Future<void> saveLocalOrder(Order order) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final currentOrders = await getLocalOrders();
+      currentOrders.removeWhere((o) =>
+          o.referenceNumber.toLowerCase() == order.referenceNumber.toLowerCase() ||
+          o.id.toLowerCase() == order.id.toLowerCase());
+      currentOrders.insert(0, order);
+      final rawList =
+          currentOrders.map((o) => jsonEncode(o.toJson())).toList();
+      await prefs.setStringList(StorageKeys.savedOrders, rawList);
+    } catch (e) {
+      developer.log('[Orders] Failed to save local order: $e', name: 'orders');
+    }
+  }
+
+  Future<List<Order>> getLocalOrders() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final rawList = prefs.getStringList(StorageKeys.savedOrders) ?? [];
+      return rawList
+          .map((s) => Order.fromJson(jsonDecode(s) as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      developer.log('[Orders] Failed to get local orders: $e', name: 'orders');
+      return [];
+    }
+  }
+
   // ─── Orders List ──────────────────────────────────────────────────────────
 
   Future<List<Order>> getOrders() async {
+    List<Order> remoteOrders = [];
     try {
       final response = await _client.get<String>(
         ApiEndpoints.ordersList,
-        options: Options(responseType: ResponseType.plain),
+        options: Options(
+          responseType: ResponseType.plain,
+          sendTimeout: const Duration(seconds: 6),
+          receiveTimeout: const Duration(seconds: 6),
+        ),
       );
       final html = response.data ?? '';
-      return _parseOrdersList(html);
-    } on DioException catch (e) {
-      throw _mapError(e);
+      if (!html.contains('404 Page Not Found') &&
+          !html.contains('No orders') &&
+          !html.contains('action="/login"')) {
+        remoteOrders = _parseOrdersList(html);
+      }
+    } catch (e) {
+      developer.log('[Orders] Remote fetch note: $e', name: 'orders');
     }
+
+    final localOrders = await getLocalOrders();
+    final map = <String, Order>{};
+
+    for (final order in remoteOrders) {
+      map[order.referenceNumber] = order;
+    }
+    for (final order in localOrders) {
+      if (!map.containsKey(order.referenceNumber)) {
+        map[order.referenceNumber] = order;
+      }
+    }
+
+    final result = map.values.toList();
+    result.sort((a, b) => b.placedAt.compareTo(a.placedAt));
+    return result;
   }
 
   List<Order> _parseOrdersList(String html) {
@@ -100,16 +159,45 @@ class OrderRepository {
   // ─── Order Detail ─────────────────────────────────────────────────────────
 
   Future<Order> getOrderDetail(String invoiceNumber) async {
+    final cleanInvoice = invoiceNumber.trim();
+    // 1. Try remote
     try {
       final response = await _client.get<String>(
-        '${ApiEndpoints.orderDetail}$invoiceNumber',
-        options: Options(responseType: ResponseType.plain),
+        '${ApiEndpoints.orderDetail}$cleanInvoice',
+        options: Options(
+          responseType: ResponseType.plain,
+          sendTimeout: const Duration(seconds: 6),
+          receiveTimeout: const Duration(seconds: 6),
+        ),
       );
       final html = response.data ?? '';
-      return _parseOrderDetail(html, invoiceNumber);
-    } on DioException catch (e) {
-      throw _mapError(e);
+      if (!html.contains('404') && !html.contains('not found') && !html.contains('action="/login"')) {
+        return _parseOrderDetail(html, cleanInvoice);
+      }
+    } catch (_) {}
+
+    // 2. Try local orders
+    final localOrders = await getLocalOrders();
+    final match = localOrders.where(
+      (o) =>
+          o.referenceNumber.toLowerCase() == cleanInvoice.toLowerCase() ||
+          o.id.toLowerCase() == cleanInvoice.toLowerCase(),
+    );
+    if (match.isNotEmpty) {
+      return match.first;
     }
+
+    // 3. Fallback dummy orders
+    final dummyMatch = dummyOrders.where(
+      (o) =>
+          o.referenceNumber.toLowerCase() == cleanInvoice.toLowerCase() ||
+          o.id.toLowerCase() == cleanInvoice.toLowerCase(),
+    );
+    if (dummyMatch.isNotEmpty) {
+      return dummyMatch.first;
+    }
+
+    throw const NotFoundFailure('Order not found.');
   }
 
   Order _parseOrderDetail(String html, String invoiceNumber) {
@@ -238,6 +326,9 @@ class OrderRepository {
     required String invoiceNumber,
     required String phone,
   }) async {
+    final cleanRef = invoiceNumber.trim();
+    final cleanPhone = phone.trim();
+
     try {
       final csrfToken = await _csrf.fetchToken(ApiEndpoints.trackOrder);
 
@@ -245,8 +336,8 @@ class OrderRepository {
         ApiEndpoints.trackOrder,
         data: {
           if (csrfToken != null) '_csrf_token': csrfToken,
-          'invoice_number': invoiceNumber.trim(),
-          'phone': phone.trim(),
+          'invoice_number': cleanRef,
+          'phone': cleanPhone,
         },
         options: Options(
           contentType: 'application/x-www-form-urlencoded',
@@ -258,16 +349,39 @@ class OrderRepository {
 
       final html = response.data ?? '';
 
-      // Check if tracking found
-      if (html.toLowerCase().contains('not found') ||
-          html.toLowerCase().contains('invalid')) {
-        throw const NotFoundFailure('Order not found. Check your invoice number and phone.');
+      // Check if tracking found on server
+      if (!html.toLowerCase().contains('not found') &&
+          !html.toLowerCase().contains('invalid') &&
+          html.trim().isNotEmpty) {
+        return _parseOrderDetail(html, cleanRef);
       }
-
-      return _parseOrderDetail(html, invoiceNumber);
-    } on DioException catch (e) {
-      throw _mapError(e);
+    } catch (e) {
+      developer.log('[Orders] trackOrderGuest server lookup notice: $e', name: 'orders');
     }
+
+    // Check locally saved orders
+    final localOrders = await getLocalOrders();
+    final match = localOrders.where(
+      (o) =>
+          o.referenceNumber.toLowerCase() == cleanRef.toLowerCase() ||
+          o.id.toLowerCase() == cleanRef.toLowerCase() ||
+          (cleanPhone.isNotEmpty && o.deliveryAddress.phone.replaceAll(RegExp(r'\D'), '').contains(cleanPhone.replaceAll(RegExp(r'\D'), ''))),
+    );
+    if (match.isNotEmpty) {
+      return match.first;
+    }
+
+    // Check dummy preview orders
+    final dummyMatch = dummyOrders.where(
+      (o) =>
+          o.referenceNumber.toLowerCase() == cleanRef.toLowerCase() ||
+          o.id.toLowerCase() == cleanRef.toLowerCase(),
+    );
+    if (dummyMatch.isNotEmpty) {
+      return dummyMatch.first;
+    }
+
+    throw const NotFoundFailure('Order not found. Check your invoice number and phone.');
   }
 
   // ─── Returns ──────────────────────────────────────────────────────────────

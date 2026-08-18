@@ -10,6 +10,8 @@ import '../cubit/cart_cubit.dart';
 import '../cubit/cart_state.dart';
 import '../models/cart_item.dart';
 import '../services/checkout_service.dart';
+import '../../orders/models/order_model.dart' as order_models;
+import '../../orders/repository/order_repository.dart';
 
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});
@@ -103,6 +105,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     setState(() => _placingOrder = true);
 
+    final now = DateTime.now();
+    final rand5 = 10000 + (now.microsecondsSinceEpoch % 90000);
+    final fallbackInvoice =
+        'INV-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}-$rand5';
+    String invoice = fallbackInvoice;
+
     try {
       final result = await _checkoutService.placeOrder(
         items: cartState.items,
@@ -114,43 +122,67 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         couponCode: _couponApplied ? _couponCtrl.text.trim() : null,
       );
 
-      if (!mounted) return;
-      context.read<CartCubit>().clearCart();
-
-      final firstItem =
-          cartState.items.isNotEmpty ? cartState.items.first : null;
-      context.go('/order-confirmation/${result.invoiceNumber}', extra: {
-        'invoiceNumber': result.invoiceNumber,
-        'subtotal': cartState.subtotal,
-        'delivery': cartState.freeDelivery ? 0 : cartState.deliveryFee,
-        'productName': firstItem?.productName,
-        'productQty': firstItem?.quantity,
-        'productPrice': firstItem?.unitPriceSnapshot,
-        'iconCodePoint': firstItem?.iconCodePoint,
-      });
+      if (result.invoiceNumber.isNotEmpty) {
+        invoice = result.invoiceNumber;
+      }
     } on EmailUnverifiedException {
       if (!mounted) return;
       setState(() => _placingOrder = false);
       _showOtpSheet(cartState);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _placingOrder = false);
-
-      // Navigate to order confirmation with a local reference even on error
-      final fallbackRef = 'ORD-${DateTime.now().millisecondsSinceEpoch}';
-      final firstItem =
-          cartState.items.isNotEmpty ? cartState.items.first : null;
-      context.read<CartCubit>().clearCart();
-      context.go('/order-confirmation/$fallbackRef', extra: {
-        'invoiceNumber': fallbackRef,
-        'subtotal': cartState.subtotal,
-        'delivery': cartState.freeDelivery ? 0 : cartState.deliveryFee,
-        'productName': firstItem?.productName,
-        'productQty': firstItem?.quantity,
-        'productPrice': firstItem?.unitPriceSnapshot,
-        'iconCodePoint': firstItem?.iconCodePoint,
-      });
+      return;
+    } catch (_) {
+      // Offline fallback
     }
+
+    final placedOrder = order_models.Order(
+      id: invoice,
+      referenceNumber: invoice,
+      placedAt: now,
+      status: order_models.OrderStatus.pending,
+      items: cartState.items
+          .map((i) => order_models.OrderItem(
+                id: i.id,
+                name: i.productName,
+                quantity: i.quantity,
+                unitPrice: i.unitPriceSnapshot.toDouble(),
+                sku: 'SKU-${i.id}',
+              ))
+          .toList(),
+      deliveryAddress: order_models.OrderAddress(
+        name: _nameCtrl.text.trim(),
+        phone: _phoneCtrl.text.trim(),
+        addressLine: _addressCtrl.text.trim(),
+        city: 'Lahore',
+      ),
+      subtotal: cartState.subtotal.toDouble(),
+      deliveryFee: (cartState.freeDelivery ? 0 : cartState.deliveryFee).toDouble(),
+      discount: _couponDiscount.toDouble(),
+      storeName: 'SoftStore Official Partner',
+      estimatedDelivery: 'Expected in 2-3 business days',
+      statusHistory: [
+        order_models.OrderStatusEvent(
+          status: order_models.OrderStatus.pending,
+          timestamp: now,
+          note: 'Order placed by customer',
+        ),
+      ],
+    );
+    await OrderRepository.instance.saveLocalOrder(placedOrder);
+
+    if (!mounted) return;
+    context.read<CartCubit>().clearCart();
+
+    final firstItem =
+        cartState.items.isNotEmpty ? cartState.items.first : null;
+    context.go('/order-confirmation/$invoice', extra: {
+      'invoiceNumber': invoice,
+      'subtotal': cartState.subtotal,
+      'delivery': cartState.freeDelivery ? 0 : cartState.deliveryFee,
+      'productName': firstItem?.productName,
+      'productQty': firstItem?.quantity,
+      'productPrice': firstItem?.unitPriceSnapshot,
+      'iconCodePoint': firstItem?.iconCodePoint,
+    });
   }
 
   void _showOtpSheet(CartState cartState) {

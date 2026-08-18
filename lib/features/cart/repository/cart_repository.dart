@@ -115,9 +115,10 @@ class CartRepository {
   /// [AuthRepository.sendVerificationCode] and retry.
   Future<PlacedOrderResult> placeOrder(OrderRequest request) async {
     try {
-      // Step 1: Fetch CSRF from checkout page
-      final csrfToken =
-          await _csrf.fetchToken(ApiEndpoints.checkoutPage);
+      // Step 1: Fetch CSRF from checkout page with 3-second timeout
+      final csrfToken = await _csrf
+          .fetchToken(ApiEndpoints.checkoutPage)
+          .timeout(const Duration(seconds: 3), onTimeout: () => null);
       if (csrfToken == null) {
         throw const ServerFailure('Unable to load checkout page.');
       }
@@ -144,11 +145,17 @@ class CartRepository {
         if (request.couponCode != null) 'coupon_code': request.couponCode,
       };
 
-      final response = await _client.post<Map<String, dynamic>>(
-        ApiEndpoints.placeOrder,
-        data: payload,
-        options: Options(contentType: 'application/json'),
-      );
+      final response = await _client
+          .post<Map<String, dynamic>>(
+            ApiEndpoints.placeOrder,
+            data: payload,
+            options: Options(
+              contentType: 'application/json',
+              sendTimeout: const Duration(seconds: 4),
+              receiveTimeout: const Duration(seconds: 4),
+            ),
+          )
+          .timeout(const Duration(seconds: 5));
 
       final data = response.data;
 

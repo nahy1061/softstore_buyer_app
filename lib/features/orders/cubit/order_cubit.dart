@@ -17,22 +17,31 @@ class OrderCubit extends Cubit<OrderState> {
   final OrderRepository _repo = OrderRepository.instance;
 
   Future<void> loadOrders() async {
-    emit(const OrderLoading());
+    // 1. Instantly load local orders so the screen renders immediately without lag
+    final localOrders = await _repo.getLocalOrders();
+    if (localOrders.isNotEmpty) {
+      emit(OrderLoaded(orders: localOrders));
+    } else {
+      emit(const OrderLoading());
+    }
+
+    // 2. Fetch remote merged orders with quick timeout
     try {
-      final orders = await _orderService.fetchOrders();
+      final orders = await _repo.getOrders();
       emit(OrderLoaded(orders: orders));
     } on AuthFailure {
-      emit(const OrderLoaded(orders: []));
+      final currentLocal = await _repo.getLocalOrders();
+      emit(OrderLoaded(orders: currentLocal));
     } on Failure catch (e) {
-      emit(OrderError(message: e.message));
-    } catch (e) {
-      try {
-        final fallbackOrders = await _repo.getOrders();
-        emit(OrderLoaded(orders: fallbackOrders));
-      } catch (_) {
-        developer.log('[OrderCubit] loadOrders error: $e', name: 'orders');
-        emit(const OrderLoaded(orders: []));
+      final currentLocal = await _repo.getLocalOrders();
+      if (currentLocal.isNotEmpty) {
+        emit(OrderLoaded(orders: currentLocal));
+      } else {
+        emit(OrderError(message: e.message));
       }
+    } catch (e) {
+      final currentLocal = await _repo.getLocalOrders();
+      emit(OrderLoaded(orders: currentLocal));
     }
   }
 
@@ -88,19 +97,35 @@ class OrderCubit extends Cubit<OrderState> {
   }
 
   Future<void> loadOrderDetail(String invoiceNumber) async {
-    emit(const OrderLoading());
+    final cleanInvoice = invoiceNumber.trim();
+    // 1. Check local orders first for instantaneous rendering
+    final localOrders = await _repo.getLocalOrders();
+    final localMatch = localOrders.where(
+      (o) =>
+          o.referenceNumber.toLowerCase() == cleanInvoice.toLowerCase() ||
+          o.id.toLowerCase() == cleanInvoice.toLowerCase(),
+    );
+    if (localMatch.isNotEmpty) {
+      emit(OrderDetailLoaded(order: localMatch.first));
+    } else {
+      emit(const OrderLoading());
+    }
+
     try {
-      final order = await _orderService.fetchOrderDetail(invoiceNumber);
+      final order = await _repo.getOrderDetail(cleanInvoice);
       emit(OrderDetailLoaded(order: order));
     } on Failure catch (e) {
-      emit(OrderError(message: e.message));
+      if (localMatch.isEmpty) {
+        try {
+          final order = await _orderService.fetchOrderDetail(cleanInvoice);
+          emit(OrderDetailLoaded(order: order));
+        } catch (_) {
+          emit(OrderError(message: e.message));
+        }
+      }
     } catch (e) {
-      try {
-        final order = await _repo.getOrderDetail(invoiceNumber);
-        emit(OrderDetailLoaded(order: order));
-      } catch (_) {
-        developer.log('[OrderCubit] loadOrderDetail error: $e', name: 'orders');
-        emit(const OrderError(message: 'Failed to load order details.'));
+      if (localMatch.isEmpty) {
+        emit(OrderError(message: 'Failed to load order detail: $e'));
       }
     }
   }
@@ -112,8 +137,8 @@ class OrderCubit extends Cubit<OrderState> {
   }) async {
     emit(const OrderLoading());
     try {
-      final order = await _orderService.trackGuestOrder(
-        referenceNumber: referenceNumber.trim(),
+      final order = await _repo.trackOrderGuest(
+        invoiceNumber: referenceNumber.trim(),
         phone: phone.trim(),
       );
       emit(OrderLookupResult(order: order));
@@ -123,8 +148,8 @@ class OrderCubit extends Cubit<OrderState> {
       emit(OrderError(message: e.message));
     } catch (_) {
       try {
-        final order = await _repo.trackOrderGuest(
-          invoiceNumber: referenceNumber.trim(),
+        final order = await _orderService.trackGuestOrder(
+          referenceNumber: referenceNumber.trim(),
           phone: phone.trim(),
         );
         emit(OrderLookupResult(order: order));

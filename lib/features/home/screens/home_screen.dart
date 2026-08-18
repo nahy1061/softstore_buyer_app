@@ -954,6 +954,7 @@ class _HomeScreenState extends State<HomeScreen> {
       onTap: () => context.push(
         '/product/${product.slug}',
         extra: {
+          'id': product.id,
           'name': product.name,
           'price': product.displayPrice.toInt(),
           'imageUrl': product.imageUrl,
@@ -1184,6 +1185,7 @@ class _HomeScreenState extends State<HomeScreen> {
       onTap: () => context.push(
         '/product/${product.slug}',
         extra: {
+          'id': product.id,
           'name': product.name,
           'price': product.displayPrice.toInt(),
           'imageUrl': product.imageUrl,
