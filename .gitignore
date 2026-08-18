@@ -72,6 +72,11 @@ yarn-error.log
 *.g.dart
 *.config.dart
 
+# Auto-generated platform files
+linux/flutter/generated_plugin_registrant.cc
+linux/flutter/generated_plugins.cmake
+macos/Flutter/GeneratedPluginRegistrant.swift
+
 # OS files
 Thumbs.db
 
