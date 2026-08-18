@@ -1,3 +1,8 @@
+plugins {
+    id("com.android.application") version "8.11.1" apply false
+    id("org.jetbrains.kotlin.android") version "2.2.20" apply false
+}
+
 allprojects {
     repositories {
         google()
@@ -20,7 +25,6 @@ subprojects {
     afterEvaluate {
         if (project.extensions.findByName("android") != null) {
             configure<com.android.build.gradle.BaseExtension> {
-                compileSdkVersion(36)
                 compileOptions {
                     sourceCompatibility = JavaVersion.VERSION_17
                     targetCompatibility = JavaVersion.VERSION_17
