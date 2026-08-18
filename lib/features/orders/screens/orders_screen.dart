@@ -163,7 +163,7 @@ class _OrdersScreenState extends State<OrdersScreen>
                 }
                 if (state is OrderLoaded) {
                   // Filter orders by search query
-                  List<Order> _filterOrders(List<Order> orders) {
+                  List<Order> filterOrders(List<Order> orders) {
                     if (_searchQuery.isEmpty) return orders;
                     return orders
                         .where((o) => o.referenceNumber
@@ -176,24 +176,24 @@ class _OrdersScreenState extends State<OrdersScreen>
                     controller: _tabController,
                     children: [
                       _OrderList(
-                        orders: _filterOrders(state.orders),
+                        orders: filterOrders(state.orders),
                         onOrderTap: (o) =>
                             context.push('/orders/${o.id}'),
                       ),
                       _OrderList(
-                        orders: _filterOrders(state.active),
+                        orders: filterOrders(state.active),
                         onOrderTap: (o) =>
                             context.push('/orders/${o.id}'),
                         emptyLabel: 'No active orders',
                       ),
                       _OrderList(
-                        orders: _filterOrders(state.delivered),
+                        orders: filterOrders(state.delivered),
                         onOrderTap: (o) =>
                             context.push('/orders/${o.id}'),
                         emptyLabel: 'No delivered orders',
                       ),
                       _OrderList(
-                        orders: _filterOrders(state.cancelled),
+                        orders: filterOrders(state.cancelled),
                         onOrderTap: (o) =>
                             context.push('/orders/${o.id}'),
                         emptyLabel: 'No cancelled orders',

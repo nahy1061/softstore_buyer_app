@@ -111,7 +111,7 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(AppSpacing.lg),
         itemCount: _tickets.length,
-        separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.md),
+        separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
         itemBuilder: (context, index) {
           final ticket = _tickets[index];
           return _TicketCard(

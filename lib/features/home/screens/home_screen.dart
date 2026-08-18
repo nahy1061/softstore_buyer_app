@@ -4,7 +4,6 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_dimensions.dart';
-import '../../../app/router.dart';
 // Shared bottom navigation bar used across all main screens
 import '../../../core/widgets/app_bottom_nav_bar.dart';
 

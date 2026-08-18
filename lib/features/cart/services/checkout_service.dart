@@ -223,7 +223,7 @@ class CheckoutService {
       );
 
       // The backend may return JSON or HTML. Try to parse as JSON first.
-      final data = _parseResponseData(response);
+      final data = _parseResponseData(response.data);
 
       // Handle email_unverified interrupt
       if (data['success'] == false &&

@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import '../features/home/screens/home_screen.dart';
 import '../features/cart/screens/cart_screen.dart';
 import '../features/cart/screens/checkout_screen.dart';
-import '../features/cart/cubit/cart_cubit.dart';
 import '../features/product/screens/product_detail_screen.dart';
 import '../features/orders/cubit/order_cubit.dart';
 import '../features/orders/screens/orders_screen.dart';
@@ -155,10 +154,7 @@ final GoRouter goRouter = GoRouter(
     ),
     GoRoute(
       path: AppRoutes.checkout,
-      builder: (context, state) => BlocProvider(
-        create: (_) => CartCubit(),
-        child: const CheckoutScreen(),
-      ),
+      builder: (context, state) => const CheckoutScreen(),
     ),
     GoRoute(
       path: AppRoutes.orderConfirmation,

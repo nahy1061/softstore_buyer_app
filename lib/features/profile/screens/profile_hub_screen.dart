@@ -109,12 +109,12 @@ class _ProfileHeaderState extends State<_ProfileHeader>
                     end: Alignment.bottomRight,
                     colors: [
                       AppColors.primary,
-                      AppColors.primary.withOpacity(0.8),
+                      AppColors.primary.withValues(alpha: 0.8),
                     ],
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.primary.withOpacity(0.3),
+                      color: AppColors.primary.withValues(alpha: 0.3),
                       blurRadius: 12,
                       offset: const Offset(0, 4),
                     ),
@@ -157,13 +157,13 @@ class _ProfileHeaderState extends State<_ProfileHeader>
                 gradient: LinearGradient(
                   colors: [
                     AppColors.primary,
-                    AppColors.primary.withOpacity(0.9),
+                    AppColors.primary.withValues(alpha: 0.9),
                   ],
                 ),
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.primary.withOpacity(0.2),
+                    color: AppColors.primary.withValues(alpha: 0.2),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
@@ -311,12 +311,12 @@ class _StatCardState extends State<_StatCard>
                 color: AppColors.surface,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color: widget.color.withOpacity(0.1),
+                  color: widget.color.withValues(alpha: 0.1),
                   width: 1.5,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: widget.color.withOpacity(_isHovered ? 0.12 : 0.06),
+                    color: widget.color.withValues(alpha: _isHovered ? 0.12 : 0.06),
                     blurRadius: _isHovered ? 12 : 8,
                     offset: const Offset(0, 2),
                   ),
@@ -329,7 +329,7 @@ class _StatCardState extends State<_StatCard>
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
-                      color: widget.color.withOpacity(0.12),
+                      color: widget.color.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(
@@ -403,7 +403,7 @@ class _MyOrdersEnhancedSection extends StatelessWidget {
                 ),
                 Container(
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.1),
+                    color: AppColors.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Material(
@@ -592,7 +592,7 @@ class _RecentlyViewedEnhancedSection extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
             scrollDirection: Axis.horizontal,
             itemCount: _items.length,
-            separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.md),
+            separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.md),
             itemBuilder: (context, index) {
               final item = _items[index];
               return _RecentlyViewedCardEnhanced(
@@ -670,7 +670,7 @@ class _RecentlyViewedCardEnhancedState extends State<_RecentlyViewedCardEnhanced
             ),
             boxShadow: [
               BoxShadow(
-                color: AppColors.primary.withOpacity(0.06),
+                color: AppColors.primary.withValues(alpha: 0.06),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -685,7 +685,7 @@ class _RecentlyViewedCardEnhancedState extends State<_RecentlyViewedCardEnhanced
                   children: [
                     Container(
                       decoration: BoxDecoration(
-                        color: AppColors.primary.withOpacity(0.08),
+                        color: AppColors.primary.withValues(alpha: 0.08),
                         borderRadius: const BorderRadius.vertical(
                           top: Radius.circular(14),
                         ),
@@ -715,7 +715,7 @@ class _RecentlyViewedCardEnhancedState extends State<_RecentlyViewedCardEnhanced
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
+                                color: Colors.black.withValues(alpha: 0.1),
                                 blurRadius: 4,
                               ),
                             ],
@@ -1001,12 +1001,12 @@ class _QuickActionCardEnhancedState extends State<_QuickActionCardEnhanced>
             color: AppColors.surface,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: widget.action.color.withOpacity(0.15),
+              color: widget.action.color.withValues(alpha: 0.15),
               width: 1.5,
             ),
             boxShadow: [
               BoxShadow(
-                color: widget.action.color.withOpacity(_isPressed ? 0.1 : 0.05),
+                color: widget.action.color.withValues(alpha: _isPressed ? 0.1 : 0.05),
                 blurRadius: _isPressed ? 12 : 8,
                 offset: const Offset(0, 2),
               ),
@@ -1019,7 +1019,7 @@ class _QuickActionCardEnhancedState extends State<_QuickActionCardEnhanced>
                 width: 50,
                 height: 50,
                 decoration: BoxDecoration(
-                  color: widget.action.color.withOpacity(0.15),
+                  color: widget.action.color.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
