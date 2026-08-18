@@ -328,9 +328,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           hintText: 'Phone (03XXXXXXXXX)',
                           prefixIcon: Icons.phone_outlined,
                         ),
-                        validator: (v) => v == null || v.trim().isEmpty
-                            ? 'Phone number is required'
-                            : null,
+                        validator: (v) {
+                          if (v == null || v.trim().isEmpty) {
+                            return 'Phone number is required';
+                          }
+                          final digits = v.replaceAll(RegExp(r'\D'), '');
+                          if (digits.length < 11) {
+                            return 'Phone number must have at least 11 digits';
+                          }
+                          return null;
+                        },
                       ),
                     ),
                     const SizedBox(height: 12),
