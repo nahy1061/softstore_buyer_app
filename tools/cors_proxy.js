@@ -19,8 +19,8 @@ const http = require('http');
 const https = require('https');
 const { URL } = require('url');
 
-const PORT = 8081;
-const TARGET = 'https://softstore.pk';
+const PORT = 8081;   @nimra WHos saying u to use this port?
+const TARGET = 'https://softstore.pk';   
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': 'http://localhost:3000',
