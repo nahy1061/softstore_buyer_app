@@ -8,7 +8,7 @@ import '../../../core/theme/app_dimensions.dart';
 import '../../../app/router.dart';
 import '../cubit/cart_cubit.dart';
 import '../cubit/cart_state.dart';
-import '../models/cart_item.dart';
+import '../models/cart_models.dart';
 import '../../orders/models/order_model.dart';
 // Shared bottom navigation bar used across all main screens
 import '../../../core/widgets/app_bottom_nav_bar.dart';
@@ -205,15 +205,14 @@ class _CartScreenState extends State<CartScreen> {
                   },
                 ),
                 onAddToCart: () {
+                  final price = (p['price'] as num).toDouble();
                   context.read<CartCubit>().addItem(
                         CartItem(
-                          id: productId,
-                          productId: productId,
+                          uuid: productId,
+                          productId: productId.hashCode.abs(),
                           productName: p['name'] as String,
                           quantity: 1,
-                          unitPriceSnapshot: p['price'] as int,
-                          subtotalSnapshot: p['price'] as int,
-                          iconCodePoint: iconData.codePoint,
+                          unitPriceSnapshot: price,
                         ),
                       );
                 },
@@ -315,15 +314,14 @@ class _CartScreenState extends State<CartScreen> {
                               },
                             ),
                             onAddToCart: () {
+                              final price = (p['price'] as num).toDouble();
                               context.read<CartCubit>().addItem(
                                     CartItem(
-                                      id: productId,
-                                      productId: productId,
+                                      uuid: productId,
+                                      productId: productId.hashCode.abs(),
                                       productName: p['name'] as String,
                                       quantity: 1,
-                                      unitPriceSnapshot: p['price'] as int,
-                                      subtotalSnapshot: p['price'] as int,
-                                      iconCodePoint: iconData.codePoint,
+                                      unitPriceSnapshot: price,
                                     ),
                                   );
                             },

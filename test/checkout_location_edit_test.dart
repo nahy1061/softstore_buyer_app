@@ -2,21 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:softstore_buyer_app/features/cart/cubit/cart_cubit.dart';
-import 'package:softstore_buyer_app/features/cart/models/cart_item.dart';
+import 'package:softstore_buyer_app/features/cart/models/cart_models.dart';
 import 'package:softstore_buyer_app/features/cart/screens/cart_screen.dart';
 
 void main() {
   testWidgets('Checkout sheet displays Edit button and updates delivery location from saved address',
       (WidgetTester tester) async {
     final cartCubit = CartCubit();
-    cartCubit.addItem(CartItem(
-      id: '1',
-      productId: '1',
+    cartCubit.addItem(const CartItem(
+      uuid: '1',
+      productId: 1,
       productName: 'Wireless Earbuds',
       quantity: 1,
       unitPriceSnapshot: 4500,
-      subtotalSnapshot: 4500,
-      iconCodePoint: Icons.headphones.codePoint,
     ));
 
     await tester.pumpWidget(
@@ -72,14 +70,12 @@ void main() {
   testWidgets('Checkout sheet allows editing custom location fields manually',
       (WidgetTester tester) async {
     final cartCubit = CartCubit();
-    cartCubit.addItem(CartItem(
-      id: '1',
-      productId: '1',
+    cartCubit.addItem(const CartItem(
+      uuid: '1',
+      productId: 1,
       productName: 'Wireless Earbuds',
       quantity: 1,
       unitPriceSnapshot: 4500,
-      subtotalSnapshot: 4500,
-      iconCodePoint: Icons.headphones.codePoint,
     ));
 
     await tester.pumpWidget(

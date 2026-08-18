@@ -1,7 +1,6 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../models/cart_item.dart';
-import '../services/cart_service.dart';
-import '../services/checkout_service.dart';
+import '../models/cart_models.dart';
+import '../repository/cart_repository.dart';
 import 'cart_state.dart';
 
 class CartCubit extends Cubit<CartState> {
@@ -9,25 +8,36 @@ class CartCubit extends Cubit<CartState> {
     _loadFromStorage();
   }
 
-  final CartService _cartService = CartService();
-  final CheckoutService _checkoutService = CheckoutService();
+  final CartRepository _repo = CartRepository.instance;
 
   Future<void> _loadFromStorage() async {
-    final items = await _cartService.getItems();
+    final items = await _repo.getCart();
     emit(state.copyWith(items: items));
-    if (items.isNotEmpty) _refreshShippingQuote();
   }
 
   void addItem(CartItem item) async {
-    final updated = await _cartService.addItem(item);
+    final items = await _repo.getCart();
+    final existingIndex = items.indexWhere(
+        (i) => i.productId == item.productId && i.variantId == item.variantId);
+
+    List<CartItem> updated;
+    if (existingIndex >= 0) {
+      updated = List<CartItem>.from(items);
+      final existing = updated[existingIndex];
+      final newQty = existing.quantity + item.quantity;
+      updated[existingIndex] = existing.copyWith(quantity: newQty);
+    } else {
+      updated = [...items, item];
+    }
+    await _repo.saveCart(updated);
     emit(state.copyWith(items: updated));
-    _refreshShippingQuote();
   }
 
   void removeItem(String id) async {
-    final updated = await _cartService.removeItem(id);
+    final items = await _repo.getCart();
+    final updated = items.where((i) => i.id != id).toList();
+    await _repo.saveCart(updated);
     emit(state.copyWith(items: updated));
-    _refreshShippingQuote();
   }
 
   void updateQuantity(String id, int quantity) async {
@@ -35,39 +45,17 @@ class CartCubit extends Cubit<CartState> {
       removeItem(id);
       return;
     }
-    final updated = await _cartService.updateQuantity(id, quantity);
+    final items = await _repo.getCart();
+    final updated = items.map((i) {
+      if (i.id != id) return i;
+      return i.copyWith(quantity: quantity);
+    }).toList();
+    await _repo.saveCart(updated);
     emit(state.copyWith(items: updated));
-    _refreshShippingQuote();
   }
 
   void clearCart() async {
-    await _cartService.clear();
+    await _repo.clearCart();
     emit(const CartState());
   }
-
-  /// Fetches a live shipping quote from the server whenever cart items change.
-  Future<void> _refreshShippingQuote() async {
-    if (state.items.isEmpty) {
-      emit(state.copyWith(deliveryFee: 0, freeDelivery: false, clearQuoteError: true));
-      return;
-    }
-
-    emit(state.copyWith(quoteLoading: true, clearQuoteError: true));
-    try {
-      final quote = await _checkoutService.getShippingQuote(state.items);
-      emit(state.copyWith(
-        deliveryFee: quote.deliveryFee,
-        freeDelivery: quote.free,
-        quoteLoading: false,
-      ));
-    } catch (e) {
-      emit(state.copyWith(
-        quoteLoading: false,
-        quoteError: e.toString(),
-      ));
-    }
-  }
-
-  /// Manually trigger a shipping quote refresh.
-  Future<void> refreshShippingQuote() async => _refreshShippingQuote();
 }

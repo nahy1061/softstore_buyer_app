@@ -1,9 +1,9 @@
 import 'package:equatable/equatable.dart';
-import '../models/cart_item.dart';
+import '../models/cart_models.dart';
 
 class CartState extends Equatable {
   final List<CartItem> items;
-  final int deliveryFee;
+  final double deliveryFee;
   final bool freeDelivery;
   final bool quoteLoading;
   final String? quoteError;
@@ -17,11 +17,10 @@ class CartState extends Equatable {
   });
 
   int get itemCount => items.fold(0, (sum, item) => sum + item.quantity);
-  int get subtotal => items.fold(0, (sum, item) => sum + item.subtotalSnapshot);
-  int get totalPrice => subtotal;
+  double get subtotal => items.fold(0.0, (sum, item) => sum + item.subtotal);
+  double get totalPrice => subtotal;
 
-  /// Total including delivery (use deliveryFee=0 when freeDelivery is true).
-  int get total {
+  double get total {
     final fee = freeDelivery ? 0 : deliveryFee;
     return subtotal + fee;
   }
@@ -30,7 +29,7 @@ class CartState extends Equatable {
 
   CartState copyWith({
     List<CartItem>? items,
-    int? deliveryFee,
+    double? deliveryFee,
     bool? freeDelivery,
     bool? quoteLoading,
     String? quoteError,

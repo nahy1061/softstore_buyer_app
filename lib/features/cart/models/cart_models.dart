@@ -1,7 +1,69 @@
 import 'dart:convert';
 import 'package:equatable/equatable.dart';
+import 'package:flutter/material.dart';
+import 'package:hive/hive.dart';
 
-// ─── CartItem ─────────────────────────────────────────────────────────────────
+// ─── CartItem TypeAdapter ──────────────────────────────────────────────────
+
+class CartItemAdapter extends TypeAdapter<CartItem> {
+  @override
+  final int typeId = 0;
+
+  @override
+  CartItem read(BinaryReader reader) {
+    final numOfFields = reader.readByte();
+    final fields = <int, dynamic>{};
+    for (int i = 0; i < numOfFields; i++) {
+      fields[reader.readByte()] = reader.read();
+    }
+    return CartItem(
+      uuid: fields[0] as String,
+      productId: fields[1] as int,
+      productName: fields[2] as String,
+      productSlug: fields[3] as String?,
+      variantId: fields[4] as int?,
+      variantLabel: fields[5] as String?,
+      quantity: fields[6] as int,
+      unitPriceSnapshot: fields[7] as double,
+      imageUrl: fields[8] as String?,
+    );
+  }
+
+  @override
+  void write(BinaryWriter writer, CartItem obj) {
+    writer.writeByte(9);
+    writer.writeByte(0);
+    writer.write(obj.uuid);
+    writer.writeByte(1);
+    writer.write(obj.productId);
+    writer.writeByte(2);
+    writer.write(obj.productName);
+    writer.writeByte(3);
+    writer.write(obj.productSlug);
+    writer.writeByte(4);
+    writer.write(obj.variantId);
+    writer.writeByte(5);
+    writer.write(obj.variantLabel);
+    writer.writeByte(6);
+    writer.write(obj.quantity);
+    writer.writeByte(7);
+    writer.write(obj.unitPriceSnapshot);
+    writer.writeByte(8);
+    writer.write(obj.imageUrl);
+  }
+
+  @override
+  int get hashCode => typeId.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CartItemAdapter &&
+          runtimeType == other.runtimeType &&
+          typeId == other.typeId;
+}
+
+// ─── CartItem ─────────────────────────────────────────────────────────────
 
 class CartItem extends Equatable {
   final String uuid;
@@ -27,6 +89,13 @@ class CartItem extends Equatable {
   });
 
   double get subtotal => unitPriceSnapshot * quantity;
+
+  // Compatibility getters used by existing screens
+  String get id => uuid;
+  String get name => productName;
+  double get price => unitPriceSnapshot;
+  int get iconCodePoint => 0xe59c;
+  IconData get icon => const IconData(0xe59c, fontFamily: 'MaterialIcons');
 
   CartItem copyWith({int? quantity, double? unitPriceSnapshot}) {
     return CartItem(

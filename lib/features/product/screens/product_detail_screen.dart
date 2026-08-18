@@ -7,7 +7,7 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../cart/cubit/cart_cubit.dart';
 import '../../cart/cubit/cart_state.dart';
-import '../../cart/models/cart_item.dart';
+import '../../cart/models/cart_models.dart';
 import '../../cart/screens/cart_screen.dart';
 
 class ProductDetailScreen extends StatelessWidget {
@@ -829,13 +829,11 @@ class _BottomBar extends StatelessWidget {
                 onPressed: () {
                   if (colors.isEmpty) {
                     context.read<CartCubit>().addItem(CartItem(
-                          id: slug,
-                          productId: slug,
+                          uuid: slug,
+                          productId: slug.hashCode.abs(),
                           productName: name,
                           quantity: 1,
-                          unitPriceSnapshot: price,
-                          subtotalSnapshot: price,
-                          iconCodePoint: iconCodePoint,
+                          unitPriceSnapshot: price.toDouble(),
                         ));
                     _showCheckout(context);
                     return;
@@ -857,13 +855,11 @@ class _BottomBar extends StatelessWidget {
                   ).then((selectedColor) {
                     if (selectedColor != null && context.mounted) {
                       context.read<CartCubit>().addItem(CartItem(
-                            id: '${slug}_$selectedColor',
-                            productId: slug,
+                            uuid: '${slug}_$selectedColor',
+                            productId: slug.hashCode.abs(),
                             productName: '$name ($selectedColor)',
                             quantity: 1,
-                            unitPriceSnapshot: price,
-                            subtotalSnapshot: price,
-                            iconCodePoint: iconCodePoint,
+                            unitPriceSnapshot: price.toDouble(),
                           ));
                       _showCheckout(context);
                     }
@@ -890,13 +886,11 @@ class _BottomBar extends StatelessWidget {
                 onPressed: () {
                   context.read<CartCubit>().addItem(
                         CartItem(
-                          id: slug,
-                          productId: slug,
+                          uuid: slug,
+                          productId: slug.hashCode.abs(),
                           productName: name,
                           quantity: 1,
-                          unitPriceSnapshot: price,
-                          subtotalSnapshot: price,
-                          iconCodePoint: iconCodePoint,
+                          unitPriceSnapshot: price.toDouble(),
                         ),
                       );
                   ScaffoldMessenger.of(context).showSnackBar(

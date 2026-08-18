@@ -1,19 +1,17 @@
-import 'dart:convert';
 import 'dart:developer' as developer;
 
 import 'package:dio/dio.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/constants/api_endpoints.dart';
-import '../../../core/constants/storage_keys.dart';
 import '../../../core/errors/failures.dart';
 import '../../../core/network/dio_client.dart';
+import '../../../core/storage/hive_service.dart';
 import '../../../core/utils/csrf_service.dart';
 import '../models/cart_models.dart';
 
 /// Manages the local cart and handles cart-related server calls.
 ///
-/// Cart data is stored entirely client-side in SharedPreferences.
+/// Cart data is stored entirely client-side in Hive.
 /// Server-side calls are made for:
 ///  - Shipping quote calculation
 ///  - Coupon code validation
@@ -25,34 +23,22 @@ class CartRepository {
   final DioClient _client = DioClient();
   final CsrfService _csrf = CsrfService.instance;
 
-  // ─── Local Cart (SharedPreferences) ──────────────────────────────────────
+  // ─── Local Cart (Hive) ────────────────────────────────────────────────
 
   Future<List<CartItem>> getCart() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getStringList(StorageKeys.cartItems) ?? [];
-    return raw
-        .map((s) => CartItem.fromJson(jsonDecode(s) as Map<String, dynamic>))
-        .toList();
+    return HiveService.getItems();
   }
 
   Future<void> saveCart(List<CartItem> items) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(
-      StorageKeys.cartItems,
-      items.map((i) => jsonEncode(i.toJson())).toList(),
-    );
+    await HiveService.saveItems(items);
   }
 
   Future<void> clearCart() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(StorageKeys.cartItems);
+    await HiveService.clearItems();
   }
 
   // ─── Shipping Quote ───────────────────────────────────────────────────────
 
-  /// Calculates the delivery fee for a set of cart items.
-  ///
-  /// Always call this before displaying the cart total and before checkout.
   Future<ShippingQuote> getShippingQuote(List<CartItem> items) async {
     try {
       final payload = {
@@ -102,29 +88,17 @@ class CartRepository {
 
   // ─── Place Order ──────────────────────────────────────────────────────────
 
-  /// Places a COD order.
-  ///
-  /// Flow:
-  ///  1. GET /store/checkout → extract CSRF token(s)
-  ///  2. POST /store/checkout with JSON body containing both token fields
-  ///  3. If server returns email_unverified → caller must trigger OTP flow
-  ///
-  /// Throws [AuthFailure] with message `'email_unverified'` when email is not
-  /// yet verified in the session — the caller should then call
-  /// [AuthRepository.sendVerificationCode] and retry.
   Future<PlacedOrderResult> placeOrder(OrderRequest request) async {
     try {
-      // Step 1: Fetch CSRF from checkout page
       final csrfToken =
           await _csrf.fetchToken(ApiEndpoints.checkoutPage);
       if (csrfToken == null) {
         throw const ServerFailure('Unable to load checkout page.');
       }
 
-      // Step 2: Build payload
       final payload = {
         '_csrf_token': csrfToken,
-        'csrf_token': csrfToken, // Server requires BOTH fields
+        'csrf_token': csrfToken,
         'items': request.items
             .map((i) => {
                   'id': i.productId,
@@ -151,7 +125,6 @@ class CartRepository {
 
       final data = response.data;
 
-      // Handle 419 CSRF expiry — refresh and retry once
       if (response.statusCode == 419) {
         developer.log('[Cart] 419 — refreshing CSRF and retrying', name: 'cart');
         final freshCsrf =
@@ -182,7 +155,6 @@ class CartRepository {
     }
     final result = PlacedOrderResult.fromJson(data);
 
-    // Email not verified — caller must trigger OTP flow
     if (!result.success && result.message == 'email_unverified') {
       throw const AuthFailure('email_unverified');
     }
