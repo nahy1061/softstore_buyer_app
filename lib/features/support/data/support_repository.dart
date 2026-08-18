@@ -242,41 +242,33 @@ class SupportRepository {
       if (ticketId <= 0) ticketId = _cachedTickets.length + 1;
     }
 
-      final now = DateTime.now();
-      final ticket = Ticket(
-        id: ticketId,
-        subject: subject,
-        category: category,
-        status: TicketStatus.open,
-        createdAt: now,
-        lastUpdatedAt: now,
-        lastMessage: message,
-      );
+    final now = DateTime.now();
+    final ticket = Ticket(
+      id: ticketId,
+      subject: subject,
+      category: category,
+      status: TicketStatus.open,
+      createdAt: now,
+      lastUpdatedAt: now,
+      lastMessage: message,
+    );
 
-      _cachedTickets.insert(0, ticket);
+    _cachedTickets.insert(0, ticket);
 
-      // Seed initial message into message cache
-      _cachedMessages[ticketId] = [
-        TicketMessage(
-          id: 1,
-          text: message,
-          sender: MessageSender.buyer,
-          sentAt: now,
-        ),
-      ];
+    // Seed initial message into message cache
+    _cachedMessages[ticketId] = [
+      TicketMessage(
+        id: 1,
+        text: message,
+        sender: MessageSender.buyer,
+        sentAt: now,
+      ),
+    ];
 
-      await _persistTickets();
-      await _persistMessages();
+    await _persistTickets();
+    await _persistMessages();
 
-      return ticket;
-    } on DioException catch (e) {
-      throw _handleDioError(e);
-    } catch (e) {
-      if (e is Failure) rethrow;
-      developer.log('[SupportRepository] createTicket error: $e',
-          name: 'support');
-      throw UnknownFailure('Failed to create ticket: $e');
-    }
+    return ticket;
   }
 
   /// Fetch all support tickets for the current user.
