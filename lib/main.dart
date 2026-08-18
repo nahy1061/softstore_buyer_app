@@ -8,11 +8,30 @@ import 'core/storage/hive_service.dart';
 import 'core/storage/local_storage.dart';
 
 Future<void> main() async {
-  HttpOverrides.global = SoftStoreHttpOverrides();
+  try {
+    HttpOverrides.global = SoftStoreHttpOverrides();
+  } catch (_) {}
+
   WidgetsFlutterBinding.ensureInitialized();
-  // Initialize core services
-  await DioClient().init();
-  await LocalStorageService().init();
-  await HiveService.init();
+
+  // Initialize core services safely
+  try {
+    await DioClient().init();
+  } catch (e) {
+    debugPrint('[Main] DioClient init error: $e');
+  }
+
+  try {
+    await LocalStorageService().init();
+  } catch (e) {
+    debugPrint('[Main] LocalStorageService init error: $e');
+  }
+
+  try {
+    await HiveService.init();
+  } catch (e) {
+    debugPrint('[Main] HiveService init error: $e');
+  }
+
   runApp(const SoftstoreBuyerApp());
 }

@@ -48,6 +48,7 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen>
   int get _productPrice => widget.productPrice ?? 200;
   IconData get _productIcon {
     if (widget.iconCodePoint != null) {
+      // ignore: non_const_argument_for_const_parameter
       return IconData(widget.iconCodePoint!, fontFamily: 'MaterialIcons');
     }
     return const IconData(0xe539, fontFamily: 'MaterialIcons'); // local_drink

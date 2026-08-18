@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/utils/validators.dart';
+import '../cubit/address_cubit.dart';
+import '../cubit/address_state.dart';
+import '../models/address_model.dart';
 
 class AddressFormScreen extends StatefulWidget {
   final bool isEditing;
@@ -27,18 +31,43 @@ class _AddressFormScreenState extends State<AddressFormScreen> {
   final _addressController = TextEditingController();
   final _cityController = TextEditingController();
   bool _isDefault = false;
-  bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
     if (widget.isEditing) {
-      _labelController.text = 'Home';
-      _nameController.text = 'Arwah Imran';
-      _phoneController.text = '03001234567';
-      _addressController.text = 'House 12, Street 5, Block B, Gulberg III';
-      _cityController.text = 'Lahore';
-      _isDefault = true;
+      _loadAddress();
+    }
+  }
+
+  void _loadAddress() {
+    final state = context.read<AddressCubit>().state;
+    List<Address> addresses = [];
+    if (state is AddressLoaded) {
+      addresses = state.addresses;
+    } else if (state is AddressAddSuccess) {
+      addresses = state.addresses;
+    } else if (state is AddressDeleteSuccess) {
+      addresses = state.addresses;
+    }
+
+    if (widget.addressId != null) {
+      final id = int.tryParse(widget.addressId!);
+      final address = addresses.firstWhere(
+        (a) => a.id == id,
+        orElse: () => const Address(
+          label: '',
+          name: '',
+          phone: '',
+          address: '',
+        ),
+      );
+      _labelController.text = address.label;
+      _nameController.text = address.name;
+      _phoneController.text = address.phone;
+      _addressController.text = address.address;
+      _cityController.text = address.city;
+      _isDefault = address.isDefault;
     }
   }
 
@@ -54,17 +83,20 @@ class _AddressFormScreenState extends State<AddressFormScreen> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() => _isSaving = true);
-    await Future.delayed(const Duration(seconds: 1));
-    if (!mounted) return;
-    setState(() => _isSaving = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-          content: Text(widget.isEditing
-              ? 'Address updated'
-              : 'Address added')),
+
+    final address = Address(
+      id: widget.isEditing && widget.addressId != null
+          ? int.tryParse(widget.addressId!)
+          : null,
+      label: _labelController.text.trim(),
+      name: _nameController.text.trim(),
+      phone: _phoneController.text.trim(),
+      address: _addressController.text.trim(),
+      city: _cityController.text.trim(),
+      isDefault: _isDefault,
     );
-    context.pop();
+
+    await context.read<AddressCubit>().addAddress(address);
   }
 
   @override
@@ -83,103 +115,126 @@ class _AddressFormScreenState extends State<AddressFormScreen> {
           onPressed: () => context.pop(),
         ),
       ),
-      body: SingleChildScrollView(
-        padding: AppSpacing.paddingLg,
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: AppSpacing.sm),
-              _FieldLabel('Address Label'),
-              TextFormField(
-                controller: _labelController,
-                validator: (v) =>
-                    v?.isEmpty ?? true ? 'Enter a label (e.g. Home)' : null,
-                decoration: const InputDecoration(
-                  hintText: 'e.g. Home, Office',
-                  prefixIcon: Icon(Icons.label_outline),
-                ),
+      body: BlocListener<AddressCubit, AddressState>(
+        listener: (context, state) {
+          if (state is AddressAddSuccess) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(state.message)),
+            );
+            context.pop();
+          } else if (state is AddressError) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(state.message),
+                backgroundColor: AppColors.error,
               ),
-              const SizedBox(height: AppSpacing.lg),
-              _FieldLabel('Full Name'),
-              TextFormField(
-                controller: _nameController,
-                validator: Validators.fullName,
-                textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(
-                  hintText: 'Recipient\'s full name',
-                  prefixIcon: Icon(Icons.person_outline),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              _FieldLabel('Phone Number'),
-              TextFormField(
-                controller: _phoneController,
-                validator: (v) =>
-                    v?.isEmpty ?? true ? 'Phone is required' : Validators.pakistaniPhone(v),
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(
-                  hintText: '03XXXXXXXXX',
-                  prefixIcon: Icon(Icons.phone_outlined),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              _FieldLabel('Street Address'),
-              TextFormField(
-                controller: _addressController,
-                validator: Validators.address,
-                maxLines: 2,
-                decoration: const InputDecoration(
-                  hintText: 'House no, street, area',
-                  prefixIcon: Icon(Icons.home_outlined),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              _FieldLabel('City'),
-              TextFormField(
-                controller: _cityController,
-                validator: Validators.city,
-                textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(
-                  hintText: 'e.g. Lahore',
-                  prefixIcon: Icon(Icons.location_city_outlined),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              Row(
-                children: [
-                  Checkbox(
-                    value: _isDefault,
-                    onChanged: (val) =>
-                        setState(() => _isDefault = val ?? false),
-                    activeColor: AppColors.primary,
+            );
+          }
+        },
+        child: SingleChildScrollView(
+          padding: AppSpacing.paddingLg,
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: AppSpacing.sm),
+                _FieldLabel('Address Label'),
+                TextFormField(
+                  controller: _labelController,
+                  validator: (v) =>
+                      v?.isEmpty ?? true ? 'Enter a label (e.g. Home)' : null,
+                  decoration: const InputDecoration(
+                    hintText: 'e.g. Home, Office',
+                    prefixIcon: Icon(Icons.label_outline),
                   ),
-                  const SizedBox(width: AppSpacing.xs),
-                  Expanded(
-                    child: Text(
-                      'Set as default delivery address',
-                      style: AppTypography.bodyMedium,
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                _FieldLabel('Full Name'),
+                TextFormField(
+                  controller: _nameController,
+                  validator: Validators.fullName,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(
+                    hintText: 'Recipient\'s full name',
+                    prefixIcon: Icon(Icons.person_outline),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                _FieldLabel('Phone Number'),
+                TextFormField(
+                  controller: _phoneController,
+                  validator: (v) => v?.isEmpty ?? true
+                      ? 'Phone is required'
+                      : Validators.pakistaniPhone(v),
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(
+                    hintText: '03XXXXXXXXX',
+                    prefixIcon: Icon(Icons.phone_outlined),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                _FieldLabel('Street Address'),
+                TextFormField(
+                  controller: _addressController,
+                  validator: Validators.address,
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    hintText: 'House no, street, area',
+                    prefixIcon: Icon(Icons.home_outlined),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                _FieldLabel('City'),
+                TextFormField(
+                  controller: _cityController,
+                  validator: Validators.city,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(
+                    hintText: 'e.g. Lahore',
+                    prefixIcon: Icon(Icons.location_city_outlined),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                Row(
+                  children: [
+                    Checkbox(
+                      value: _isDefault,
+                      onChanged: (val) =>
+                          setState(() => _isDefault = val ?? false),
+                      activeColor: AppColors.primary,
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              ElevatedButton(
-                onPressed: _isSaving ? null : _save,
-                child: _isSaving
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : Text(
-                        widget.isEditing ? 'Save Changes' : 'Add Address'),
-              ),
-            ],
+                    const SizedBox(width: AppSpacing.xs),
+                    Expanded(
+                      child: Text(
+                        'Set as default delivery address',
+                        style: AppTypography.bodyMedium,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                BlocBuilder<AddressCubit, AddressState>(
+                  builder: (context, state) {
+                    final isSaving = state is AddressAdding;
+                    return ElevatedButton(
+                      onPressed: isSaving ? null : _save,
+                      child: isSaving
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Text(
+                              widget.isEditing ? 'Save Changes' : 'Add Address'),
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
         ),
       ),

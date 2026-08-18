@@ -12,6 +12,18 @@ abstract final class AppTypography {
     fontWeight: FontWeight.w700,
   );
 
+  static const TextStyle titleLarge = TextStyle(
+    fontFamily: _googleSans,
+    fontSize: 18,
+    fontWeight: FontWeight.w700,
+  );
+
+  static const TextStyle titleMedium = TextStyle(
+    fontFamily: _googleSans,
+    fontSize: 16,
+    fontWeight: FontWeight.w600,
+  );
+
   static const TextStyle sectionHeading = TextStyle(
     fontFamily: _googleSans,
     fontSize: 16,

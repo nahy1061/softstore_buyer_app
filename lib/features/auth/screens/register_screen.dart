@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/router.dart';
+import '../../../core/utils/validators.dart';
 import '../cubit/auth_cubit.dart';
 import '../cubit/auth_state.dart';
 
@@ -149,6 +150,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     controller: _phoneCtrl,
                     keyboardType: TextInputType.phone,
                     textInputAction: TextInputAction.next,
+                    validator: Validators.pakistaniPhone,
                     decoration: const InputDecoration(
                       labelText: 'Phone number (optional)',
                       prefixIcon: Icon(Icons.phone_outlined),
