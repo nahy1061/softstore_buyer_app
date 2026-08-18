@@ -94,6 +94,7 @@ class ApiEndpoints {
   /// POST form to profile page (same as GET profilePage)
   static const String updateProfile = '/store/account/profile';
   static const String profile = '/store/account/profile';
+  static const String getProfile = '/store/account/profile';
 
   /// POST form {current_password, new_password}
   static const String changePassword = '/store/account/password';
@@ -101,10 +102,13 @@ class ApiEndpoints {
   /// GET — dashboard stats HTML
   static const String dashboard = '/store/account/dashboard';
   static const String dashboardStats = '/store/account/dashboard';
+  static const String getDashboard = '/store/account/dashboard';
 
   // ─── Addresses ──────────────────────────────────────────────────────────────
   /// GET — addresses list HTML; POST form to add
   static const String addresses = '/store/account/addresses';
+  static const String getAddresses = '/store/account/addresses';
+  static const String addAddress = '/store/account/addresses';
 
   /// POST /store/account/addresses/{id}/delete — delete address
   static const String deleteAddressSuffix = '/delete';

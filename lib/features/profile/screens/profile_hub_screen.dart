@@ -364,9 +364,9 @@ class _ProductCard extends StatelessWidget {
           Container(
             height: 60,
             width: double.infinity,
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               color: AppColors.background,
-              borderRadius: BorderRadius.vertical(top: AppDimensions.radiusMd),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
             ),
             child: Icon(
               IconData(iconCodePoint, fontFamily: 'MaterialIcons'),

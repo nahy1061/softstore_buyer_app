@@ -61,6 +61,7 @@ class _AuthScreenState extends State<AuthScreen>
     context.read<AuthCubit>().login(
           email: _loginEmailCtrl.text.trim(),
           password: _loginPassCtrl.text,
+          recaptchaToken: 'app-token',
         );
   }
 
@@ -71,6 +72,7 @@ class _AuthScreenState extends State<AuthScreen>
           lastName: _regLastNameCtrl.text.trim(),
           email: _regEmailCtrl.text.trim(),
           password: _regPassCtrl.text,
+          recaptchaToken: 'app-token',
         );
   }
 
@@ -78,7 +80,7 @@ class _AuthScreenState extends State<AuthScreen>
   Widget build(BuildContext context) {
     return BlocListener<AuthCubit, AuthState>(
       listener: (context, state) {
-        if (state is AuthLoginSuccess) {
+        if (state is AuthAuthenticated) {
           // Pop the auth screen and return true so the caller retries Buy Now
           Navigator.of(context).pop(true);
         } else if (state is AuthError) {
@@ -235,7 +237,7 @@ class _AuthScreenState extends State<AuthScreen>
             // Login button
             BlocBuilder<AuthCubit, AuthState>(
               builder: (context, state) {
-                final isLoading = state is AuthLoggingIn;
+                final isLoading = state is AuthLoading;
                 return SizedBox(
                   height: 52,
                   child: ElevatedButton(
@@ -385,7 +387,7 @@ class _AuthScreenState extends State<AuthScreen>
             // Register button
             BlocBuilder<AuthCubit, AuthState>(
               builder: (context, state) {
-                final isLoading = state is AuthRegistering;
+                final isLoading = state is AuthLoading;
                 return SizedBox(
                   height: 52,
                   child: ElevatedButton(

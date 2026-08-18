@@ -6,9 +6,20 @@ class HiveService {
   static final List<CartItem> _memoryFallback = [];
 
   static Future<void> init() async {
-    await Hive.initFlutter();
-    Hive.registerAdapter(CartItemAdapter());
-    await Hive.openBox<CartItem>(_cartBoxName);
+    try {
+      await Hive.initFlutter();
+      if (!Hive.isAdapterRegistered(0)) {
+        Hive.registerAdapter(CartItemAdapter());
+      }
+      try {
+        await Hive.openBox<CartItem>(_cartBoxName);
+      } catch (_) {
+        await Hive.deleteBoxFromDisk(_cartBoxName);
+        await Hive.openBox<CartItem>(_cartBoxName);
+      }
+    } catch (_) {
+      // In-memory fallback will take over seamlessly
+    }
   }
 
   static bool get _isOpen {
