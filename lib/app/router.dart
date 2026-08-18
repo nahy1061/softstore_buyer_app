@@ -24,6 +24,7 @@ import '../features/support/presentation/screens/support_hub_screen.dart';
 import '../features/support/presentation/screens/tickets_list_screen.dart';
 import '../features/support/presentation/screens/ticket_chat_screen.dart';
 import '../features/support/models/ticket_model.dart';
+import '../features/auth/screens/auth_screen.dart';
 
 // Placeholder screens (will be replaced with actual screens)
 class PlaceholderScreen extends StatelessWidget {
@@ -218,11 +219,11 @@ final GoRouter goRouter = GoRouter(
     // Auth
     GoRoute(
       path: AppRoutes.login,
-      builder: (context, state) => const PlaceholderScreen(label: 'Login'),
+      builder: (context, state) => const AuthScreen(),
     ),
     GoRoute(
       path: AppRoutes.register,
-      builder: (context, state) => const PlaceholderScreen(label: 'Register'),
+      builder: (context, state) => const AuthScreen(),
     ),
 
     // Profile — Arwah's screens

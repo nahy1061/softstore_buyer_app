@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_dimensions.dart';
 import '../../../app/router.dart';
+import '../cubit/address_cubit.dart';
+import '../cubit/address_state.dart';
+import '../models/address_model.dart';
 
 class AddressesScreen extends StatefulWidget {
   const AddressesScreen({super.key});
@@ -14,36 +18,16 @@ class AddressesScreen extends StatefulWidget {
 }
 
 class _AddressesScreenState extends State<AddressesScreen> {
-  final List<Map<String, dynamic>> _addresses = [
-    {
-      'id': '1',
-      'label': 'Home',
-      'name': 'Arwah Imran',
-      'phone': '03001234567',
-      'address': 'House 12, Street 5, Block B, Gulberg III',
-      'city': 'Lahore',
-      'isDefault': true,
-    },
-    {
-      'id': '2',
-      'label': 'Office',
-      'name': 'Arwah Imran',
-      'phone': '03009876543',
-      'address': 'Office 401, Plaza 33, Main Boulevard',
-      'city': 'Lahore',
-      'isDefault': false,
-    },
-  ];
-
-  void _setDefault(String id) {
-    setState(() {
-      for (final a in _addresses) {
-        a['isDefault'] = a['id'] == id;
-      }
-    });
+  @override
+  void initState() {
+    super.initState();
+    final cubit = context.read<AddressCubit>();
+    if (cubit.state is AddressInitial) {
+      cubit.loadAddresses();
+    }
   }
 
-  void _delete(String id) {
+  void _delete(Address address) {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
@@ -56,7 +40,9 @@ class _AddressesScreenState extends State<AddressesScreen> {
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              setState(() => _addresses.removeWhere((a) => a['id'] == id));
+              if (address.id != null) {
+                context.read<AddressCubit>().deleteAddress(address.id!);
+              }
             },
             child: const Text('Delete',
                 style: TextStyle(color: AppColors.error)),
@@ -79,39 +65,99 @@ class _AddressesScreenState extends State<AddressesScreen> {
           onPressed: () => context.pop(),
         ),
       ),
-      body: _addresses.isEmpty
-          ? _EmptyAddresses(onAdd: () => context.go(AppRoutes.addressAdd))
-          : ListView.separated(
-              padding: AppSpacing.paddingLg,
-              itemCount: _addresses.length,
-              separatorBuilder: (context, index) =>
-                  const SizedBox(height: AppSpacing.md),
-              itemBuilder: (context, index) {
-                final address = _addresses[index];
-                return _AddressCard(
-                  address: address,
-                  onSetDefault: () => _setDefault(address['id']),
-                  onEdit: () =>
-                      context.go('/addresses/edit/${address['id']}'),
-                  onDelete: () => _delete(address['id']),
-                );
-              },
-            ),
-      floatingActionButton: _addresses.isNotEmpty
-          ? FloatingActionButton.extended(
-              onPressed: () => context.go(AppRoutes.addressAdd),
-              backgroundColor: AppColors.primary,
-              icon: const Icon(Icons.add, color: Colors.white),
-              label: const Text('Add Address',
-                  style: TextStyle(color: Colors.white)),
-            )
-          : null,
+      body: BlocConsumer<AddressCubit, AddressState>(
+        listener: (context, state) {
+          if (state is AddressAddSuccess) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(state.message)),
+            );
+          } else if (state is AddressDeleteSuccess) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(state.message)),
+            );
+          } else if (state is AddressError) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(state.message),
+                backgroundColor: AppColors.error,
+              ),
+            );
+          }
+        },
+        builder: (context, state) {
+          if (state is AddressLoading) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final addresses = state is AddressLoaded
+              ? state.addresses
+              : state is AddressAdding
+                  ? state.addresses
+                  : state is AddressAddSuccess
+                      ? state.addresses
+                      : state is AddressDeleting
+                          ? state.addresses
+                          : state is AddressDeleteSuccess
+                              ? state.addresses
+                              : <Address>[];
+
+          if (addresses.isEmpty) {
+            return _EmptyAddresses(onAdd: () => context.go(AppRoutes.addressAdd));
+          }
+
+          return ListView.separated(
+            padding: AppSpacing.paddingLg,
+            itemCount: addresses.length,
+            separatorBuilder: (context, index) =>
+                const SizedBox(height: AppSpacing.md),
+            itemBuilder: (context, index) {
+              final address = addresses[index];
+              return _AddressCard(
+                address: address,
+                onSetDefault: () {
+                  if (address.id != null) {
+                    context.read<AddressCubit>().setDefault(address.id!);
+                  }
+                },
+                onEdit: () =>
+                    context.go('/addresses/edit/${address.id}'),
+                onDelete: () => _delete(address),
+              );
+            },
+          );
+        },
+      ),
+      floatingActionButton: BlocBuilder<AddressCubit, AddressState>(
+        builder: (context, state) {
+          final addresses = state is AddressLoaded
+              ? state.addresses
+              : state is AddressAdding
+                  ? state.addresses
+                  : state is AddressAddSuccess
+                      ? state.addresses
+                      : state is AddressDeleting
+                          ? state.addresses
+                          : state is AddressDeleteSuccess
+                              ? state.addresses
+                              : <Address>[];
+
+          if (addresses.isEmpty) return const SizedBox.shrink();
+
+          return FloatingActionButton.extended(
+            onPressed: () => context.go(AppRoutes.addressAdd),
+            backgroundColor: AppColors.primary,
+            icon: const Icon(Icons.add, color: Colors.white),
+            label: const Text('Add Address',
+                style: TextStyle(color: Colors.white)),
+          );
+        },
+      ),
     );
   }
 }
 
 class _AddressCard extends StatelessWidget {
-  final Map<String, dynamic> address;
+  final Address address;
   final VoidCallback onSetDefault;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
@@ -125,15 +171,14 @@ class _AddressCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDefault = address['isDefault'] as bool;
     return Container(
       padding: AppSpacing.paddingLg,
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: AppDimensions.radiusMd,
         border: Border.all(
-          color: isDefault ? AppColors.primary : AppColors.divider,
-          width: isDefault ? 1.5 : 0.5,
+          color: address.isDefault ? AppColors.primary : AppColors.divider,
+          width: address.isDefault ? 1.5 : 0.5,
         ),
       ),
       child: Column(
@@ -145,22 +190,22 @@ class _AddressCard extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(
                     horizontal: AppSpacing.sm, vertical: 3),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha:0.1),
+                  color: AppColors.primary.withValues(alpha: 0.1),
                   borderRadius: AppDimensions.radiusSm,
                 ),
                 child: Text(
-                  address['label'],
+                  address.label,
                   style: AppTypography.labelSmall
                       .copyWith(color: AppColors.primary),
                 ),
               ),
-              if (isDefault) ...[
+              if (address.isDefault) ...[
                 const SizedBox(width: AppSpacing.sm),
                 Container(
                   padding: const EdgeInsets.symmetric(
                       horizontal: AppSpacing.sm, vertical: 3),
                   decoration: BoxDecoration(
-                    color: AppColors.success.withValues(alpha:0.1),
+                    color: AppColors.success.withValues(alpha: 0.1),
                     borderRadius: AppDimensions.radiusSm,
                   ),
                   child: Text(
@@ -178,7 +223,7 @@ class _AddressCard extends StatelessWidget {
                   if (value == 'default') onSetDefault();
                 },
                 itemBuilder: (_) => [
-                  if (!isDefault)
+                  if (!address.isDefault)
                     const PopupMenuItem(
                         value: 'default',
                         child: Text('Set as Default')),
@@ -195,17 +240,21 @@ class _AddressCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
-          Text(address['name'],
+          Text(address.name,
               style: AppTypography.bodyMedium
                   .copyWith(fontWeight: FontWeight.w600)),
           const SizedBox(height: 2),
-          Text(address['phone'],
+          Text(address.phone,
               style: AppTypography.bodySmall
                   .copyWith(color: AppColors.textSecondary)),
           const SizedBox(height: AppSpacing.xs),
-          Text('${address['address']}, ${address['city']}',
-              style: AppTypography.bodySmall
-                  .copyWith(color: AppColors.textSecondary)),
+          Text(
+            address.city.isNotEmpty
+                ? '${address.address}, ${address.city}'
+                : address.address,
+            style: AppTypography.bodySmall
+                .copyWith(color: AppColors.textSecondary),
+          ),
         ],
       ),
     );

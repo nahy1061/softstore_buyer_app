@@ -5,6 +5,9 @@ import '../../../app/router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../auth/cubit/auth_cubit.dart';
+import '../../auth/cubit/auth_state.dart';
+import '../../auth/screens/auth_screen.dart';
 import '../../cart/cubit/cart_cubit.dart';
 import '../../cart/cubit/cart_state.dart';
 import '../../cart/models/cart_item.dart';
@@ -777,6 +780,63 @@ class _BottomBar extends StatelessWidget {
     );
   }
 
+  /// Check auth before proceeding with Buy Now.
+  /// If not authenticated, shows auth screen. On success, retries Buy Now.
+  Future<void> _buyNow(BuildContext context) async {
+    final authState = context.read<AuthCubit>().state;
+    final isAuthenticated = authState is AuthAuthenticated;
+
+    if (!isAuthenticated) {
+      final result = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          fullscreenDialog: true,
+          builder: (_) => BlocProvider.value(
+            value: context.read<AuthCubit>(),
+            child: const AuthScreen(),
+          ),
+        ),
+      );
+      if (result != true || !context.mounted) return;
+    }
+
+    // User is authenticated — proceed with Buy Now
+    if (colors.isEmpty) {
+      context.read<CartCubit>().addItem(CartItem(
+            id: slug,
+            name: name,
+            price: price,
+            iconCodePoint: iconCodePoint,
+          ));
+      _showCheckout(context);
+      return;
+    }
+    showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => BlocProvider.value(
+        value: context.read<CartCubit>(),
+        child: _ColorSheet(
+          name: name,
+          price: price,
+          iconCodePoint: iconCodePoint,
+          slug: slug,
+          colors: colors,
+        ),
+      ),
+    ).then((selectedColor) {
+      if (selectedColor != null && context.mounted) {
+        context.read<CartCubit>().addItem(CartItem(
+              id: '${slug}_$selectedColor',
+              name: '$name ($selectedColor)',
+              price: price,
+              iconCodePoint: iconCodePoint,
+            ));
+        _showCheckout(context);
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -806,43 +866,7 @@ class _BottomBar extends StatelessWidget {
             child: SizedBox(
               height: 46,
               child: OutlinedButton(
-                onPressed: () {
-                  if (colors.isEmpty) {
-                    context.read<CartCubit>().addItem(CartItem(
-                          id: slug,
-                          name: name,
-                          price: price,
-                          iconCodePoint: iconCodePoint,
-                        ));
-                    _showCheckout(context);
-                    return;
-                  }
-                  showModalBottomSheet<String>(
-                    context: context,
-                    isScrollControlled: true,
-                    backgroundColor: Colors.transparent,
-                    builder: (_) => BlocProvider.value(
-                      value: context.read<CartCubit>(),
-                      child: _ColorSheet(
-                        name: name,
-                        price: price,
-                        iconCodePoint: iconCodePoint,
-                        slug: slug,
-                        colors: colors,
-                      ),
-                    ),
-                  ).then((selectedColor) {
-                    if (selectedColor != null && context.mounted) {
-                      context.read<CartCubit>().addItem(CartItem(
-                            id: '${slug}_$selectedColor',
-                            name: '$name ($selectedColor)',
-                            price: price,
-                            iconCodePoint: iconCodePoint,
-                          ));
-                      _showCheckout(context);
-                    }
-                  });
-                },
+                onPressed: () => _buyNow(context),
                 style: OutlinedButton.styleFrom(
                   side: const BorderSide(color: AppColors.primary),
                   foregroundColor: AppColors.primary,

@@ -37,11 +37,20 @@ class ApiEndpoints {
   static const String validateCartItem = '/cart/validate-item';
   static const String validateCart = '/cart/validate';
 
-  // Wishlist endpoints
-  static const String getWishlist = '/wishlist';
-  static const String addToWishlist = '/wishlist';
-  static const String removeFromWishlist = '/wishlist/:productId';
-  static const String checkWishlisted = '/wishlist/check';
+  // Profile endpoints (API Mapping #22-#25)
+  static const String getProfile = '/store/account/profile';
+  static const String updateProfile = '/store/account/profile';
+  static const String changePassword = '/store/account/password';
+  static const String getDashboard = '/store/account/dashboard';
+
+  // Addresses endpoints (API Mapping #26-#28)
+  static const String getAddresses = '/store/account/addresses';
+  static const String addAddress = '/store/account/addresses';
+  static const String deleteAddress = '/store/account/addresses/:id/delete';
+
+  // Wishlist endpoints (API Mapping #36-#37)
+  static const String getWishlist = '/store/account/wishlist';
+  static const String toggleWishlist = '/store/wishlist/toggle';
 
   // Checkout endpoints
   static const String sendCheckoutOtp = '/checkout/send-otp';
@@ -50,39 +59,31 @@ class ApiEndpoints {
   static const String placeOrder = '/checkout/place-order';
   static const String getCheckoutRecommendations = '/checkout/recommendations';
 
-  // Orders endpoints
-  static const String getOrders = '/orders';
-  static const String getOrderDetail = '/orders/:id';
-  static const String trackOrder = '/orders/track';
+  // Orders endpoints (API Mapping #17-#21)
+  static const String getOrders = '/store/account/orders';
+  static const String getOrderDetail = '/store/account/orders/:id';
+  static const String trackOrder = '/store/track-order';
   static const String cancelOrder = '/orders/:id/cancel';
-
-  // Returns endpoints
-  static const String getReturns = '/returns';
+  static const String requestReturn = '/store/account/orders/:id/return';
+  static const String getReturns = '/store/account/returns';
   static const String getReturnDetail = '/returns/:id';
   static const String submitReturn = '/returns';
   static const String uploadReturnEvidence = '/returns/:id/upload-evidence';
 
-  // Profile endpoints
-  static const String getProfile = '/profile';
-  static const String updateProfile = '/profile';
-  static const String changePassword = '/profile/change-password';
+  // Messages endpoints (API Mapping #29-#32)
+  static const String getMessages = '/store/messages';
+  static const String newMessage = '/store/messages/new';
 
-  // Addresses endpoints
-  static const String getAddresses = '/addresses';
-  static const String addAddress = '/addresses';
-  static const String updateAddress = '/addresses/:id';
-  static const String deleteAddress = '/addresses/:id';
-  static const String setDefaultAddress = '/addresses/:id/set-default';
+  // Support endpoints (API Mapping #33-#35)
+  static const String getSupportTickets = '/store/support/tickets';
+  static const String createSupportTicket = '/store/support/tickets';
+  static const String getSupportTicketDetail = '/store/support/tickets/:id';
+  static const String getSupportTicketMessages = '/store/support/tickets/:id/messages';
+  static const String sendSupportMessage = '/store/support/tickets/:id/messages';
 
   // Notifications endpoints
   static const String getNotifications = '/notifications';
   static const String markNotificationRead = '/notifications/:id/read';
   static const String markAllNotificationsRead = '/notifications/read-all';
   static const String registerFcmToken = '/notifications/register-token';
-
-  // Support endpoints
-  static const String createSupportTicket = '/support/tickets';
-  static const String getSupportTickets = '/support/tickets';
-  static const String getSupportTicketMessages = '/support/tickets/:id/messages';
-  static const String sendSupportMessage = '/support/tickets/:id/messages';
 }
