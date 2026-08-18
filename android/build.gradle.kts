@@ -20,6 +20,7 @@ subprojects {
     afterEvaluate {
         if (project.extensions.findByName("android") != null) {
             configure<com.android.build.gradle.BaseExtension> {
+                compileSdkVersion(36)
                 compileOptions {
                     sourceCompatibility = JavaVersion.VERSION_17
                     targetCompatibility = JavaVersion.VERSION_17
