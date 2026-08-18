@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_dimensions.dart';
 import '../../../app/router.dart';
+import '../../../features/auth/cubit/auth_cubit.dart';
+import '../../../features/auth/cubit/auth_state.dart';
+import '../../../features/auth/models/user_model.dart';
+// Shared bottom navigation bar used across all main screens
 import '../../../core/widgets/app_bottom_nav_bar.dart';
 
 class ProfileHubScreen extends StatelessWidget {
@@ -22,7 +27,7 @@ class ProfileHubScreen extends StatelessWidget {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            _ProfileHeader(),
+            const _ProfileHeader(),
             const SizedBox(height: AppSpacing.md),
             _ProfileMenuSection(
               title: 'My Account',
@@ -96,7 +101,7 @@ class ProfileHubScreen extends StatelessWidget {
               ],
             ),
             const SizedBox(height: AppSpacing.md),
-            _SignOutButton(),
+            const _SignOutButton(),
             const SizedBox(height: AppSpacing.xl),
           ],
         ),
@@ -107,48 +112,77 @@ class ProfileHubScreen extends StatelessWidget {
 }
 
 class _ProfileHeader extends StatelessWidget {
+  const _ProfileHeader();
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      color: AppColors.surface,
-      padding: AppSpacing.paddingXl,
-      child: Column(
-        children: [
-          CircleAvatar(
-            radius: 40,
-            backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-            child: const Icon(Icons.person, size: 40, color: AppColors.primary),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Text('Guest User', style: AppTypography.sectionHeading),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            'Sign in to access your orders and profile',
-            style: AppTypography.bodySmall.copyWith(
-                color: AppColors.textSecondary),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          Row(
+    return BlocBuilder<AuthCubit, AuthState>(
+      builder: (context, authState) {
+        final bool isAuthenticated = authState is AuthAuthenticated;
+        final User? user = isAuthenticated ? authState.user : null;
+
+        return Container(
+          width: double.infinity,
+          color: AppColors.surface,
+          padding: AppSpacing.paddingXl,
+          child: Column(
             children: [
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () => context.go(AppRoutes.login),
-                  child: const Text('Sign In'),
+              CircleAvatar(
+                radius: 40,
+                backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                child: Icon(
+                  isAuthenticated ? Icons.person : Icons.person_outline,
+                  size: 40,
+                  color: AppColors.primary,
                 ),
               ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => context.go(AppRoutes.register),
-                  child: const Text('Register'),
-                ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                isAuthenticated
+                    ? (user?.fullName.isNotEmpty == true
+                        ? user!.fullName
+                        : 'SoftStore Buyer')
+                    : 'Guest User',
+                style: AppTypography.sectionHeading,
               ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                isAuthenticated
+                    ? (user?.email ?? '')
+                    : 'Sign in to access your orders and profile',
+                style: AppTypography.bodySmall
+                    .copyWith(color: AppColors.textSecondary),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              if (isAuthenticated)
+                ElevatedButton.icon(
+                  onPressed: () => context.go(AppRoutes.editProfile),
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                  label: const Text('Edit Profile'),
+                )
+              else
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () => context.go(AppRoutes.login),
+                        child: const Text('Sign In'),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => context.go(AppRoutes.register),
+                        child: const Text('Register'),
+                      ),
+                    ),
+                  ],
+                ),
             ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -244,45 +278,55 @@ class _MenuItem extends StatelessWidget {
 }
 
 class _SignOutButton extends StatelessWidget {
+  const _SignOutButton();
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: AppColors.surface,
-      width: double.infinity,
-      padding: AppSpacing.paddingLg,
-      child: OutlinedButton.icon(
-        onPressed: () {
-          showDialog(
-            context: context,
-            builder: (_) => AlertDialog(
-              title: const Text('Sign Out'),
-              content: const Text('Are you sure you want to sign out?'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
+    return BlocBuilder<AuthCubit, AuthState>(
+      builder: (context, authState) {
+        if (authState is! AuthAuthenticated) {
+          return const SizedBox.shrink();
+        }
+        return Container(
+          color: AppColors.surface,
+          width: double.infinity,
+          padding: AppSpacing.paddingLg,
+          child: OutlinedButton.icon(
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (_) => AlertDialog(
+                  title: const Text('Sign Out'),
+                  content: const Text('Are you sure you want to sign out?'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancel'),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        context.read<AuthCubit>().logout();
+                        context.go(AppRoutes.login);
+                      },
+                      child: const Text('Sign Out',
+                          style: TextStyle(color: AppColors.error)),
+                    ),
+                  ],
                 ),
-                TextButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    context.go(AppRoutes.login);
-                  },
-                  child: const Text('Sign Out',
-                      style: TextStyle(color: AppColors.error)),
-                ),
-              ],
+              );
+            },
+            icon: const Icon(Icons.logout, color: AppColors.error),
+            label: const Text('Sign Out',
+                style: TextStyle(color: AppColors.error)),
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: AppColors.error),
+              minimumSize:
+                  const Size(double.infinity, AppDimensions.touchTarget),
             ),
-          );
-        },
-        icon: const Icon(Icons.logout, color: AppColors.error),
-        label: const Text('Sign Out',
-            style: TextStyle(color: AppColors.error)),
-        style: OutlinedButton.styleFrom(
-          side: const BorderSide(color: AppColors.error),
-          minimumSize:
-              const Size(double.infinity, AppDimensions.touchTarget),
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

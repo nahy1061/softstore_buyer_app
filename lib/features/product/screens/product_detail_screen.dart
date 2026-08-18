@@ -14,6 +14,7 @@ class ProductDetailScreen extends StatelessWidget {
   final String slug;
   final String name;
   final int price;
+  final String? imageUrl;
   final int iconCodePoint;
   final List<Map<String, dynamic>> colors;
 
@@ -22,6 +23,7 @@ class ProductDetailScreen extends StatelessWidget {
     required this.slug,
     required this.name,
     required this.price,
+    this.imageUrl,
     required this.iconCodePoint,
     this.colors = const [],
   });
@@ -123,7 +125,12 @@ class ProductDetailScreen extends StatelessWidget {
             Expanded(
               child: TabBarView(
                 children: [
-                  _OverviewTab(name: name, price: price, icon: _icon),
+                  _OverviewTab(
+                    name: name,
+                    price: price,
+                    imageUrl: imageUrl,
+                    icon: _icon,
+                  ),
                   const _RatingsTab(),
                   _ProductDetailsTab(name: name),
                   _RecommendedTab(currentSlug: slug),
@@ -150,10 +157,15 @@ class ProductDetailScreen extends StatelessWidget {
 class _OverviewTab extends StatelessWidget {
   final String name;
   final int price;
+  final String? imageUrl;
   final IconData icon;
 
-  const _OverviewTab(
-      {required this.name, required this.price, required this.icon});
+  const _OverviewTab({
+    required this.name,
+    required this.price,
+    this.imageUrl,
+    required this.icon,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -166,9 +178,17 @@ class _OverviewTab extends StatelessWidget {
             width: double.infinity,
             height: 280,
             color: Colors.white,
-            child: Center(
-              child: Icon(icon, size: 100, color: AppColors.primary),
-            ),
+            child: imageUrl != null && imageUrl!.isNotEmpty
+                ? Image.network(
+                    imageUrl!,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => Center(
+                      child: Icon(icon, size: 100, color: AppColors.primary),
+                    ),
+                  )
+                : Center(
+                    child: Icon(icon, size: 100, color: AppColors.primary),
+                  ),
           ),
 
           const Divider(height: 1, color: AppColors.divider),

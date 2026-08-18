@@ -27,6 +27,9 @@ dependencies:
   dio_cookie_manager: ^3.1.1
   html: ^0.15.4
 
+  # reCAPTCHA v3 (required for login/register)
+  recaptcha_v3: ^0.2.1
+
   # Storage
   shared_preferences: ^2.3.2
   flutter_secure_storage: ^9.2.2
@@ -53,11 +56,12 @@ dev_dependencies:
 flutter_launcher_icons:
   android: "ic_launcher"
   ios: true
-  image_path: "assets/images/logo/logo-launcher-full.png"
+  image_path: "images/logo/logo-launcher-full.png"
   min_sdk_android: 21
   adaptive_icon_background: "#FFFFFF"
-  adaptive_icon_foreground: "assets/images/logo/logo-launcher-foreground.png"
+  adaptive_icon_foreground: "images/logo/logo-launcher-foreground.png"
 flutter:
   uses-material-design: true
   assets:
     - assets/images/
+    - images/logo/

@@ -21,9 +21,17 @@ class EnvConfig {
     defaultValue: '',
   );
 
-  static const String reCaptchaKey = String.fromEnvironment(
+  /// reCAPTCHA v3 site key for login/register
+  static const String reCaptchaSiteKey = String.fromEnvironment(
     'RECAPTCHA_KEY',
-    defaultValue: '',
+    defaultValue: '6Ldqn3ctAAAAAIrfgKNTGbqPVJhsP1jYITlxdArv',
+  );
+
+  /// Google OAuth client ID (for future Google Sign-In)
+  static const String googleClientId = String.fromEnvironment(
+    'GOOGLE_CLIENT_ID',
+    defaultValue:
+        '40211309448-3v1tcc991u2fru0l8im5g2p1od2c3e.apps.googleusercontent.com',
   );
 
   // Helper methods
@@ -33,3 +41,4 @@ class EnvConfig {
 
   static String get apiBaseUrl => baseUrl;
 }
+

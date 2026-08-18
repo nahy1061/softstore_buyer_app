@@ -7,17 +7,19 @@ class TicketMessage {
   final String text;
   final MessageSender sender;
   final DateTime sentAt;
+  final String? timestamp;
 
   const TicketMessage({
     required this.id,
     required this.text,
     required this.sender,
     required this.sentAt,
+    this.timestamp,
   });
 
   factory TicketMessage.fromJson(Map<String, dynamic> json) {
     return TicketMessage(
-      id: json['id'] as int,
+      id: json['id'] as int? ?? 0,
       text: (json['body'] ?? json['text'] ?? '') as String,
       sender: messageSenderFromString(json['sender'] as String? ?? 'buyer'),
       sentAt: DateTime.parse(json['created_at'] as String? ?? json['sent_at'] as String? ?? DateTime.now().toIso8601String()),
@@ -30,6 +32,20 @@ class TicketMessage {
         'sender': sender.name,
         'created_at': sentAt.toIso8601String(),
       };
+}
+
+class TicketDetail {
+  final String id;
+  final String subject;
+  final String status;
+  final List<TicketMessage> messages;
+
+  const TicketDetail({
+    required this.id,
+    required this.subject,
+    required this.status,
+    this.messages = const [],
+  });
 }
 
 final Map<int, List<TicketMessage>> kMockMessages = {

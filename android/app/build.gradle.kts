@@ -7,6 +7,7 @@ plugins {
 android {
     namespace = "pk.softstore.softstore_buyer"
     compileSdk = flutter.compileSdkVersion
+    buildToolsVersion = "34.0.0"
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

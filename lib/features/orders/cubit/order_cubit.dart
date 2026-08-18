@@ -1,7 +1,10 @@
+import 'dart:developer' as developer;
 import 'package:flutter_bloc/flutter_bloc.dart';
+
 import '../../../core/errors/failures.dart';
 import '../data/order_service.dart';
 import '../models/order_model.dart';
+import '../repository/order_repository.dart';
 import 'order_state.dart';
 
 class OrderCubit extends Cubit<OrderState> {
@@ -11,19 +14,25 @@ class OrderCubit extends Cubit<OrderState> {
       : _orderService = orderService ?? OrderService(),
         super(const OrderInitial());
 
+  final OrderRepository _repo = OrderRepository.instance;
+
   Future<void> loadOrders() async {
     emit(const OrderLoading());
     try {
       final orders = await _orderService.fetchOrders();
       emit(OrderLoaded(orders: orders));
     } on AuthFailure {
-      // In guest or initial testing mode when no session cookie exists yet,
-      // show empty loaded state with a clean empty list rather than hard crash.
       emit(const OrderLoaded(orders: []));
     } on Failure catch (e) {
       emit(OrderError(message: e.message));
     } catch (e) {
-      emit(OrderError(message: 'Failed to load orders: $e'));
+      try {
+        final fallbackOrders = await _repo.getOrders();
+        emit(OrderLoaded(orders: fallbackOrders));
+      } catch (_) {
+        developer.log('[OrderCubit] loadOrders error: $e', name: 'orders');
+        emit(const OrderLoaded(orders: []));
+      }
     }
   }
 
@@ -78,15 +87,21 @@ class OrderCubit extends Cubit<OrderState> {
     }
   }
 
-  Future<void> loadOrderDetail(String orderId) async {
+  Future<void> loadOrderDetail(String invoiceNumber) async {
     emit(const OrderLoading());
     try {
-      final order = await _orderService.fetchOrderDetail(orderId);
+      final order = await _orderService.fetchOrderDetail(invoiceNumber);
       emit(OrderDetailLoaded(order: order));
     } on Failure catch (e) {
       emit(OrderError(message: e.message));
     } catch (e) {
-      emit(OrderError(message: 'Failed to load order detail: $e'));
+      try {
+        final order = await _repo.getOrderDetail(invoiceNumber);
+        emit(OrderDetailLoaded(order: order));
+      } catch (_) {
+        developer.log('[OrderCubit] loadOrderDetail error: $e', name: 'orders');
+        emit(const OrderError(message: 'Failed to load order details.'));
+      }
     }
   }
 
@@ -98,8 +113,8 @@ class OrderCubit extends Cubit<OrderState> {
     emit(const OrderLoading());
     try {
       final order = await _orderService.trackGuestOrder(
-        referenceNumber: referenceNumber,
-        phone: phone,
+        referenceNumber: referenceNumber.trim(),
+        phone: phone.trim(),
       );
       emit(OrderLookupResult(order: order));
     } on NotFoundFailure {
@@ -107,17 +122,24 @@ class OrderCubit extends Cubit<OrderState> {
     } on Failure catch (e) {
       emit(OrderError(message: e.message));
     } catch (_) {
-      emit(const OrderLookupNotFound());
+      try {
+        final order = await _repo.trackOrderGuest(
+          invoiceNumber: referenceNumber.trim(),
+          phone: phone.trim(),
+        );
+        emit(OrderLookupResult(order: order));
+      } catch (_) {
+        emit(const OrderLookupNotFound());
+      }
     }
   }
 
   Future<void> cancelOrder(String orderId, {String? reason}) async {
     emit(const OrderCancelling());
-    await Future.delayed(const Duration(milliseconds: 600));
+    await Future.delayed(const Duration(milliseconds: 500));
     emit(OrderCancelled(orderId: orderId));
     loadOrders();
   }
 
   void reset() => emit(const OrderInitial());
 }
-

@@ -1,37 +1,61 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import '../features/home/screens/home_screen.dart';
+import '../core/widgets/app_bottom_nav_bar.dart';
+
+// Feature screen imports
+import '../features/auth/screens/login_screen.dart';
+import '../features/auth/screens/register_screen.dart';
+import '../features/auth/screens/splash_screen.dart';
+
 import '../features/cart/screens/cart_screen.dart';
-import '../features/cart/screens/checkout_screen.dart';
-import '../features/product/screens/product_detail_screen.dart';
-import '../features/orders/cubit/order_cubit.dart';
-import '../features/orders/screens/orders_screen.dart';
-import '../features/orders/screens/order_detail_screen.dart';
-import '../features/orders/screens/order_confirmation_screen.dart';
-import '../features/orders/screens/order_lookup_screen.dart';
-import '../features/orders/models/order_model.dart';
-import '../features/profile/screens/profile_hub_screen.dart';
-import '../features/profile/screens/edit_profile_screen.dart';
-import '../features/profile/screens/change_password_screen.dart';
-import '../features/profile/screens/settings_screen.dart';
-import '../features/profile/screens/addresses_screen.dart';
-import '../features/profile/screens/address_form_screen.dart';
+
+import '../features/catalog/screens/categories_screen.dart';
+import '../features/catalog/screens/category_products_screen.dart';
+import '../features/catalog/screens/seller_screen.dart';
+
+import '../features/checkout/screens/checkout_screen.dart';
 import '../features/deals/screens/deals_screen.dart';
-import '../features/support/presentation/screens/faq_screen.dart';
-import '../features/support/presentation/screens/contact_support_screen.dart';
-import '../features/support/presentation/screens/support_hub_screen.dart';
-import '../features/support/presentation/screens/tickets_list_screen.dart';
-import '../features/support/presentation/screens/ticket_chat_screen.dart';
+
+import '../features/home/screens/home_screen.dart';
+
+import '../features/orders/cubit/order_cubit.dart';
+import '../features/orders/models/order_model.dart';
+import '../features/orders/screens/order_confirmation_screen.dart';
+import '../features/orders/screens/order_detail_screen.dart';
+import '../features/orders/screens/order_lookup_screen.dart';
+import '../features/orders/screens/orders_screen.dart';
+
+import '../features/product/screens/product_detail_screen.dart';
+
+import '../features/profile/screens/address_form_screen.dart';
+import '../features/profile/screens/addresses_screen.dart';
+import '../features/profile/screens/change_password_screen.dart';
+import '../features/profile/screens/edit_profile_screen.dart';
+import '../features/profile/screens/profile_hub_screen.dart';
+import '../features/profile/screens/settings_screen.dart';
+
 import '../features/support/models/ticket_model.dart';
 import '../features/support/presentation/cubits/support_cubit.dart';
 import '../features/support/data/support_repository.dart';
+import '../features/support/presentation/screens/contact_support_screen.dart';
+import '../features/support/presentation/screens/faq_screen.dart';
+import '../features/support/presentation/screens/support_hub_screen.dart';
+import '../features/support/presentation/screens/ticket_chat_screen.dart';
+import '../features/support/presentation/screens/tickets_list_screen.dart';
 
-// Placeholder screens (will be replaced with actual screens)
-class PlaceholderScreen extends StatelessWidget {
+import '../features/wishlist/screens/wishlist_screen.dart';
+
+// Placeholder screen for secondary sub-routes if needed
+class SecondaryPlaceholderScreen extends StatelessWidget {
   final String label;
+  final int? navIndex;
 
-  const PlaceholderScreen({super.key, required this.label});
+  const SecondaryPlaceholderScreen({
+    super.key,
+    required this.label,
+    this.navIndex,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -41,13 +65,9 @@ class PlaceholderScreen extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.construction, size: 64, color: Colors.grey),
+            const Icon(Icons.info_outline, size: 48, color: Colors.grey),
             const SizedBox(height: 16),
-            Text(
-              '$label\n(Placeholder)',
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 18),
-            ),
+            Text(label, style: const TextStyle(fontSize: 16)),
           ],
         ),
       ),
@@ -94,8 +114,18 @@ abstract final class AppRoutes {
 }
 
 final GoRouter goRouter = GoRouter(
-  initialLocation: AppRoutes.home,
+  initialLocation: AppRoutes.root,
   routes: [
+    // Launch Splash Screen
+    GoRoute(
+      path: AppRoutes.root,
+      builder: (context, state) => const SplashScreen(),
+    ),
+    GoRoute(
+      path: AppRoutes.splash,
+      builder: (context, state) => const SplashScreen(),
+    ),
+
     // Home & Browsing
     GoRoute(
       path: AppRoutes.home,
@@ -103,13 +133,15 @@ final GoRouter goRouter = GoRouter(
     ),
     GoRoute(
       path: AppRoutes.categories,
-      builder: (context, state) => const PlaceholderScreen(label: 'Categories'),
+      builder: (context, state) => const CategoriesScreen(),
     ),
     GoRoute(
       path: AppRoutes.categoryProducts,
       builder: (context, state) {
         final slug = state.pathParameters['slug'] ?? '';
-        return PlaceholderScreen(label: 'Category: $slug');
+        final extra = state.extra as Map<String, dynamic>? ?? {};
+        final name = extra['name'] as String?;
+        return CategoryProductsScreen(slug: slug, categoryName: name);
       },
     ),
     GoRoute(
@@ -121,6 +153,7 @@ final GoRouter goRouter = GoRouter(
           slug: slug,
           name: extra['name'] as String? ?? slug,
           price: extra['price'] as int? ?? 0,
+          imageUrl: extra['imageUrl'] as String?,
           iconCodePoint: extra['iconCodePoint'] as int? ?? 0xe59c,
           colors: (extra['colors'] as List?)
                   ?.cast<Map<String, dynamic>>() ??
@@ -130,13 +163,13 @@ final GoRouter goRouter = GoRouter(
     ),
     GoRoute(
       path: AppRoutes.search,
-      builder: (context, state) => const PlaceholderScreen(label: 'Search'),
+      builder: (context, state) => const HomeScreen(),
     ),
     GoRoute(
       path: AppRoutes.seller,
       builder: (context, state) {
         final slug = state.pathParameters['slug'] ?? '';
-        return PlaceholderScreen(label: 'Seller: $slug');
+        return SellerScreen(slug: slug);
       },
     ),
 
@@ -147,7 +180,7 @@ final GoRouter goRouter = GoRouter(
     ),
     GoRoute(
       path: AppRoutes.wishlist,
-      builder: (context, state) => const PlaceholderScreen(label: 'Wishlist'),
+      builder: (context, state) => const WishlistScreen(),
     ),
     GoRoute(
       path: AppRoutes.checkout,
@@ -217,20 +250,21 @@ final GoRouter goRouter = GoRouter(
     ),
     GoRoute(
       path: AppRoutes.returns,
-      builder: (context, state) => const PlaceholderScreen(label: 'Returns'),
+      builder: (context, state) =>
+          const SecondaryPlaceholderScreen(label: 'Returns', navIndex: 1),
     ),
 
     // Auth
     GoRoute(
       path: AppRoutes.login,
-      builder: (context, state) => const PlaceholderScreen(label: 'Login'),
+      builder: (context, state) => const LoginScreen(),
     ),
     GoRoute(
       path: AppRoutes.register,
-      builder: (context, state) => const PlaceholderScreen(label: 'Register'),
+      builder: (context, state) => const RegisterScreen(),
     ),
 
-    // Profile � Arwah's screens
+    // Profile
     GoRoute(
       path: AppRoutes.profile,
       builder: (context, state) => const ProfileHubScreen(),
@@ -272,7 +306,7 @@ final GoRouter goRouter = GoRouter(
     GoRoute(
       path: AppRoutes.notifications,
       builder: (context, state) =>
-          const PlaceholderScreen(label: 'Notifications'),
+          const SecondaryPlaceholderScreen(label: 'Notifications', navIndex: 4),
     ),
 
     // Deals & Sponsors
@@ -281,7 +315,7 @@ final GoRouter goRouter = GoRouter(
       builder: (context, state) => const DealsScreen(),
     ),
 
-    // Support � Naheed's screens
+    // Support
     GoRoute(
       path: AppRoutes.support,
       builder: (context, state) => const SupportHubScreen(),
