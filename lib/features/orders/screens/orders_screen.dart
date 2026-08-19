@@ -12,14 +12,15 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_bottom_nav_bar.dart';
 
 class OrdersScreen extends StatefulWidget {
-  const OrdersScreen({super.key});
+  final int initialTab;
+  const OrdersScreen({super.key, this.initialTab = 0});
 
   @override
   State<OrdersScreen> createState() => _OrdersScreenState();
 }
 
 class _OrdersScreenState extends State<OrdersScreen> {
-  int _selectedTab = 0;
+  late int _selectedTab;
 
   static const _tabs = [
     'All',
@@ -34,6 +35,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
   @override
   void initState() {
     super.initState();
+    _selectedTab = widget.initialTab;
     context.read<OrderCubit>().loadOrders();
   }
 

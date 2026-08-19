@@ -868,6 +868,7 @@ class _EmailVerificationOtpDialogState
     _focusNodes = List.generate(6, (_) => FocusNode());
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       final email = _emailCtrl.text.trim();
       if (email.contains('@') && email != 'buyer@softstore.pk') {
         _sendCode();
