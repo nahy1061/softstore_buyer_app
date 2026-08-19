@@ -1,7 +1,9 @@
-import 'package:flutter/foundation.dart';
+import 'dart:developer' as developer;
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/errors/failures.dart';
+import '../../../core/services/notification_service.dart';
 import '../repository/auth_repository.dart';
 import 'auth_state.dart';
 
@@ -23,13 +25,19 @@ class AuthCubit extends Cubit<AuthState> {
     try {
       final user = await _repo.restoreSession();
       if (user != null) {
-        debugPrint('[AuthCubit] Session restored: ${user.email}');
+        developer.log('[AuthCubit] Session restored: ${user.email}', name: 'auth');
+        NotificationService.instance.setBuyerUser(
+          email: user.email,
+          userId: user.id,
+          phone: user.phone,
+          firstName: user.firstName,
+        );
         emit(AuthAuthenticated(user));
       } else {
         emit(const AuthUnauthenticated());
       }
     } catch (e) {
-      debugPrint('[AuthCubit] Session restore failed: $e');
+      developer.log('[AuthCubit] Session restore failed: $e', name: 'auth');
       emit(const AuthUnauthenticated());
     }
   }
@@ -39,7 +47,7 @@ class AuthCubit extends Cubit<AuthState> {
   Future<void> login({
     required String email,
     required String password,
-    String recaptchaToken = '',
+    required String recaptchaToken,
   }) async {
     emit(const AuthLoading());
     try {
@@ -47,6 +55,12 @@ class AuthCubit extends Cubit<AuthState> {
         email: email,
         password: password,
         recaptchaToken: recaptchaToken,
+      );
+      NotificationService.instance.setBuyerUser(
+        email: user.email,
+        userId: user.id,
+        phone: user.phone,
+        firstName: user.firstName,
       );
       emit(AuthAuthenticated(user));
     } on AuthFailure catch (e) {
@@ -66,12 +80,10 @@ class AuthCubit extends Cubit<AuthState> {
     required String password,
     String? lastName,
     String? phone,
-    String recaptchaToken = '',
+    required String recaptchaToken,
   }) async {
-    debugPrint('[AuthCubit] Register attempt: email=$email');
     emit(const AuthLoading());
     try {
-      debugPrint('[AuthCubit] Captcha token length: ${recaptchaToken.length}');
       final user = await _repo.register(
         firstName: firstName,
         email: email,
@@ -80,16 +92,18 @@ class AuthCubit extends Cubit<AuthState> {
         phone: phone,
         recaptchaToken: recaptchaToken,
       );
-      debugPrint('[AuthCubit] Register SUCCESS: ${user.email}');
+      NotificationService.instance.setBuyerUser(
+        email: user.email,
+        userId: user.id,
+        phone: user.phone,
+        firstName: user.firstName,
+      );
       emit(AuthAuthenticated(user));
     } on AuthFailure catch (e) {
-      debugPrint('[AuthCubit] Register AuthFailure: ${e.message}');
       emit(AuthError(e.message));
     } on NetworkFailure catch (e) {
-      debugPrint('[AuthCubit] Register NetworkFailure: ${e.message}');
       emit(AuthError(e.message));
     } catch (e) {
-      debugPrint('[AuthCubit] Register unexpected error: $e');
       emit(AuthError(e.toString()));
     }
   }
@@ -97,6 +111,7 @@ class AuthCubit extends Cubit<AuthState> {
   // ─── Logout ───────────────────────────────────────────────────────────────
 
   Future<void> logout() async {
+    await NotificationService.instance.clearUserOnLogout();
     await _repo.logout();
     emit(const AuthUnauthenticated());
   }

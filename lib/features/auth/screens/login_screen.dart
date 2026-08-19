@@ -8,6 +8,7 @@ import '../../../core/theme/app_colors.dart';
 import '../cubit/auth_cubit.dart';
 import '../cubit/auth_state.dart';
 import 'auth_screen.dart';
+import 'register_screen.dart';
 
 import '../widgets/recaptcha_invisible_view.dart';
 
@@ -113,10 +114,11 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _goToRegister() {
-    if (widget.isModal) {
-      if (widget.onSwitchToRegister != null) {
-        widget.onSwitchToRegister!();
-      }
+    if (widget.isModal && widget.onSwitchToRegister != null) {
+      widget.onSwitchToRegister!();
+    } else if (widget.isModal) {
+      Navigator.of(context).pop();
+      RegisterScreen.showAsModal(context);
     } else {
       context.push(AppRoutes.register);
     }
@@ -529,13 +531,17 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   GestureDetector(
+                    behavior: HitTestBehavior.opaque,
                     onTap: _goToRegister,
-                    child: const Text(
-                      'Create an account',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFFFF6A00),
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                      child: Text(
+                        'Create an account',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFFFF6A00),
+                        ),
                       ),
                     ),
                   ),

@@ -69,25 +69,34 @@ class HtmlParserUtil {
 
   // ─── Form Error Extraction ────────────────────────────────────────────────
 
-  /// Returns the first error text found in HTML body or JSON, or
-  /// null if no visible error message is found.
+  /// Returns the first error text found in HTML or JSON body, or
+  /// null if the response contains no visible error messages.
   static String? extractFormError(String htmlBody) {
-    try {
-      final trimmed = htmlBody.trim();
-      if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
-        try {
-          final jsonMap = jsonDecode(trimmed) as Map<String, dynamic>;
-          final msg = jsonMap['message'] ?? jsonMap['error'] ?? jsonMap['msg'];
+    if (htmlBody.trim().isEmpty) return null;
+
+    // Check if JSON response e.g. {"success":false,"message":"..."}
+    final trimmed = htmlBody.trim();
+    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+      try {
+        final decoded = jsonDecode(trimmed);
+        if (decoded is Map<String, dynamic>) {
+          final msg = decoded['message'] ?? decoded['error'] ?? decoded['msg'];
           if (msg != null && msg.toString().isNotEmpty) {
             return msg.toString();
           }
-        } catch (_) {}
-      }
+        }
+      } catch (_) {}
+    }
 
+    try {
       final doc = html_parser.parse(htmlBody);
 
-      // Check common alert & validation message containers
+      // Check SoftStore specific alert elements & common validation containers
       const selectors = [
+        '.sx-alert-err',
+        '.sx-alert',
+        '.alert-tf.alert-danger',
+        '[role="alert"]',
         '.invalid-feedback',
         '.alert-danger',
         '.alert-error',
@@ -97,7 +106,6 @@ class HtmlParserUtil {
         '.error-msg',
         '.form-error',
         '.alert',
-        '[role="alert"]',
         '.error',
         '.help-block.text-danger',
       ];
