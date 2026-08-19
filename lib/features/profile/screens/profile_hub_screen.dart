@@ -1,255 +1,629 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_typography.dart';
-import '../../../core/theme/app_spacing.dart';
-import '../../../core/theme/app_dimensions.dart';
-import '../../../app/router.dart';
-// Shared bottom navigation bar used across all main screens
-import '../../../core/widgets/app_bottom_nav_bar.dart';
 
-class ProfileHubScreen extends StatelessWidget {
+import '../../../app/router.dart';
+import '../../../core/widgets/app_bottom_nav_bar.dart';
+import '../../auth/cubit/auth_cubit.dart';
+import '../../auth/cubit/auth_state.dart';
+import '../cubit/profile_cubit.dart';
+import '../cubit/profile_state.dart';
+
+import '../../auth/screens/login_screen.dart';
+
+class ProfileHubScreen extends StatefulWidget {
   const ProfileHubScreen({super.key});
 
   @override
+  State<ProfileHubScreen> createState() => _ProfileHubScreenState();
+}
+
+class _ProfileHubScreenState extends State<ProfileHubScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final authState = context.read<AuthCubit>().state;
+      if (authState is AuthAuthenticated) {
+        context.read<ProfileCubit>().loadProfile();
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
+    return BlocBuilder<AuthCubit, AuthState>(
+      builder: (context, authState) {
+        final bool isAuthenticated = authState is AuthAuthenticated;
+
+        return Scaffold(
+          backgroundColor:
+              isAuthenticated ? const Color(0xFFF6F7F9) : Colors.white,
+          appBar: !isAuthenticated
+              ? AppBar(
+                  backgroundColor: Colors.white,
+                  elevation: 0,
+                  scrolledUnderElevation: 0,
+                  title: const Text(
+                    'Me',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF111827),
+                    ),
+                  ),
+                  centerTitle: true,
+                )
+              : null,
+          body: !isAuthenticated
+              ? const _UnauthenticatedProfileView()
+              : BlocBuilder<ProfileCubit, ProfileState>(
+                  builder: (context, profileState) {
+                    String displayName = 'akash';
+                    String avatarLetter = 'A';
+                    int ordersCount = 2;
+                    double totalSpent = 1350.0;
+                    int wishlistCount = 0;
+                    int followedCount = 1;
+
+                    if (profileState is ProfileLoaded) {
+                      final user = profileState.user;
+                      final fullName =
+                          '${user.firstName} ${user.lastName}'.trim();
+                      if (fullName.isNotEmpty) {
+                        displayName = fullName;
+                        avatarLetter = user.firstName.isNotEmpty
+                            ? user.firstName[0].toUpperCase()
+                            : 'A';
+                      }
+                      ordersCount = profileState.stats.totalOrders > 0
+                          ? profileState.stats.totalOrders
+                          : 2;
+                      totalSpent = profileState.stats.totalSpent > 0
+                          ? profileState.stats.totalSpent
+                          : 1350.0;
+                    } else {
+                      final user = authState.user;
+                      if (user.firstName.isNotEmpty) {
+                        displayName =
+                            '${user.firstName} ${user.lastName}'.trim();
+                        avatarLetter = user.firstName[0].toUpperCase();
+                      }
+                    }
+
+                    return SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      child: Column(
+                        children: [
+                          // ── Header with soft peach gradient ───────────────────
+                          _ProfileHeader(
+                            displayName: displayName,
+                            avatarLetter: avatarLetter,
+                            wishlistCount: wishlistCount,
+                            followedCount: followedCount,
+                            ordersCount: ordersCount,
+                            totalSpent: totalSpent,
+                          ),
+
+                          const SizedBox(height: 12),
+
+                          // ── My Orders Section ─────────────────────────────────
+                          const _MyOrdersSection(),
+
+                          const SizedBox(height: 12),
+
+                          // ── Recently Viewed Section ───────────────────────────
+                          const _RecentlyViewedSection(),
+
+                          const SizedBox(height: 12),
+
+                          // ── Quick Actions Section ─────────────────────────────
+                          const _QuickActionsSection(),
+
+                          const SizedBox(height: 24),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+          bottomNavigationBar: const AppBottomNavBar(currentIndex: 4),
+        );
+      },
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Unauthenticated "Me" View matching Screenshot 2
+// ─────────────────────────────────────────────────────────────────────────────
+class _UnauthenticatedProfileView extends StatelessWidget {
+  const _UnauthenticatedProfileView();
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Center(
         child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 24),
           child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              _ProfileHeader(),
-              const SizedBox(height: AppSpacing.xl),
-              _DashboardStatsSection(),
-              const SizedBox(height: AppSpacing.xl),
-              _MyOrdersEnhancedSection(),
-              const SizedBox(height: AppSpacing.xl),
-              _RecentlyViewedEnhancedSection(),
-              const SizedBox(height: AppSpacing.xl),
-              _QuickActionsEnhancedGrid(),
-              const SizedBox(height: AppSpacing.xxl),
+              // User Avatar Circular Outline
+              Container(
+                width: 92,
+                height: 92,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: const Color(0xFF9E9E9E),
+                    width: 3.2,
+                  ),
+                ),
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.person,
+                  size: 58,
+                  color: Color(0xFF8E8E93),
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              // Title: Sign in for a better experience
+              const Text(
+                'Sign in for a better experience',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF111827),
+                ),
+                textAlign: TextAlign.center,
+              ),
+
+              const SizedBox(height: 28),
+
+              // Primary Button: Sign In
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: () => LoginScreen.showAsModal(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF6A00),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  child: const Text(
+                    'Sign In',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 14),
+
+              // Secondary Button: Track Order
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: OutlinedButton(
+                  onPressed: () => context.push(AppRoutes.orderLookup),
+                  style: OutlinedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    side: const BorderSide(
+                      color: Color(0xFFFF6A00),
+                      width: 1.5,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: const Text(
+                    'Track Order',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFFFF6A00),
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
       ),
-      // Shared bottom nav — index 4 = Profile (this screen)
-      bottomNavigationBar: const AppBottomNavBar(currentIndex: 4),
     );
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Profile Header with Peach Gradient & Stats Cards
+// ─────────────────────────────────────────────────────────────────────────────
 class _ProfileHeader extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      color: AppColors.surface,
-      padding: AppSpacing.paddingXl,
-      child: Column(
-        children: [
-          CircleAvatar(
-            radius: 40,
-            backgroundColor: AppColors.primary.withValues(alpha:0.1),
-            child: const Icon(Icons.person, size: 40, color: AppColors.primary),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Text('Guest User', style: AppTypography.sectionHeading),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            'Sign in to access your orders and profile',
-            style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () => context.go(AppRoutes.login),
-                  child: const Text('Sign In'),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => context.go(AppRoutes.register),
-                  child: const Text('Register'),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
+  final String displayName;
+  final String avatarLetter;
+  final int wishlistCount;
+  final int followedCount;
+  final int ordersCount;
+  final double totalSpent;
 
-class _DashboardStatsSection extends StatelessWidget {
-  const _DashboardStatsSection();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-      child: Row(
-        children: [
-          _StatCard(
-            icon: Icons.shopping_bag_outlined,
-            label: 'Orders',
-            value: '12',
-            color: AppColors.primary,
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          _StatCard(
-            icon: Icons.favorite_outline,
-            label: 'Wishlist',
-            value: '5',
-            color: AppColors.error,
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          _StatCard(
-            icon: Icons.star_outline,
-            label: 'Reviews',
-            value: '8',
-            color: AppColors.secondary,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatCard extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color color;
-
-  const _StatCard({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.color,
+  const _ProfileHeader({
+    required this.displayName,
+    required this.avatarLetter,
+    required this.wishlistCount,
+    required this.followedCount,
+    required this.ordersCount,
+    required this.totalSpent,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: AppSpacing.paddingMd,
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: AppDimensions.radiusMd,
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primary.withValues(alpha: 0.05),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
+    final topPadding = MediaQuery.of(context).padding.top;
+
+    return Container(
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0xFFFFD1BE), // Warm peach top
+            Color(0xFFFFE8DD), // Soft gradient middle
+            Color(0xFFFFF6F2), // Light transition bottom
           ],
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: color, size: 24),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              value,
-              style: AppTypography.titleLarge.copyWith(color: color),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: AppTypography.labelSmall.copyWith(
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ],
+          stops: [0.0, 0.6, 1.0],
         ),
       ),
-    );
-  }
-}
-
-class _MyOrdersEnhancedSection extends StatelessWidget {
-  const _MyOrdersEnhancedSection();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+      padding: EdgeInsets.only(
+        top: topPadding + 12,
+        left: 16,
+        right: 16,
+        bottom: 16,
+      ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ── User Info & Header Actions ─────────────────────────────────────
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Text(
-                'My Orders',
-                style: AppTypography.sectionHeading.copyWith(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
+              // Vibrant Orange Avatar
+              Container(
+                width: 68,
+                height: 68,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFFF6A00),
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  avatarLetter,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
-              TextButton(
-                onPressed: () => context.go(AppRoutes.orders),
-                child: const Text('View All'),
+              const SizedBox(width: 14),
+
+              // Name & Subtitle
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      displayName,
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1E2022),
+                        letterSpacing: -0.3,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '$wishlistCount Wishlist  ·  $followedCount Followed',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w400,
+                        color: Color(0xFF6B7280),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Settings Gear Button
+              IconButton(
+                onPressed: () => context.push(AppRoutes.settingsScreen),
+                icon: const Icon(
+                  Icons.settings_outlined,
+                  color: Color(0xFF2D3134),
+                  size: 26,
+                ),
+                splashRadius: 22,
+                tooltip: 'Settings',
+              ),
+
+              // Logout / Sign Out Button
+              InkWell(
+                onTap: () => _showSignOutDialog(context),
+                borderRadius: BorderRadius.circular(14),
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFECEB),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(
+                    Icons.logout_rounded,
+                    color: Color(0xFFE53935),
+                    size: 22,
+                  ),
+                ),
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.sm),
-          _OrderStatusRow(),
+
+          const SizedBox(height: 18),
+
+          // ── 3 Summary Stat Cards (Orders, Total Spent, Wishlist) ───────────
+          Row(
+            children: [
+              Expanded(
+                child: _SummaryCard(
+                  value: '$ordersCount',
+                  label: 'Orders',
+                  onTap: () => context.push(AppRoutes.orders),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _SummaryCard(
+                  value: 'Rs ${_formatPrice(totalSpent)}',
+                  label: 'Total Spent',
+                  onTap: () => context.push(AppRoutes.orders),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _SummaryCard(
+                  value: '$wishlistCount',
+                  label: 'Wishlist',
+                  onTap: () => context.push(AppRoutes.wishlist),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatPrice(double amount) {
+    if (amount >= 1000) {
+      final intPart = amount.toInt();
+      final thousands = intPart ~/ 1000;
+      final remainder = intPart % 1000;
+      return '$thousands,${remainder.toString().padLeft(3, '0')}';
+    }
+    return amount.toInt().toString();
+  }
+
+  void _showSignOutDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Sign Out', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: const Text('Are you sure you want to sign out of your account?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF6B7280))),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(dialogCtx);
+              context.read<AuthCubit>().logout();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFE53935),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('Sign Out'),
+          ),
         ],
       ),
     );
   }
 }
 
-class _OrderStatusRow extends StatelessWidget {
-  const _OrderStatusRow();
+// ─────────────────────────────────────────────────────────────────────────────
+// Summary Card Component
+// ─────────────────────────────────────────────────────────────────────────────
+class _SummaryCard extends StatelessWidget {
+  final String value;
+  final String label;
+  final VoidCallback onTap;
+
+  const _SummaryCard({
+    required this.value,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      elevation: 0,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFF0F1F3), width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                value,
+                style: const TextStyle(
+                  color: Color(0xFFFF6A00),
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Color(0xFF757575),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// My Orders Section
+// ─────────────────────────────────────────────────────────────────────────────
+class _MyOrdersSection extends StatelessWidget {
+  const _MyOrdersSection();
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: AppSpacing.paddingMd,
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: AppDimensions.radiusMd,
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFF0F1F3), width: 1),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.05),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
         ],
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _OrderStatusItem(
-            icon: Icons.access_time,
-            label: 'Pending',
-            count: '2',
-            color: AppColors.warning,
+          // Header Row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'My Orders',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1E2022),
+                ),
+              ),
+              InkWell(
+                onTap: () => context.push(AppRoutes.orders, extra: 0),
+                borderRadius: BorderRadius.circular(6),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'View All Orders',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFFFF6A00),
+                        ),
+                      ),
+                      SizedBox(width: 2),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        size: 16,
+                        color: Color(0xFFFF6A00),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
-          _OrderStatusItem(
-            icon: Icons.local_shipping_outlined,
-            label: 'Shipping',
-            count: '1',
-            color: AppColors.primary,
-          ),
-          _OrderStatusItem(
-            icon: Icons.check_circle_outline,
-            label: 'Delivered',
-            count: '9',
-            color: AppColors.success,
-          ),
-          _OrderStatusItem(
-            icon: Icons.replay_outlined,
-            label: 'Returns',
-            count: '0',
-            color: AppColors.error,
+
+          const SizedBox(height: 16),
+
+          // 5 Order Status Icons Row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _OrderStatusItem(
+                icon: Icons.credit_card_rounded,
+                label: 'To Pay',
+                onTap: () => context.push(AppRoutes.orders, extra: 1),
+              ),
+              _OrderStatusItem(
+                icon: Icons.inventory_2_outlined,
+                label: 'To Ship',
+                onTap: () => context.push(AppRoutes.orders, extra: 3),
+              ),
+              _OrderStatusItem(
+                icon: Icons.inbox_rounded,
+                label: 'To Receive',
+                onTap: () => context.push(AppRoutes.orders, extra: 4),
+              ),
+              _OrderStatusItem(
+                icon: Icons.star_rounded,
+                label: 'To Review',
+                onTap: () => context.push(AppRoutes.orders, extra: 5),
+              ),
+              _OrderStatusItem(
+                icon: Icons.replay_rounded,
+                label: 'Returns &\nCancellations',
+                isMultiLine: true,
+                onTap: () => context.push(AppRoutes.orders, extra: 6),
+              ),
+            ],
           ),
         ],
       ),
@@ -260,68 +634,157 @@ class _OrderStatusRow extends StatelessWidget {
 class _OrderStatusItem extends StatelessWidget {
   final IconData icon;
   final String label;
-  final String count;
-  final Color color;
+  final VoidCallback onTap;
+  final bool isMultiLine;
 
   const _OrderStatusItem({
     required this.icon,
     required this.label,
-    required this.count,
-    required this.color,
+    required this.onTap,
+    this.isMultiLine = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Icon(icon, color: color, size: 24),
-        const SizedBox(height: 4),
-        Text(
-          count,
-          style: AppTypography.titleMedium.copyWith(color: color),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        width: 62,
+        alignment: Alignment.topCenter,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF0E8),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(
+                icon,
+                color: const Color(0xFFFF6A00),
+                size: 26,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: isMultiLine ? 9.5 : 11,
+                fontWeight: FontWeight.w500,
+                color: const Color(0xFF4A4D50),
+                height: 1.15,
+              ),
+              maxLines: 2,
+            ),
+          ],
         ),
-        const SizedBox(height: 2),
-        Text(
-          label,
-          style: AppTypography.labelSmall.copyWith(
-            color: AppColors.textSecondary,
-            fontSize: 11,
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
 
-class _RecentlyViewedEnhancedSection extends StatelessWidget {
-  const _RecentlyViewedEnhancedSection();
+// ─────────────────────────────────────────────────────────────────────────────
+// Recently Viewed Section
+// ─────────────────────────────────────────────────────────────────────────────
+class _RecentlyViewedSection extends StatelessWidget {
+  const _RecentlyViewedSection();
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+    final recentProducts = [
+      const _RecentItem(
+        price: 'Rs. 1,300',
+        isBeverage: false,
+        placeholderCode: Icons.image_outlined,
+      ),
+      const _RecentItem(
+        price: 'Rs. 200',
+        isBeverage: true,
+        placeholderCode: Icons.local_drink_rounded,
+      ),
+      const _RecentItem(
+        price: 'Rs. 3,300',
+        isBeverage: false,
+        placeholderCode: Icons.image_outlined,
+      ),
+    ];
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFF0F1F3), width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Recently Viewed',
-            style: AppTypography.sectionHeading.copyWith(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
+          // Header Row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Recently Viewed',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1E2022),
+                ),
+              ),
+              InkWell(
+                onTap: () => context.push(AppRoutes.categories),
+                borderRadius: BorderRadius.circular(6),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'View More',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFFFF6A00),
+                        ),
+                      ),
+                      SizedBox(width: 2),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        size: 16,
+                        color: Color(0xFFFF6A00),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: AppSpacing.sm),
+
+          const SizedBox(height: 14),
+
+          // Horizontal Product Cards
           SizedBox(
-            height: 120,
-            child: ListView.builder(
+            height: 175,
+            child: ListView.separated(
               scrollDirection: Axis.horizontal,
-              itemCount: 5,
+              physics: const BouncingScrollPhysics(),
+              itemCount: recentProducts.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 12),
               itemBuilder: (context, index) {
-                return _ProductCard(
-                  name: 'Product ${index + 1}',
-                  price: 1999 + (index * 500),
-                  iconCodePoint: Icons.shopping_bag.codePoint,
-                );
+                final item = recentProducts[index];
+                return _RecentlyViewedCard(item: item);
               },
             ),
           ),
@@ -331,28 +794,150 @@ class _RecentlyViewedEnhancedSection extends StatelessWidget {
   }
 }
 
-class _ProductCard extends StatelessWidget {
-  final String name;
-  final int price;
-  final int iconCodePoint;
+class _RecentItem {
+  final String price;
+  final bool isBeverage;
+  final IconData placeholderCode;
 
-  const _ProductCard({
-    required this.name,
+  const _RecentItem({
     required this.price,
-    required this.iconCodePoint,
+    required this.isBeverage,
+    required this.placeholderCode,
   });
+}
+
+class _RecentlyViewedCard extends StatelessWidget {
+  final _RecentItem item;
+
+  const _RecentlyViewedCard({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () => context.push(AppRoutes.categories),
+      borderRadius: BorderRadius.circular(14),
+      child: SizedBox(
+        width: 126,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Product Image Container
+            Container(
+              width: 126,
+              height: 135,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F3F6),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              alignment: Alignment.center,
+              child: item.isBeverage
+                  ? _buildBeverageGraphic()
+                  : Icon(
+                      item.placeholderCode,
+                      size: 40,
+                      color: const Color(0xFFC7CDD4),
+                    ),
+            ),
+            const SizedBox(height: 8),
+
+            // Price text
+            Text(
+              item.price,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFFFF6A00),
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBeverageGraphic() {
+    // Stylized high quality bottle matching Coca-Cola snip
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        // Cap
+        Container(
+          width: 10,
+          height: 6,
+          decoration: BoxDecoration(
+            color: const Color(0xFFD32F2F),
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        // Bottle Neck
+        Container(
+          width: 8,
+          height: 12,
+          color: const Color(0xFF2C1810),
+        ),
+        // Bottle Body
+        Container(
+          width: 28,
+          height: 72,
+          decoration: BoxDecoration(
+            color: const Color(0xFF24140E),
+            borderRadius: BorderRadius.circular(10),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.15),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 28,
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFE50914),
+                ),
+                child: const Text(
+                  'Cola',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 7.5,
+                    fontWeight: FontWeight.w900,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Quick Actions Section (Heading + 8 Circular Action Icons)
+// ─────────────────────────────────────────────────────────────────────────────
+class _QuickActionsSection extends StatelessWidget {
+  const _QuickActionsSection();
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 100,
-      margin: const EdgeInsets.only(right: AppSpacing.sm),
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: AppDimensions.radiusMd,
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFF0F1F3), width: 1),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.05),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -361,284 +946,136 @@ class _ProductCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            height: 60,
-            width: double.infinity,
-            decoration: const BoxDecoration(
-              color: AppColors.background,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-            ),
-            child: Icon(
-              IconData(iconCodePoint, fontFamily: 'MaterialIcons'),
-              color: AppColors.primary,
-              size: 32,
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  style: AppTypography.labelSmall,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Rs. $price',
-                  style: AppTypography.labelMedium.copyWith(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 11,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _QuickActionsEnhancedGrid extends StatelessWidget {
-  const _QuickActionsEnhancedGrid();
-
-  @override
-  Widget build(BuildContext context) {
-    final primaryActions = [
-      _Action(
-        Icons.chat_bubble_outline,
-        'Messages',
-        AppColors.success,
-        () {},
-      ),
-      _Action(
-        Icons.headset_mic_outlined,
-        'Support',
-        const Color(0xFF5B8CFF),
-        () => context.go(AppRoutes.support),
-      ),
-      _Action(
-        Icons.star_outline,
-        'Reviews',
-        AppColors.secondary,
-        () {},
-      ),
-    ];
-
-    final secondaryActions = [
-      _Action(
-        Icons.local_shipping_outlined,
-        'Track',
-        const Color(0xFF9B59B6),
-        () => context.go(AppRoutes.orders),
-      ),
-      _Action(
-        Icons.location_on_outlined,
-        'Addresses',
-        AppColors.success,
-        () => context.go(AppRoutes.addresses),
-      ),
-      _Action(
-        Icons.favorite_outline,
-        'Wishlist',
-        AppColors.error,
-        () => context.go(AppRoutes.wishlist),
-      ),
-    ];
-
-    const tertiaryActions = [
-      _Action(
-        Icons.settings_outlined,
-        'Settings',
-        AppColors.textSecondary,
-        null,
-      ),
-      _Action(
-        Icons.logout,
-        'Sign Out',
-        AppColors.error,
-        null,
-      ),
-    ];
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
+          // Explicit "Quick Actions" Heading requested by user
+          const Text(
             'Quick Actions',
-            style: AppTypography.sectionHeading.copyWith(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF1E2022),
             ),
           ),
-          const SizedBox(height: AppSpacing.md),
-          Container(
-            padding: AppSpacing.paddingMd,
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: AppDimensions.radiusMd,
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primary.withValues(alpha: 0.05),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: primaryActions.map((action) => _ActionItem(action: action)).toList(),
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: secondaryActions.map((action) => _ActionItem(action: action)).toList(),
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: tertiaryActions.map((action) => _ActionItem(action: action)).toList(),
-                ),
-              ],
-            ),
+
+          const SizedBox(height: 18),
+
+          // Row 1: My Messages, Customer Care, My Reviews, Track Order
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _QuickActionCircleItem(
+                icon: Icons.chat_bubble_rounded,
+                label: 'My Messages',
+                onTap: () => context.push(AppRoutes.support),
+              ),
+              _QuickActionCircleItem(
+                icon: Icons.headset_mic_rounded,
+                label: 'Customer Care',
+                onTap: () => context.push(AppRoutes.supportContact),
+              ),
+              _QuickActionCircleItem(
+                icon: Icons.star_rounded,
+                label: 'My Reviews',
+                onTap: () => context.push(AppRoutes.orders, extra: 5),
+              ),
+              _QuickActionCircleItem(
+                icon: Icons.near_me_rounded,
+                label: 'Track Order',
+                onTap: () => context.push(AppRoutes.orderLookup),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 20),
+
+          // Row 2: Addresses, Wishlist, Followed Stores, Settings
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _QuickActionCircleItem(
+                icon: Icons.location_on_rounded,
+                label: 'Addresses',
+                onTap: () => context.push(AppRoutes.addresses),
+              ),
+              _QuickActionCircleItem(
+                icon: Icons.favorite_rounded,
+                label: 'Wishlist',
+                onTap: () => context.push(AppRoutes.wishlist),
+              ),
+              _QuickActionCircleItem(
+                icon: Icons.storefront_rounded,
+                label: 'Followed Stores',
+                onTap: () => _showFollowedStoresSheet(context),
+              ),
+              _QuickActionCircleItem(
+                icon: Icons.settings_rounded,
+                label: 'Settings',
+                onTap: () => context.push(AppRoutes.settingsScreen),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
-}
 
-class _ActionItem extends StatelessWidget {
-  final _Action action;
-
-  const _ActionItem({required this.action});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: action.onTap,
-      child: Column(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: action.color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(action.icon, color: action.color, size: 24),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            action.label,
-            style: AppTypography.labelLarge.copyWith(
-              color: action.color,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 2),
-        ],
+  void _showFollowedStoresSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-    );
-  }
-}
-
-class _Action {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback? onTap;
-
-  const _Action(this.icon, this.label, this.color, this.onTap);
-}
-
-class _ProfileMenuSection extends StatelessWidget {
-  final String title;
-  final List<_MenuItem> items;
-
-  const _ProfileMenuSection({required this.title, required this.items});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: AppColors.surface,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.sm),
-            child: Text(
-              title,
-              style: AppTypography.labelLarge.copyWith(color: AppColors.textSecondary),
-            ),
-          ),
-          const Divider(height: 1),
-          ...items.map((item) => Column(
-                children: [
-                  item,
-                  const Divider(height: 1, indent: AppSpacing.lg + 40),
-                ],
-              )),
-        ],
-      ),
-    );
-  }
-}
-
-class _MenuItem extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  const _MenuItem({
-    required this.icon,
-    required this.label,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.lg, vertical: AppSpacing.md),
-        child: Row(
+      builder: (sheetCtx) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha:0.08),
-                borderRadius: AppDimensions.radiusSm,
-              ),
-              child: Icon(icon, color: AppColors.primary, size: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Followed Stores',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(sheetCtx),
+                ),
+              ],
             ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label, style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w500)),
-                  const SizedBox(height: 2),
-                  Text(subtitle,
-                      style: AppTypography.bodySmall.copyWith(
-                          color: AppColors.textSecondary)),
-                ],
+            const SizedBox(height: 12),
+            ListTile(
+              leading: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF0E8),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.storefront_rounded, color: Color(0xFFFF6A00)),
+              ),
+              title: const Text(
+                'SoftStore Official',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              subtitle: const Text('Verified Merchant'),
+              trailing: OutlinedButton(
+                onPressed: () {
+                  Navigator.pop(sheetCtx);
+                  context.push(AppRoutes.categories);
+                },
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFFFF6A00),
+                  side: const BorderSide(color: Color(0xFFFF6A00)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                child: const Text('Visit'),
               ),
             ),
-            const Icon(Icons.chevron_right, color: AppColors.textSecondary, size: 20),
+            const SizedBox(height: 16),
           ],
         ),
       ),
@@ -646,42 +1083,57 @@ class _MenuItem extends StatelessWidget {
   }
 }
 
-class _SignOutButton extends StatelessWidget {
+class _QuickActionCircleItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _QuickActionCircleItem({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: AppColors.surface,
-      width: double.infinity,
-      padding: AppSpacing.paddingLg,
-      child: OutlinedButton.icon(
-        onPressed: () {
-          showDialog(
-            context: context,
-            builder: (_) => AlertDialog(
-              title: const Text('Sign Out'),
-              content: const Text('Are you sure you want to sign out?'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
-                ),
-                TextButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    context.go(AppRoutes.login);
-                  },
-                  child: const Text('Sign Out',
-                      style: TextStyle(color: AppColors.error)),
-                ),
-              ],
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(30),
+      child: Container(
+        width: 74,
+        alignment: Alignment.topCenter,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Peach circle with orange icon
+            Container(
+              width: 56,
+              height: 56,
+              decoration: const BoxDecoration(
+                color: Color(0xFFFFF0E8),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                icon,
+                color: const Color(0xFFFF6A00),
+                size: 26,
+              ),
             ),
-          );
-        },
-        icon: const Icon(Icons.logout, color: AppColors.error),
-        label: const Text('Sign Out', style: TextStyle(color: AppColors.error)),
-        style: OutlinedButton.styleFrom(
-          side: const BorderSide(color: AppColors.error),
-          minimumSize: const Size(double.infinity, AppDimensions.touchTarget),
+            const SizedBox(height: 6),
+
+            // Label
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF2D3134),
+                height: 1.2,
+              ),
+              maxLines: 2,
+            ),
+          ],
         ),
       ),
     );

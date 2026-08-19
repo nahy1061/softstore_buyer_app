@@ -1,5 +1,5 @@
 name: softstore_buyer_app
-description: "A Flutter app for Softstore buyers"
+description: "A Flutter app for Softstore buyers" # @todo Please User real information
 publish_to: 'none'
 version: 1.0.0+1
 
