@@ -1,10 +1,8 @@
-# softstore_buyer
+# SoftStore Buyer App
 
-A new Flutter project.
+Discover products from registered stores across Pakistan on SoftStore Marketplace with Cash on Delivery (COD) nationwide.
 
-## Getting Started
-
-This project is a starting point for a Flutter application.
+The SoftStore Buyer App is a cross-platform Flutter application providing a seamless shopping experience for Pakistani buyers, featuring multi-store catalog browsing, dynamic deals, cart & checkout management, guest/authenticated order tracking, and account management.
 
 A few resources to get you started if this is your first Flutter project:
 

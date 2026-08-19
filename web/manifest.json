@@ -1,11 +1,11 @@
 {
-    "name": "softstore_buyer",
-    "short_name": "softstore_buyer",
+    "name": "SoftStore Marketplace",
+    "short_name": "SoftStore",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Discover products from registered stores across Pakistan on SoftStore Marketplace. Cash on delivery nationwide.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
