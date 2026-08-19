@@ -16,6 +16,23 @@ class User extends Equatable {
     this.phone,
   });
 
+  factory User.fromJson(Map<String, dynamic> json) {
+    final name = json['name']?.toString() ?? '';
+    final nameParts = name.trim().split(RegExp(r'\s+'));
+    final first = json['first_name']?.toString() ??
+        (nameParts.isNotEmpty ? nameParts.first : '');
+    final last = json['last_name']?.toString() ??
+        (nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '');
+
+    return User(
+      id: json['id']?.toString(),
+      firstName: first,
+      lastName: last,
+      email: json['email']?.toString() ?? '',
+      phone: json['phone']?.toString(),
+    );
+  }
+
   String get fullName => '$firstName $lastName'.trim();
 
   User copyWith({

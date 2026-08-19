@@ -33,8 +33,11 @@ class EnvConfig {
 
   /// reCAPTCHA v3 site key for login/register
   static const String reCaptchaSiteKey = String.fromEnvironment(
-    'RECAPTCHA_KEY',
-    defaultValue: '6Ldqn3ctAAAAAIrfgKNTGbqPVJhsP1jYITlxdArv',
+    'RECAPTCHA_SITE_KEY',
+    defaultValue: String.fromEnvironment(
+      'RECAPTCHA_KEY',
+      defaultValue: '6Ldqn3ctAAAAAIrfgKNTGbqPVJhsP1jYITlxdArv',
+    ),
   );
 
   /// Google OAuth client ID (for future Google Sign-In)

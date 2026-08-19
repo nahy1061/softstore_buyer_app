@@ -7,6 +7,8 @@ import 'package:flutter/services.dart';
 import 'package:softstore_buyer_app/core/network/dio_client.dart';
 import 'package:softstore_buyer_app/core/network/http_overrides.dart';
 import 'package:softstore_buyer_app/core/utils/csrf_service.dart';
+import 'package:softstore_buyer_app/core/errors/failures.dart';
+import 'package:softstore_buyer_app/features/auth/repository/auth_repository.dart';
 import 'package:softstore_buyer_app/features/catalog/repository/catalog_repository.dart';
 import 'package:softstore_buyer_app/features/orders/data/order_service.dart';
 
@@ -142,6 +144,21 @@ void main() {
         print('✓ Profile endpoint response status: ${response.statusCode}');
       } catch (e) {
         print('✓ Profile endpoint verified: $e');
+      }
+    });
+
+    test('13. Auth: login() properly returns credentials error and avoids captcha block', () async {
+      final authRepo = AuthRepository();
+      try {
+        await authRepo.login(
+          email: 'nonexistent_test_buyer@example.com',
+          password: 'wrong_password_123',
+          recaptchaToken: '',
+        );
+        fail('Should not succeed with invalid credentials');
+      } on AuthFailure catch (e) {
+        print('✓ Auth error handled correctly without captcha failure: "${e.message}"');
+        expect(e.message.toLowerCase().contains('captcha'), isFalse);
       }
     });
   });

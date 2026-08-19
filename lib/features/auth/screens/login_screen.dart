@@ -8,6 +8,8 @@ import '../cubit/auth_cubit.dart';
 import '../cubit/auth_state.dart';
 import 'auth_screen.dart';
 
+import '../widgets/recaptcha_invisible_view.dart';
+
 /// Login Screen matching the exact SoftStore design (Screenshot 3).
 /// Can be presented as a standalone page or as a bottom sheet modal.
 class LoginScreen extends StatefulWidget {
@@ -37,6 +39,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   bool _obscurePassword = true;
+  RecaptchaController? _recaptchaController;
 
   @override
   void initState() {
@@ -59,16 +62,20 @@ class _LoginScreenState extends State<LoginScreen> {
   bool get _hasValidInput =>
       _emailCtrl.text.trim().isNotEmpty && _passwordCtrl.text.isNotEmpty;
 
-  void _submit() {
+  void _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
-    // reCAPTCHA token placeholder for mobile compatibility
-    const String recaptchaToken = '';
+    String token = '';
+    if (_recaptchaController != null) {
+      token = await _recaptchaController!.getFreshToken();
+    }
+
+    if (!mounted) return;
 
     context.read<AuthCubit>().login(
           email: _emailCtrl.text.trim(),
           password: _passwordCtrl.text,
-          recaptchaToken: recaptchaToken,
+          recaptchaToken: token,
         );
   }
 
@@ -132,29 +139,36 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocListener<AuthCubit, AuthState>(
-      listener: (context, state) {
-        if (state is AuthAuthenticated) {
-          if (widget.isModal) {
-            Navigator.of(context).pop(true);
-          } else {
-            if (context.canPop()) {
-              context.pop();
-            } else {
-              context.go(AppRoutes.home);
+    return Stack(
+      children: [
+        BlocListener<AuthCubit, AuthState>(
+          listener: (context, state) {
+            if (state is AuthAuthenticated) {
+              if (widget.isModal) {
+                Navigator.of(context).pop(true);
+              } else {
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go(AppRoutes.home);
+                }
+              }
+            } else if (state is AuthError) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(state.message),
+                  backgroundColor: AppColors.error,
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
             }
-          }
-        } else if (state is AuthError) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(state.message),
-              backgroundColor: AppColors.error,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
-      },
-      child: widget.isModal ? _buildModalSheet(context) : _buildFullScreen(context),
+          },
+          child: widget.isModal ? _buildModalSheet(context) : _buildFullScreen(context),
+        ),
+        RecaptchaInvisibleView(
+          onControllerCreated: (controller) => _recaptchaController = controller,
+        ),
+      ],
     );
   }
 

@@ -5,6 +5,9 @@
 /// JSON endpoints are only under /api/store/* and specific POST actions.
 class ApiEndpoints {
   // ─── Authentication ─────────────────────────────────────────────────────────
+  /// REST API endpoint for mobile/JSON authentication (bypasses HTML captcha)
+  static const String apiAuthLogin = '/api/auth/login';
+
   /// GET to extract CSRF; POST with form data to authenticate
   static const String loginPage = '/login';
   static const String login = '/login';
@@ -31,8 +34,9 @@ class ApiEndpoints {
 
   // ─── Session Restoration ────────────────────────────────────────────────────
   /// GET — parse user profile from HTML form inputs; 302→/login means expired
-  static const String profilePage = '/store/account/profile';
-  static const String checkSession = '/store/account/profile';
+  /// NOTE: must match iOS AuthService.fetchProfile() path: /marketplace/account/profile
+  static const String profilePage = '/marketplace/account/profile';
+  static const String checkSession = '/marketplace/account/profile';
 
   // ─── Catalog ────────────────────────────────────────────────────────────────
   /// GET — homepage HTML with hero banners, categories, product rails

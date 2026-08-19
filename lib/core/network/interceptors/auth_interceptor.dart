@@ -21,8 +21,8 @@ class AuthInterceptor extends Interceptor {
     final location = response.headers.value('location') ?? '';
     final path = response.requestOptions.path;
 
-    // Do NOT treat 302 on login or register as session expired
-    if (path.contains('/login') || path.contains('/register')) {
+    // Do NOT treat 302/401 on login, register, or auth endpoints as session expired
+    if (path.contains('login') || path.contains('register') || path.contains('auth')) {
       return handler.next(response);
     }
 
