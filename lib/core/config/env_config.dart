@@ -1,6 +1,16 @@
 /// Environment configuration read from --dart-define flags.
 /// Defaults to development for safety.
 class EnvConfig {
+  static const String appName = String.fromEnvironment(
+    'APP_NAME',
+    defaultValue: 'SoftStore',
+  );
+
+  static const String siteName = String.fromEnvironment(
+    'SITE_NAME',
+    defaultValue: 'SoftStore',
+  );
+
   static const String baseUrl = String.fromEnvironment(
     'BASE_URL',
     defaultValue: 'https://softstore.pk',

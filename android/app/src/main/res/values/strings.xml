@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Application identity & metadata -->
+    <string name="app_name">SoftStore</string>
+    <string name="site_name">SoftStore</string>
+    <string name="site_label">SoftStore Buyer</string>
+    <string name="site_url">https://softstore.pk</string>
+    <string name="package_name">com.softstore.softstore_buyer_app</string>
+</resources>

@@ -5,6 +5,7 @@ import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio_cookie_manager/dio_cookie_manager.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter/foundation.dart';
+import '../config/env_config.dart';
 
 /// Dedicated HTTP client for the SoftStore PHP backend.
 ///
@@ -42,12 +43,7 @@ class SoftstoreApiClient {
   bool _cookieJarReady = false;
   final Completer<void> _cookieJarCompleter = Completer<void>();
 
-  static const String _defaultBaseUrl = 'https://softstore.pk';
-
-  static String get _baseUrl {
-    const envUrl = String.fromEnvironment('BASE_URL');
-    return envUrl.isNotEmpty ? envUrl : _defaultBaseUrl;
-  }
+  static String get _baseUrl => EnvConfig.baseUrl;
 
   /// CORS-safe content type.  `text/plain` is a CORS-safelisted value, so
   /// the browser will NOT send an OPTIONS preflight.  PHP still reads the

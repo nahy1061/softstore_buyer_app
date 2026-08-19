@@ -1,7 +1,10 @@
+import '../config/env_config.dart';
+
 class AppConstants {
-  static const String baseUrl = 'https://softstore.pk';
-  static const String recaptchaSiteKey = '6Ldqn3ctAAAAAIrfgKNTGbqPVJhsP1jYITlxdArv';
-  static const String googleOAuthUrl = 'https://softstore.pk/auth/google/buyer/redirect';
+  static const String appName = EnvConfig.appName;
+  static const String baseUrl = EnvConfig.baseUrl;
+  static const String recaptchaSiteKey = EnvConfig.reCaptchaSiteKey;
+  static String get googleOAuthUrl => '${EnvConfig.baseUrl}/auth/google/buyer/redirect';
   static const String userAgent = 'SoftStoreBuyer/1.0 Android';
   static const int requestTimeout = 20;
   static const String sessionCookieName = 'SOFTSTORE_SESSID';
