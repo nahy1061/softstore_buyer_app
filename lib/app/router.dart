@@ -214,10 +214,13 @@ final GoRouter goRouter = GoRouter(
     // Orders & Returns
     GoRoute(
       path: AppRoutes.orders,
-      builder: (context, state) => BlocProvider(
-        create: (_) => OrderCubit(),
-        child: const OrdersScreen(),
-      ),
+      builder: (context, state) {
+        final tab = state.extra is int ? state.extra as int : 0;
+        return BlocProvider(
+          create: (_) => OrderCubit(),
+          child: OrdersScreen(initialTab: tab),
+        );
+      },
     ),
     GoRoute(
       path: AppRoutes.orderDetail,
