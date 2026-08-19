@@ -22,16 +22,20 @@ class TicketMessage {
       id: json['id'] as int? ?? 0,
       text: (json['body'] ?? json['text'] ?? '') as String,
       sender: messageSenderFromString(json['sender'] as String? ?? 'buyer'),
-      sentAt: DateTime.parse(json['created_at'] as String? ?? json['sent_at'] as String? ?? DateTime.now().toIso8601String()),
+      sentAt: DateTime.parse(
+        json['created_at'] as String? ??
+            json['sent_at'] as String? ??
+            DateTime.now().toIso8601String(),
+      ),
     );
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'body': text,
-        'sender': sender.name,
-        'created_at': sentAt.toIso8601String(),
-      };
+    'id': id,
+    'body': text,
+    'sender': sender.name,
+    'created_at': sentAt.toIso8601String(),
+  };
 }
 
 class TicketDetail {
@@ -52,13 +56,15 @@ final Map<int, List<TicketMessage>> kMockMessages = {
   1003: [
     TicketMessage(
       id: 1,
-      text: 'Hi, my order SS-20260810-003 was supposed to arrive 3 days ago but I still haven\'t received it.',
+      text:
+          'Hi, my order SS-20260810-003 was supposed to arrive 3 days ago but I still haven\'t received it.',
       sender: MessageSender.buyer,
       sentAt: DateTime(2026, 8, 10, 14, 30),
     ),
     TicketMessage(
       id: 2,
-      text: 'Hello! Thank you for reaching out. We apologize for the delay. Could you please confirm your delivery address?',
+      text:
+          'Hello! Thank you for reaching out. We apologize for the delay. Could you please confirm your delivery address?',
       sender: MessageSender.agent,
       sentAt: DateTime(2026, 8, 10, 15, 5),
     ),
@@ -78,7 +84,8 @@ final Map<int, List<TicketMessage>> kMockMessages = {
   1007: [
     TicketMessage(
       id: 1,
-      text: 'I received a blue shirt instead of the red one I ordered. Order #SS-20260809-007.',
+      text:
+          'I received a blue shirt instead of the red one I ordered. Order #SS-20260809-007.',
       sender: MessageSender.buyer,
       sentAt: DateTime(2026, 8, 9, 11, 0),
     ),
@@ -86,13 +93,15 @@ final Map<int, List<TicketMessage>> kMockMessages = {
   1012: [
     TicketMessage(
       id: 1,
-      text: 'My payment of PKR 2,500 was deducted but my order shows as failed.',
+      text:
+          'My payment of PKR 2,500 was deducted but my order shows as failed.',
       sender: MessageSender.buyer,
       sentAt: DateTime(2026, 8, 5, 16, 45),
     ),
     TicketMessage(
       id: 2,
-      text: 'We have verified the transaction. A refund has been initiated to your account.',
+      text:
+          'We have verified the transaction. A refund has been initiated to your account.',
       sender: MessageSender.agent,
       sentAt: DateTime(2026, 8, 6, 10, 0),
     ),
@@ -112,7 +121,8 @@ final Map<int, List<TicketMessage>> kMockMessages = {
     ),
     TicketMessage(
       id: 2,
-      text: 'You can update your delivery address from Profile → Addresses before the order is shipped.',
+      text:
+          'You can update your delivery address from Profile → Addresses before the order is shipped.',
       sender: MessageSender.agent,
       sentAt: DateTime(2026, 8, 2, 9, 0),
     ),
@@ -158,21 +168,27 @@ class Ticket {
       subject: json['subject'] as String? ?? '',
       category: json['category'] as String? ?? 'general',
       status: ticketStatusFromString(json['status'] as String? ?? 'open'),
-      createdAt: DateTime.parse(json['created_at'] as String? ?? DateTime.now().toIso8601String()),
-      lastUpdatedAt: DateTime.parse(json['last_message_at'] as String? ?? json['created_at'] as String? ?? DateTime.now().toIso8601String()),
+      createdAt: DateTime.parse(
+        json['created_at'] as String? ?? DateTime.now().toIso8601String(),
+      ),
+      lastUpdatedAt: DateTime.parse(
+        json['last_message_at'] as String? ??
+            json['created_at'] as String? ??
+            DateTime.now().toIso8601String(),
+      ),
       lastMessage: json['last_message'] as String? ?? '',
     );
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'subject': subject,
-        'category': category,
-        'status': status.name,
-        'created_at': createdAt.toIso8601String(),
-        'last_message_at': lastUpdatedAt.toIso8601String(),
-        'last_message': lastMessage,
-      };
+    'id': id,
+    'subject': subject,
+    'category': category,
+    'status': status.name,
+    'created_at': createdAt.toIso8601String(),
+    'last_message_at': lastUpdatedAt.toIso8601String(),
+    'last_message': lastMessage,
+  };
 }
 
 final List<Ticket> kMockTickets = [

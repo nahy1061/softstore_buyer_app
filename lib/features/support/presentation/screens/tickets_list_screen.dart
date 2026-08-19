@@ -6,9 +6,11 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_dimensions.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../models/support_category.dart';
 import '../../models/ticket_model.dart';
 import '../cubits/support_cubit.dart';
 import '../cubits/support_state.dart';
+import '../widgets/ticket_status_badge.dart';
 
 class TicketsListScreen extends StatefulWidget {
   const TicketsListScreen({super.key});
@@ -27,7 +29,7 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F7F7),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.transparent,
@@ -35,8 +37,10 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
         scrolledUnderElevation: 1,
         shadowColor: Colors.black12,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded,
-              color: AppColors.textPrimary),
+          icon: const Icon(
+            Icons.arrow_back_rounded,
+            color: AppColors.textPrimary,
+          ),
           onPressed: () {
             if (context.canPop()) {
               context.pop();
@@ -47,8 +51,9 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
         ),
         title: Text(
           'My Tickets',
-          style: AppTypography.screenTitle
-              .copyWith(color: AppColors.textPrimary),
+          style: AppTypography.screenTitle.copyWith(
+            color: AppColors.textPrimary,
+          ),
         ),
         actions: [
           IconButton(
@@ -60,8 +65,10 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
                 }
               });
             },
-            icon: const Icon(Icons.add_circle_outline_rounded,
-                color: AppColors.primary),
+            icon: const Icon(
+              Icons.add_circle_outline_rounded,
+              color: AppColors.primary,
+            ),
             tooltip: 'New Ticket',
           ),
         ],
@@ -81,32 +88,42 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.error_outline_rounded,
-                        color: AppColors.error, size: 48),
+                    const Icon(
+                      Icons.error_outline_rounded,
+                      color: AppColors.error,
+                      size: 48,
+                    ),
                     const SizedBox(height: AppSpacing.lg),
                     Text(
                       'Something went wrong',
-                      style: AppTypography.sectionHeading
-                          .copyWith(color: AppColors.textPrimary),
+                      style: AppTypography.sectionHeading.copyWith(
+                        color: AppColors.textPrimary,
+                      ),
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     Text(
                       state.message,
                       textAlign: TextAlign.center,
-                      style: AppTypography.bodyMedium
-                          .copyWith(color: AppColors.textSecondary),
+                      style: AppTypography.bodyMedium.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                     const SizedBox(height: AppSpacing.xl),
                     FilledButton(
-                      onPressed: () => context.read<SupportCubit>().loadTickets(),
+                      onPressed: () =>
+                          context.read<SupportCubit>().loadTickets(),
                       style: FilledButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         shape: RoundedRectangleBorder(
-                            borderRadius: AppDimensions.radiusMd),
+                          borderRadius: AppDimensions.radiusMd,
+                        ),
                       ),
-                      child: Text('Retry',
-                          style: AppTypography.buttonText
-                              .copyWith(color: Colors.white)),
+                      child: Text(
+                        'Retry',
+                        style: AppTypography.buttonText.copyWith(
+                          color: Colors.white,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -144,21 +161,26 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
                 color: AppColors.primary.withValues(alpha: 0.07),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.confirmation_number_outlined,
-                  color: AppColors.primary, size: 40),
+              child: const Icon(
+                Icons.confirmation_number_outlined,
+                color: AppColors.primary,
+                size: 40,
+              ),
             ),
             const SizedBox(height: AppSpacing.xl),
             Text(
               'No Tickets Yet',
-              style: AppTypography.sectionHeading
-                  .copyWith(color: AppColors.textPrimary),
+              style: AppTypography.sectionHeading.copyWith(
+                color: AppColors.textPrimary,
+              ),
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
               'You haven\'t submitted any support tickets.\nNeed help? Contact us anytime.',
               textAlign: TextAlign.center,
-              style: AppTypography.bodyMedium
-                  .copyWith(color: AppColors.textSecondary),
+              style: AppTypography.bodyMedium.copyWith(
+                color: AppColors.textSecondary,
+              ),
             ),
             const SizedBox(height: AppSpacing.xl),
             FilledButton.icon(
@@ -178,9 +200,12 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.xl, vertical: AppSpacing.md),
+                  horizontal: AppSpacing.xl,
+                  vertical: AppSpacing.md,
+                ),
                 shape: RoundedRectangleBorder(
-                    borderRadius: AppDimensions.radiusMd),
+                  borderRadius: AppDimensions.radiusMd,
+                ),
               ),
             ),
           ],
@@ -204,13 +229,13 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
             ticket: ticket,
             onTap: () {
               final cubit = context.read<SupportCubit>();
-              context
-                  .push('/support/tickets/${ticket.id}', extra: ticket)
-                  .then((_) {
-                if (mounted) {
-                  cubit.loadTickets();
-                }
-              });
+              context.push('/support/tickets/${ticket.id}', extra: ticket).then(
+                (_) {
+                  if (mounted) {
+                    cubit.loadTickets();
+                  }
+                },
+              );
             },
           );
         },
@@ -227,16 +252,14 @@ class _TicketCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = _statusColor(ticket.status);
+    final statusColor = TicketStatusBadge.statusColor(ticket.status);
 
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: AppDimensions.radiusLg,
-        border: Border(
-          left: BorderSide(color: statusColor, width: 3),
-        ),
+        border: Border(left: BorderSide(color: statusColor, width: 3)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.06),
@@ -256,7 +279,7 @@ class _TicketCard extends StatelessWidget {
               Row(
                 children: [
                   Icon(
-                    _categoryIcon(ticket.category),
+                    getSupportCategoryIcon(ticket.category),
                     size: 15,
                     color: AppColors.textSecondary,
                   ),
@@ -269,7 +292,7 @@ class _TicketCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  _StatusBadge(status: ticket.status),
+                  TicketStatusBadge(status: ticket.status, compact: true),
                 ],
               ),
               const SizedBox(height: AppSpacing.sm),
@@ -289,7 +312,7 @@ class _TicketCard extends StatelessWidget {
                   width: double.infinity,
                   padding: const EdgeInsets.all(AppSpacing.md),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF7F7F7),
+                    color: AppColors.surfaceAlt,
                     borderRadius: AppDimensions.radiusSm,
                   ),
                   child: Row(
@@ -332,8 +355,11 @@ class _TicketCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: AppSpacing.xs),
-                  Icon(Icons.chevron_right_rounded,
-                      size: 18, color: statusColor),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: 18,
+                    color: statusColor,
+                  ),
                 ],
               ),
             ],
@@ -343,104 +369,22 @@ class _TicketCard extends StatelessWidget {
     );
   }
 
-  IconData _categoryIcon(String category) {
-    switch (category) {
-      case 'Order issue':
-        return Icons.shopping_bag_outlined;
-      case 'Delivery problem':
-        return Icons.local_shipping_outlined;
-      case 'Return & refund':
-        return Icons.assignment_return_outlined;
-      case 'Payment issue':
-        return Icons.payment_outlined;
-      case 'Account problem':
-        return Icons.person_outline;
-      default:
-        return Icons.help_outline;
-    }
-  }
-
   String _formatDate(DateTime dt) {
     const months = [
-      '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      '',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${months[dt.month]} ${dt.day}, ${dt.year}';
-  }
-
-  Color _statusColor(TicketStatus status) {
-    switch (status) {
-      case TicketStatus.open:
-        return AppColors.primary;
-      case TicketStatus.inProgress:
-        return AppColors.statusPending;
-      case TicketStatus.resolved:
-        return AppColors.success;
-      case TicketStatus.closed:
-        return AppColors.textSecondary;
-    }
-  }
-}
-
-class _StatusBadge extends StatelessWidget {
-  final TicketStatus status;
-
-  const _StatusBadge({required this.status});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 3),
-      decoration: BoxDecoration(
-        color: _backgroundColor,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        _label,
-        style: AppTypography.labelSmall.copyWith(
-          color: _textColor,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-
-  String get _label {
-    switch (status) {
-      case TicketStatus.open:
-        return 'Open';
-      case TicketStatus.inProgress:
-        return 'In Progress';
-      case TicketStatus.resolved:
-        return 'Resolved';
-      case TicketStatus.closed:
-        return 'Closed';
-    }
-  }
-
-  Color get _textColor {
-    switch (status) {
-      case TicketStatus.open:
-        return AppColors.primary;
-      case TicketStatus.inProgress:
-        return AppColors.statusPending;
-      case TicketStatus.resolved:
-        return AppColors.success;
-      case TicketStatus.closed:
-        return AppColors.textSecondary;
-    }
-  }
-
-  Color get _backgroundColor {
-    switch (status) {
-      case TicketStatus.open:
-        return AppColors.primary.withValues(alpha: 0.1);
-      case TicketStatus.inProgress:
-        return AppColors.statusPending.withValues(alpha: 0.1);
-      case TicketStatus.resolved:
-        return AppColors.success.withValues(alpha: 0.1);
-      case TicketStatus.closed:
-        return AppColors.textSecondary.withValues(alpha: 0.1);
-    }
   }
 }

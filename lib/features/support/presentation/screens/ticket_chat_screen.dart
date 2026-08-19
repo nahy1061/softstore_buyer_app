@@ -4,11 +4,13 @@ import 'package:go_router/go_router.dart';
 import '../../../../app/router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_dimensions.dart';
+import '../../../../core/theme/app_durations.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../models/ticket_model.dart';
 import '../cubits/support_cubit.dart';
 import '../cubits/support_state.dart';
+import '../widgets/ticket_status_badge.dart';
 
 class TicketChatScreen extends StatefulWidget {
   final Ticket ticket;
@@ -37,7 +39,10 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
 
     if (widget.ticket.status == TicketStatus.open ||
         widget.ticket.status == TicketStatus.inProgress) {
-      cubit.startPolling(widget.ticket.id, interval: const Duration(seconds: 5));
+      cubit.startPolling(
+        widget.ticket.id,
+        interval: const Duration(seconds: 5),
+      );
     }
   }
 
@@ -66,7 +71,7 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
+          duration: AppDurations.normal,
           curve: Curves.easeOut,
         );
       }
@@ -100,7 +105,8 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isClosed = widget.ticket.status == TicketStatus.closed ||
+    final isClosed =
+        widget.ticket.status == TicketStatus.closed ||
         widget.ticket.status == TicketStatus.resolved;
 
     return BlocListener<SupportCubit, SupportState>(
@@ -125,7 +131,7 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
       },
       child: Scaffold(
         resizeToAvoidBottomInset: true,
-        backgroundColor: const Color(0xFFF7F7F7),
+        backgroundColor: AppColors.background,
         appBar: AppBar(
           backgroundColor: Colors.white,
           surfaceTintColor: Colors.transparent,
@@ -133,8 +139,10 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
           scrolledUnderElevation: 1,
           shadowColor: Colors.black12,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_rounded,
-                color: AppColors.textPrimary),
+            icon: const Icon(
+              Icons.arrow_back_rounded,
+              color: AppColors.textPrimary,
+            ),
             onPressed: () {
               if (context.canPop()) {
                 context.pop();
@@ -153,8 +161,11 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
                   color: AppColors.primary.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.support_agent_rounded,
-                    color: AppColors.primary, size: 18),
+                child: const Icon(
+                  Icons.support_agent_rounded,
+                  color: AppColors.primary,
+                  size: 18,
+                ),
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
@@ -186,8 +197,11 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
           ),
           actions: [
             Padding(
-              padding: const EdgeInsets.only(right: AppSpacing.sm),
-              child: _StatusChip(status: widget.ticket.status),
+              padding: const EdgeInsets.only(right: AppSpacing.md),
+              child: TicketStatusBadge(
+                status: widget.ticket.status,
+                compact: true,
+              ),
             ),
           ],
         ),
@@ -197,36 +211,37 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
               child: RefreshIndicator(
                 color: AppColors.primary,
                 onRefresh: () async {
-                  context
-                      .read<SupportCubit>()
-                      .loadMessages(widget.ticket.id);
+                  context.read<SupportCubit>().loadMessages(widget.ticket.id);
                 },
                 child: _messages.isEmpty
                     ? ListView(
                         physics: const AlwaysScrollableScrollPhysics(),
                         children: [
                           SizedBox(
-                              height:
-                                  MediaQuery.of(context).size.height * 0.25),
+                            height: MediaQuery.of(context).size.height * 0.25,
+                          ),
                           Center(
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 const Icon(
-                                    Icons.chat_bubble_outline_rounded,
-                                    size: 48,
-                                    color: AppColors.textDisabled),
+                                  Icons.chat_bubble_outline_rounded,
+                                  size: 48,
+                                  color: AppColors.textDisabled,
+                                ),
                                 const SizedBox(height: AppSpacing.md),
                                 Text(
                                   'No messages yet',
                                   style: AppTypography.bodyMedium.copyWith(
-                                      color: AppColors.textSecondary),
+                                    color: AppColors.textSecondary,
+                                  ),
                                 ),
                                 const SizedBox(height: AppSpacing.sm),
                                 Text(
                                   'Send a message to contact our support team',
                                   style: AppTypography.bodySmall.copyWith(
-                                      color: AppColors.textDisabled),
+                                    color: AppColors.textDisabled,
+                                  ),
                                 ),
                               ],
                             ),
@@ -237,15 +252,19 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
                         controller: _scrollController,
                         physics: const AlwaysScrollableScrollPhysics(),
                         padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.lg,
-                            vertical: AppSpacing.md),
+                          horizontal: AppSpacing.lg,
+                          vertical: AppSpacing.md,
+                        ),
                         itemCount: _messages.length,
                         itemBuilder: (context, index) {
                           final message = _messages[index];
                           final isFirst = index == 0;
-                          final showDateSeparator = isFirst ||
-                              !_isSameDay(_messages[index - 1].sentAt,
-                                  message.sentAt);
+                          final showDateSeparator =
+                              isFirst ||
+                              !_isSameDay(
+                                _messages[index - 1].sentAt,
+                                message.sentAt,
+                              );
                           return Column(
                             children: [
                               if (showDateSeparator)
@@ -274,7 +293,7 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
       ),
       decoration: BoxDecoration(
         color: Colors.white,
-        border: const Border(top: BorderSide(color: Color(0xFFEEEEEE))),
+        border: const Border(top: BorderSide(color: AppColors.divider)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.04),
@@ -292,28 +311,34 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
               maxLines: 4,
               minLines: 1,
               textCapitalization: TextCapitalization.sentences,
-              style: AppTypography.bodyMedium
-                  .copyWith(color: AppColors.textPrimary),
+              style: AppTypography.bodyMedium.copyWith(
+                color: AppColors.textPrimary,
+              ),
               decoration: InputDecoration(
                 hintText: 'Type your message...',
-                hintStyle: AppTypography.bodyMedium
-                    .copyWith(color: AppColors.textDisabled),
+                hintStyle: AppTypography.bodyMedium.copyWith(
+                  color: AppColors.textDisabled,
+                ),
                 filled: true,
-                fillColor: const Color(0xFFF7F7F7),
+                fillColor: AppColors.surfaceAlt,
                 contentPadding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                  horizontal: AppSpacing.md,
+                  vertical: AppSpacing.sm,
+                ),
                 border: OutlineInputBorder(
                   borderRadius: AppDimensions.radiusMd,
-                  borderSide: const BorderSide(color: Color(0xFFEEEEEE)),
+                  borderSide: const BorderSide(color: AppColors.divider),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: AppDimensions.radiusMd,
-                  borderSide: const BorderSide(color: Color(0xFFEEEEEE)),
+                  borderSide: const BorderSide(color: AppColors.divider),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: AppDimensions.radiusMd,
-                  borderSide:
-                      const BorderSide(color: AppColors.primary, width: 1.5),
+                  borderSide: const BorderSide(
+                    color: AppColors.primary,
+                    width: 1.5,
+                  ),
                 ),
               ),
             ),
@@ -333,10 +358,15 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
                       width: 18,
                       height: 18,
                       child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white),
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
                     )
-                  : const Icon(Icons.send_rounded,
-                      color: Colors.white, size: 20),
+                  : const Icon(
+                      Icons.send_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
               padding: EdgeInsets.zero,
             ),
           ),
@@ -354,7 +384,7 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
         color: isResolved
             ? AppColors.success.withValues(alpha: 0.06)
             : AppColors.background,
-        border: const Border(top: BorderSide(color: Color(0xFFEEEEEE))),
+        border: const Border(top: BorderSide(color: AppColors.divider)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -396,8 +426,9 @@ class _ChatBubble extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: Row(
-        mainAxisAlignment:
-            isBuyer ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment: isBuyer
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           if (!isBuyer) ...[
@@ -408,19 +439,25 @@ class _ChatBubble extends StatelessWidget {
                 color: AppColors.primary.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.support_agent_rounded,
-                  color: AppColors.primary, size: 18),
+              child: const Icon(
+                Icons.support_agent_rounded,
+                color: AppColors.primary,
+                size: 18,
+              ),
             ),
             const SizedBox(width: AppSpacing.sm),
           ],
           Flexible(
             child: Column(
-              crossAxisAlignment:
-                  isBuyer ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              crossAxisAlignment: isBuyer
+                  ? CrossAxisAlignment.end
+                  : CrossAxisAlignment.start,
               children: [
                 Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                    horizontal: AppSpacing.md,
+                    vertical: AppSpacing.sm,
+                  ),
                   decoration: BoxDecoration(
                     color: isBuyer ? AppColors.primary : Colors.white,
                     borderRadius: BorderRadius.only(
@@ -431,7 +468,7 @@ class _ChatBubble extends StatelessWidget {
                     ),
                     border: isBuyer
                         ? null
-                        : Border.all(color: const Color(0xFFEEEEEE)),
+                        : Border.all(color: AppColors.divider),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withValues(alpha: 0.05),
@@ -468,8 +505,8 @@ class _ChatBubble extends StatelessWidget {
     final hour = dt.hour > 12
         ? dt.hour - 12
         : dt.hour == 0
-            ? 12
-            : dt.hour;
+        ? 12
+        : dt.hour;
     final min = dt.minute.toString().padLeft(2, '0');
     final ampm = dt.hour >= 12 ? 'PM' : 'AM';
     return '$hour:$min $ampm';
@@ -488,7 +525,9 @@ class _DateSeparator extends StatelessWidget {
       child: Center(
         child: Container(
           padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.md, vertical: AppSpacing.xs),
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.xs,
+          ),
           decoration: BoxDecoration(
             color: Colors.black.withValues(alpha: 0.06),
             borderRadius: BorderRadius.circular(12),
@@ -506,60 +545,20 @@ class _DateSeparator extends StatelessWidget {
 
   String _formatDate(DateTime dt) {
     const months = [
-      '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      '',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${months[dt.month]} ${dt.day}, ${dt.year}';
-  }
-}
-
-class _StatusChip extends StatelessWidget {
-  final TicketStatus status;
-
-  const _StatusChip({required this.status});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.sm, vertical: 3),
-      decoration: BoxDecoration(
-        color: _color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        _label,
-        style: AppTypography.labelSmall.copyWith(
-          color: _color,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-
-  String get _label {
-    switch (status) {
-      case TicketStatus.open:
-        return 'Open';
-      case TicketStatus.inProgress:
-        return 'In Progress';
-      case TicketStatus.resolved:
-        return 'Resolved';
-      case TicketStatus.closed:
-        return 'Closed';
-    }
-  }
-
-  Color get _color {
-    switch (status) {
-      case TicketStatus.open:
-        return AppColors.primary;
-      case TicketStatus.inProgress:
-        return AppColors.statusPending;
-      case TicketStatus.resolved:
-        return AppColors.success;
-      case TicketStatus.closed:
-        return AppColors.textSecondary;
-    }
   }
 }

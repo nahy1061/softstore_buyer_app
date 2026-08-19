@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../app/router.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_dimensions.dart';
+import '../../../../core/theme/app_durations.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
-import '../../../../core/theme/app_dimensions.dart';
 import '../../models/faq_model.dart';
 
 class FaqScreen extends StatefulWidget {
@@ -30,9 +31,11 @@ class _FaqScreenState extends State<FaqScreen> {
     final results = <FaqCategory>[];
     for (final category in kFaqData) {
       final matchingItems = category.items
-          .where((item) =>
-              item.question.toLowerCase().contains(q) ||
-              item.answer.toLowerCase().contains(q))
+          .where(
+            (item) =>
+                item.question.toLowerCase().contains(q) ||
+                item.answer.toLowerCase().contains(q),
+          )
           .toList();
       if (matchingItems.isNotEmpty) {
         results.add(FaqCategory(title: category.title, items: matchingItems));
@@ -46,7 +49,7 @@ class _FaqScreenState extends State<FaqScreen> {
     final filtered = _filtered;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F7F7),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.transparent,
@@ -54,8 +57,10 @@ class _FaqScreenState extends State<FaqScreen> {
         scrolledUnderElevation: 1,
         shadowColor: Colors.black12,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded,
-              color: AppColors.textPrimary),
+          icon: const Icon(
+            Icons.arrow_back_rounded,
+            color: AppColors.textPrimary,
+          ),
           onPressed: () {
             if (context.canPop()) {
               context.pop();
@@ -66,8 +71,9 @@ class _FaqScreenState extends State<FaqScreen> {
         ),
         title: Text(
           'Help Centre',
-          style: AppTypography.screenTitle
-              .copyWith(color: AppColors.textPrimary),
+          style: AppTypography.screenTitle.copyWith(
+            color: AppColors.textPrimary,
+          ),
         ),
       ),
       body: Column(
@@ -76,21 +82,29 @@ class _FaqScreenState extends State<FaqScreen> {
           Container(
             color: Colors.white,
             padding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, AppSpacing.lg,
+              AppSpacing.lg,
+              AppSpacing.sm,
+              AppSpacing.lg,
+              AppSpacing.lg,
             ),
             child: TextField(
               controller: _searchController,
               onChanged: (value) => setState(() => _query = value),
               decoration: InputDecoration(
                 hintText: 'Search help articles...',
-                hintStyle: AppTypography.bodyMedium
-                    .copyWith(color: AppColors.textDisabled),
-                prefixIcon: const Icon(Icons.search_rounded,
-                    color: AppColors.textSecondary),
+                hintStyle: AppTypography.bodyMedium.copyWith(
+                  color: AppColors.textDisabled,
+                ),
+                prefixIcon: const Icon(
+                  Icons.search_rounded,
+                  color: AppColors.textSecondary,
+                ),
                 suffixIcon: _query.isNotEmpty
                     ? IconButton(
-                        icon: const Icon(Icons.clear_rounded,
-                            color: AppColors.textSecondary),
+                        icon: const Icon(
+                          Icons.clear_rounded,
+                          color: AppColors.textSecondary,
+                        ),
                         onPressed: () {
                           _searchController.clear();
                           setState(() => _query = '');
@@ -98,22 +112,26 @@ class _FaqScreenState extends State<FaqScreen> {
                       )
                     : null,
                 filled: true,
-                fillColor: const Color(0xFFF7F7F7),
+                fillColor: AppColors.surfaceAlt,
                 border: OutlineInputBorder(
                   borderRadius: AppDimensions.radiusMd,
-                  borderSide: const BorderSide(color: Color(0xFFEEEEEE)),
+                  borderSide: const BorderSide(color: AppColors.divider),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: AppDimensions.radiusMd,
-                  borderSide: const BorderSide(color: Color(0xFFEEEEEE)),
+                  borderSide: const BorderSide(color: AppColors.divider),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: AppDimensions.radiusMd,
-                  borderSide:
-                      const BorderSide(color: AppColors.primary, width: 1.5),
+                  borderSide: const BorderSide(
+                    color: AppColors.primary,
+                    width: 1.5,
+                  ),
                 ),
                 contentPadding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+                  horizontal: AppSpacing.lg,
+                  vertical: AppSpacing.md,
+                ),
               ),
             ),
           ),
@@ -122,7 +140,9 @@ class _FaqScreenState extends State<FaqScreen> {
             child: filtered.isEmpty
                 ? _buildEmptyState()
                 : ListView.builder(
-                    padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: AppSpacing.md,
+                    ),
                     itemCount: filtered.length + 1,
                     itemBuilder: (context, index) {
                       if (index == filtered.length) {
@@ -151,21 +171,26 @@ class _FaqScreenState extends State<FaqScreen> {
                 color: AppColors.primary.withValues(alpha: 0.07),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.search_off_rounded,
-                  size: 40, color: AppColors.primary),
+              child: const Icon(
+                Icons.search_off_rounded,
+                size: 40,
+                color: AppColors.primary,
+              ),
             ),
             const SizedBox(height: AppSpacing.lg),
             Text(
               'No results for "$_query"',
-              style: AppTypography.sectionHeading
-                  .copyWith(color: AppColors.textPrimary),
+              style: AppTypography.sectionHeading.copyWith(
+                color: AppColors.textPrimary,
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
               'Try a different keyword, or contact us directly.',
-              style: AppTypography.bodyMedium
-                  .copyWith(color: AppColors.textSecondary),
+              style: AppTypography.bodyMedium.copyWith(
+                color: AppColors.textSecondary,
+              ),
               textAlign: TextAlign.center,
             ),
           ],
@@ -195,8 +220,11 @@ class _FaqScreenState extends State<FaqScreen> {
                   color: AppColors.primary.withValues(alpha: 0.12),
                   borderRadius: AppDimensions.radiusSm,
                 ),
-                child: const Icon(Icons.headset_mic_outlined,
-                    color: AppColors.primary, size: 22),
+                child: const Icon(
+                  Icons.headset_mic_outlined,
+                  color: AppColors.primary,
+                  size: 22,
+                ),
               ),
               const SizedBox(width: AppSpacing.md),
               Text(
@@ -211,8 +239,9 @@ class _FaqScreenState extends State<FaqScreen> {
           const SizedBox(height: AppSpacing.md),
           Text(
             'Our support team replies to every ticket — usually within a few hours.',
-            style: AppTypography.bodyMedium
-                .copyWith(color: AppColors.textSecondary),
+            style: AppTypography.bodyMedium.copyWith(
+              color: AppColors.textSecondary,
+            ),
           ),
           const SizedBox(height: AppSpacing.lg),
           SizedBox(
@@ -222,7 +251,8 @@ class _FaqScreenState extends State<FaqScreen> {
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 shape: RoundedRectangleBorder(
-                    borderRadius: AppDimensions.radiusMd),
+                  borderRadius: AppDimensions.radiusMd,
+                ),
               ),
               child: const Text('Contact Support'),
             ),
@@ -238,7 +268,8 @@ class _FaqScreenState extends State<FaqScreen> {
                 foregroundColor: AppColors.primary,
                 side: const BorderSide(color: AppColors.primary),
                 shape: RoundedRectangleBorder(
-                    borderRadius: AppDimensions.radiusMd),
+                  borderRadius: AppDimensions.radiusMd,
+                ),
               ),
             ),
           ),
@@ -257,13 +288,19 @@ class _FaqCategorySection extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-          AppSpacing.lg, AppSpacing.md, AppSpacing.lg, 0),
+        AppSpacing.lg,
+        AppSpacing.md,
+        AppSpacing.lg,
+        0,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
             padding: const EdgeInsets.only(
-                left: AppSpacing.xs, bottom: AppSpacing.sm),
+              left: AppSpacing.xs,
+              bottom: AppSpacing.sm,
+            ),
             child: Text(
               category.title.toUpperCase(),
               style: AppTypography.overline.copyWith(
@@ -293,7 +330,7 @@ class _FaqCategorySection extends StatelessWidget {
                       height: 1,
                       indent: AppSpacing.lg,
                       endIndent: AppSpacing.lg,
-                      color: Color(0xFFEEEEEE),
+                      color: AppColors.divider,
                     ),
                   _FaqItemTile(item: category.items[i]),
                 ],
@@ -324,13 +361,11 @@ class _FaqItemTileState extends State<_FaqItemTile>
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 200),
-      vsync: this,
-    );
-    _iconTurn = Tween<double>(begin: 0, end: 0.5).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    _controller = AnimationController(duration: AppDurations.fast, vsync: this);
+    _iconTurn = Tween<double>(
+      begin: 0,
+      end: 0.5,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
   }
 
   @override
@@ -376,7 +411,7 @@ class _FaqItemTileState extends State<_FaqItemTile>
               ],
             ),
             AnimatedSize(
-              duration: const Duration(milliseconds: 200),
+              duration: AppDurations.fast,
               curve: Curves.easeInOut,
               child: _expanded
                   ? Padding(

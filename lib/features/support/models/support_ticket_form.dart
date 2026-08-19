@@ -20,7 +20,10 @@ class SupportTicketSubmitData {
     String? categoryLabel,
     int? orderId,
   }) {
-    final apiCategory = (categoryLabel != null ? supportCategoryApiValue(categoryLabel) : null) ??
+    final apiCategory =
+        (categoryLabel != null
+            ? supportCategoryApiValue(categoryLabel)
+            : null) ??
         (orderId != null ? 'order' : 'general');
     return SupportTicketSubmitData(
       subject: subject.trim(),
@@ -31,11 +34,11 @@ class SupportTicketSubmitData {
   }
 
   Map<String, dynamic> toApiJson() => {
-        'subject': subject,
-        'message': message,
-        'category': categoryApiValue,
-        if (orderId != null) 'order_id': orderId,
-      };
+    'subject': subject,
+    'message': message,
+    'category': categoryApiValue,
+    if (orderId != null) 'order_id': orderId,
+  };
 }
 
 /// Validates optional order reference input (invoice format or numeric id).

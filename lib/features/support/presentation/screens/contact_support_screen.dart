@@ -7,15 +7,12 @@ import '../../../../core/theme/app_dimensions.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/validators.dart';
+import '../../../auth/cubit/auth_cubit.dart';
+import '../../../auth/cubit/auth_state.dart';
 import '../../models/support_ticket_form.dart';
 import '../../models/ticket_model.dart';
 import '../cubits/support_cubit.dart';
 import '../cubits/support_state.dart';
-
-/// Temporary until AuthCubit / profile API is wired (matches profile hub mock).
-const _mockLoggedInUserName = 'Arwah Imran';
-const _mockLoggedInUserEmail = 'arwah@example.com';
-const _mockIsLoggedIn = true;
 
 class ContactSupportScreen extends StatefulWidget {
   final String? orderReference;
@@ -55,9 +52,26 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
     if (widget.initialSubject != null) {
       _subjectController.text = widget.initialSubject!;
     }
-    if (_mockIsLoggedIn) {
-      _nameController.text = _mockLoggedInUserName;
-      _emailController.text = _mockLoggedInUserEmail;
+    _populateUserInfo();
+  }
+
+  void _populateUserInfo() {
+    try {
+      final authState = context.read<AuthCubit>().state;
+      if (authState is AuthAuthenticated) {
+        final user = authState.user;
+        _nameController.text = user.fullName;
+        _emailController.text = user.email;
+      }
+    } catch (_) {}
+  }
+
+  bool get _isLoggedIn {
+    try {
+      final authState = context.watch<AuthCubit>().state;
+      return authState is AuthAuthenticated;
+    } catch (_) {
+      return false;
     }
   }
 
@@ -110,17 +124,17 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
 
       if (!mounted) return;
       context.read<SupportCubit>().createTicket(
-            subject: submitData.subject,
-            message: submitData.message,
-            category: submitData.categoryApiValue,
-            orderId: submitData.orderId,
-            email: _emailController.text.trim().isNotEmpty
-                ? _emailController.text.trim()
-                : null,
-            guestName: _nameController.text.trim().isNotEmpty
-                ? _nameController.text.trim()
-                : null,
-          );
+        subject: submitData.subject,
+        message: submitData.message,
+        category: submitData.categoryApiValue,
+        orderId: submitData.orderId,
+        email: _emailController.text.trim().isNotEmpty
+            ? _emailController.text.trim()
+            : null,
+        guestName: _nameController.text.trim().isNotEmpty
+            ? _nameController.text.trim()
+            : null,
+      );
     } on ArgumentError catch (error) {
       if (!mounted) return;
       setState(() {
@@ -147,21 +161,26 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
                 color: AppColors.success.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.check_circle_rounded,
-                  color: AppColors.success, size: 36),
+              child: const Icon(
+                Icons.check_circle_rounded,
+                color: AppColors.success,
+                size: 36,
+              ),
             ),
             const SizedBox(height: AppSpacing.lg),
             Text(
               'Ticket Submitted!',
-              style: AppTypography.sectionHeading
-                  .copyWith(color: AppColors.textPrimary),
+              style: AppTypography.sectionHeading.copyWith(
+                color: AppColors.textPrimary,
+              ),
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
               'Your ticket ${ticket.displayId} has been created. Our team will respond within 24 hours.',
               textAlign: TextAlign.center,
-              style: AppTypography.bodyMedium
-                  .copyWith(color: AppColors.textSecondary),
+              style: AppTypography.bodyMedium.copyWith(
+                color: AppColors.textSecondary,
+              ),
             ),
             const SizedBox(height: AppSpacing.xl),
             SizedBox(
@@ -175,7 +194,8 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
                   backgroundColor: AppColors.primary,
                   padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
                   shape: RoundedRectangleBorder(
-                      borderRadius: AppDimensions.radiusMd),
+                    borderRadius: AppDimensions.radiusMd,
+                  ),
                 ),
                 child: Text(
                   'View My Tickets',
@@ -193,8 +213,9 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
                 },
                 child: Text(
                   'Back to Support',
-                  style: AppTypography.buttonText
-                      .copyWith(color: AppColors.textSecondary),
+                  style: AppTypography.buttonText.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ),
             ),
@@ -220,7 +241,7 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
         }
       },
       child: Scaffold(
-        backgroundColor: const Color(0xFFF7F7F7),
+        backgroundColor: AppColors.background,
         appBar: AppBar(
           backgroundColor: Colors.white,
           surfaceTintColor: Colors.transparent,
@@ -228,8 +249,10 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
           scrolledUnderElevation: 1,
           shadowColor: Colors.black12,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_rounded,
-                color: AppColors.textPrimary),
+            icon: const Icon(
+              Icons.arrow_back_rounded,
+              color: AppColors.textPrimary,
+            ),
             onPressed: () {
               if (context.canPop()) {
                 context.pop();
@@ -240,8 +263,9 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
           ),
           title: Text(
             'Contact Support',
-            style: AppTypography.screenTitle
-                .copyWith(color: AppColors.textPrimary),
+            style: AppTypography.screenTitle.copyWith(
+              color: AppColors.textPrimary,
+            ),
           ),
         ),
         body: SingleChildScrollView(
@@ -276,8 +300,11 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
         ),
         child: Row(
           children: [
-            const Icon(Icons.receipt_long_outlined,
-                color: AppColors.primary, size: 20),
+            const Icon(
+              Icons.receipt_long_outlined,
+              color: AppColors.primary,
+              size: 20,
+            ),
             const SizedBox(width: AppSpacing.sm),
             Expanded(
               child: Text(
@@ -313,11 +340,11 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
             const SizedBox(height: AppSpacing.md),
             _FormCard(
               title: 'Your Details',
-              subtitle: _mockIsLoggedIn
+              subtitle: _isLoggedIn
                   ? 'Taken from your profile'
                   : 'We\'ll use this to follow up with you',
               icon: Icons.person_outline_rounded,
-              child: _mockIsLoggedIn
+              child: _isLoggedIn
                   ? _buildProfileSummary()
                   : Column(
                       children: [
@@ -408,8 +435,11 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(Icons.error_outline,
-                              color: AppColors.error, size: 18),
+                          const Icon(
+                            Icons.error_outline,
+                            color: AppColors.error,
+                            size: 18,
+                          ),
                           const SizedBox(width: AppSpacing.sm),
                           Expanded(
                             child: Text(
@@ -431,10 +461,12 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
                       onPressed: _isSubmitting ? null : _submitTicket,
                       style: FilledButton.styleFrom(
                         backgroundColor: AppColors.primary,
-                        disabledBackgroundColor:
-                            AppColors.primary.withValues(alpha: 0.5),
+                        disabledBackgroundColor: AppColors.primary.withValues(
+                          alpha: 0.5,
+                        ),
                         shape: RoundedRectangleBorder(
-                            borderRadius: AppDimensions.radiusMd),
+                          borderRadius: AppDimensions.radiusMd,
+                        ),
                       ),
                       child: _isSubmitting
                           ? const SizedBox(
@@ -447,8 +479,9 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
                             )
                           : Text(
                               'Submit Ticket',
-                              style: AppTypography.buttonText
-                                  .copyWith(color: Colors.white),
+                              style: AppTypography.buttonText.copyWith(
+                                color: Colors.white,
+                              ),
                             ),
                     ),
                   ),
@@ -466,9 +499,9 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: const Color(0xFFF7F7F7),
+        color: AppColors.surfaceAlt,
         borderRadius: AppDimensions.radiusMd,
-        border: Border.all(color: const Color(0xFFEEEEEE)),
+        border: Border.all(color: AppColors.divider),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -539,12 +572,16 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
             Text(
               label,
               style: AppTypography.labelLarge.copyWith(
-                  color: AppColors.textPrimary),
+                color: AppColors.textPrimary,
+              ),
             ),
             if (required)
-              Text(' *',
-                  style: AppTypography.labelLarge
-                      .copyWith(color: AppColors.error)),
+              Text(
+                ' *',
+                style: AppTypography.labelLarge.copyWith(
+                  color: AppColors.error,
+                ),
+              ),
           ],
         ),
         const SizedBox(height: AppSpacing.sm),
@@ -555,30 +592,37 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
           readOnly: readOnly,
           validator: validator,
           onChanged: onChanged,
-          style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary),
+          style: AppTypography.bodyMedium.copyWith(
+            color: AppColors.textPrimary,
+          ),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: AppTypography.bodyMedium
-                .copyWith(color: AppColors.textDisabled),
+            hintStyle: AppTypography.bodyMedium.copyWith(
+              color: AppColors.textDisabled,
+            ),
             prefixIcon: icon != null
                 ? Icon(icon, color: AppColors.textSecondary, size: 20)
                 : null,
             filled: true,
-            fillColor: const Color(0xFFF7F7F7),
+            fillColor: AppColors.surfaceAlt,
             contentPadding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.md, vertical: AppSpacing.md),
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.md,
+            ),
             border: OutlineInputBorder(
               borderRadius: AppDimensions.radiusMd,
-              borderSide: const BorderSide(color: Color(0xFFEEEEEE)),
+              borderSide: const BorderSide(color: AppColors.divider),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: AppDimensions.radiusMd,
-              borderSide: const BorderSide(color: Color(0xFFEEEEEE)),
+              borderSide: const BorderSide(color: AppColors.divider),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: AppDimensions.radiusMd,
-              borderSide:
-                  const BorderSide(color: AppColors.primary, width: 1.5),
+              borderSide: const BorderSide(
+                color: AppColors.primary,
+                width: 1.5,
+              ),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: AppDimensions.radiusMd,
@@ -586,11 +630,11 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
             ),
             focusedErrorBorder: OutlineInputBorder(
               borderRadius: AppDimensions.radiusMd,
-              borderSide:
-                  const BorderSide(color: AppColors.error, width: 1.5),
+              borderSide: const BorderSide(color: AppColors.error, width: 1.5),
             ),
-            errorStyle:
-                AppTypography.errorText.copyWith(color: AppColors.error),
+            errorStyle: AppTypography.errorText.copyWith(
+              color: AppColors.error,
+            ),
           ),
         ),
       ],
@@ -630,7 +674,10 @@ class _FormCard extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, 0,
+              AppSpacing.lg,
+              AppSpacing.lg,
+              AppSpacing.lg,
+              0,
             ),
             child: Row(
               children: [
@@ -656,8 +703,9 @@ class _FormCard extends StatelessWidget {
                     ),
                     Text(
                       subtitle,
-                      style: AppTypography.bodySmall
-                          .copyWith(color: AppColors.textSecondary),
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                   ],
                 ),
@@ -666,11 +714,14 @@ class _FormCard extends StatelessWidget {
           ),
           const Padding(
             padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
-            child: Divider(height: 1, color: Color(0xFFEEEEEE)),
+            child: Divider(height: 1, color: AppColors.divider),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.lg,
+              AppSpacing.lg,
+              0,
+              AppSpacing.lg,
+              AppSpacing.lg,
             ),
             child: child,
           ),

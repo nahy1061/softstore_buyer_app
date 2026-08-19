@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../app/router.dart';
+import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_dimensions.dart';
 import '../../../../core/theme/app_spacing.dart';
@@ -13,7 +14,7 @@ class SupportHubScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F7F7),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.transparent,
@@ -32,7 +33,9 @@ class SupportHubScreen extends StatelessWidget {
         ),
         title: Text(
           'Help & Support',
-          style: AppTypography.screenTitle.copyWith(color: AppColors.textPrimary),
+          style: AppTypography.screenTitle.copyWith(
+            color: AppColors.textPrimary,
+          ),
         ),
       ),
       body: SingleChildScrollView(
@@ -143,27 +146,39 @@ class SupportHubScreen extends StatelessWidget {
                       icon: Icons.chat_outlined,
                       label: 'WhatsApp',
                       isFirst: true,
-                      onTap: () => launchUrl(
-                        Uri.parse('https://wa.me/923009999999'),
-                        mode: LaunchMode.externalApplication,
-                      ),
+                      onTap: () {
+                        final phoneDigits = AppConstants.contactPhone
+                            .replaceAll(RegExp(r'[^0-9]'), '');
+                        launchUrl(
+                          Uri.parse('https://wa.me/$phoneDigits'),
+                          mode: LaunchMode.externalApplication,
+                        );
+                      },
                     ),
-                    const Divider(height: 1, indent: 60, color: Color(0xFFEEEEEE)),
+                    const Divider(
+                      height: 1,
+                      indent: 60,
+                      color: AppColors.divider,
+                    ),
                     _QuickContactListItem(
                       icon: Icons.email_outlined,
                       label: 'Email',
                       onTap: () => launchUrl(
-                        Uri.parse('mailto:info@softstore.pk'),
+                        Uri.parse('mailto:${AppConstants.contactEmail}'),
                         mode: LaunchMode.externalApplication,
                       ),
                     ),
-                    const Divider(height: 1, indent: 60, color: Color(0xFFEEEEEE)),
+                    const Divider(
+                      height: 1,
+                      indent: 60,
+                      color: AppColors.divider,
+                    ),
                     _QuickContactListItem(
                       icon: Icons.call_outlined,
                       label: 'Call',
                       isLast: true,
                       onTap: () => launchUrl(
-                        Uri.parse('tel:+923009999999'),
+                        Uri.parse('tel:${AppConstants.contactPhone}'),
                         mode: LaunchMode.externalApplication,
                       ),
                     ),

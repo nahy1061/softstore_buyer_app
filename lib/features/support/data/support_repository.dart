@@ -57,8 +57,7 @@ class SupportRepository {
           final ticketId = int.tryParse(key);
           if (ticketId != null && val is List) {
             final msgs = val
-                .map((m) =>
-                    TicketMessage.fromJson(m as Map<String, dynamic>))
+                .map((m) => TicketMessage.fromJson(m as Map<String, dynamic>))
                 .toList();
             _cachedMessages[ticketId] = msgs;
           }
@@ -67,8 +66,10 @@ class SupportRepository {
 
       _isStorageInitialized = true;
     } catch (e) {
-      developer.log('[SupportRepository] initStorage error: $e',
-          name: 'support');
+      developer.log(
+        '[SupportRepository] initStorage error: $e',
+        name: 'support',
+      );
     }
   }
 
@@ -78,8 +79,10 @@ class SupportRepository {
       final list = _cachedTickets.map((t) => t.toJson()).toList();
       await prefs.setString('support_saved_tickets', jsonEncode(list));
     } catch (e) {
-      developer.log('[SupportRepository] persistTickets error: $e',
-          name: 'support');
+      developer.log(
+        '[SupportRepository] persistTickets error: $e',
+        name: 'support',
+      );
     }
   }
 
@@ -92,8 +95,10 @@ class SupportRepository {
       });
       await prefs.setString('support_saved_messages', jsonEncode(map));
     } catch (e) {
-      developer.log('[SupportRepository] persistMessages error: $e',
-          name: 'support');
+      developer.log(
+        '[SupportRepository] persistMessages error: $e',
+        name: 'support',
+      );
     }
   }
 
@@ -103,14 +108,16 @@ class SupportRepository {
     if (cached != null && cached.isNotEmpty) return cached;
 
     try {
-      final response = await _dio.get(
-        pageUrl,
-        options: Options(
-          responseType: ResponseType.plain,
-          sendTimeout: const Duration(milliseconds: 1500),
-          receiveTimeout: const Duration(milliseconds: 1500),
-        ),
-      ).timeout(const Duration(milliseconds: 1800));
+      final response = await _dio
+          .get(
+            pageUrl,
+            options: Options(
+              responseType: ResponseType.plain,
+              sendTimeout: const Duration(milliseconds: 1500),
+              receiveTimeout: const Duration(milliseconds: 1500),
+            ),
+          )
+          .timeout(const Duration(milliseconds: 1800));
 
       final html = response.data?.toString() ?? '';
       if (html.isNotEmpty) {
@@ -130,8 +137,10 @@ class SupportRepository {
 
     final patterns = [
       RegExp(r'/agent/tickets/(\d+)', caseSensitive: false),
-      RegExp(r'/support(?:/tickets|/ticket|/view)?/(\d+)',
-          caseSensitive: false),
+      RegExp(
+        r'/support(?:/tickets|/ticket|/view)?/(\d+)',
+        caseSensitive: false,
+      ),
       RegExp(r'/tickets?/(\d+)', caseSensitive: false),
       RegExp(r'/view/(\d+)', caseSensitive: false),
       RegExp(r'[?&](?:ticket_id|id|ticket)=(\d+)', caseSensitive: false),
@@ -190,15 +199,17 @@ class SupportRepository {
     await _persistMessages();
 
     // 3. Fire-and-forget background sync to live server (completely non-blocking)
-    unawaited(_syncTicketToServer(
-      localTicketId: ticketId,
-      subject: subject,
-      message: message,
-      category: category,
-      orderId: orderId,
-      email: email,
-      guestName: guestName,
-    ));
+    unawaited(
+      _syncTicketToServer(
+        localTicketId: ticketId,
+        subject: subject,
+        message: message,
+        category: category,
+        orderId: orderId,
+        email: email,
+        guestName: guestName,
+      ),
+    );
 
     // 4. Return ticket instantly so UI immediately displays success dialog
     return ticket;
@@ -235,17 +246,19 @@ class SupportRepository {
 
       for (final endpoint in endpointsToPost) {
         try {
-          final response = await _dio.post(
-            endpoint,
-            data: formData,
-            options: Options(
-              contentType: Headers.formUrlEncodedContentType,
-              followRedirects: false,
-              sendTimeout: const Duration(milliseconds: 2000),
-              receiveTimeout: const Duration(milliseconds: 2000),
-              validateStatus: (status) => status != null && status < 500,
-            ),
-          ).timeout(const Duration(milliseconds: 2500));
+          final response = await _dio
+              .post(
+                endpoint,
+                data: formData,
+                options: Options(
+                  contentType: Headers.formUrlEncodedContentType,
+                  followRedirects: false,
+                  sendTimeout: const Duration(milliseconds: 2000),
+                  receiveTimeout: const Duration(milliseconds: 2000),
+                  validateStatus: (status) => status != null && status < 500,
+                ),
+              )
+              .timeout(const Duration(milliseconds: 2500));
 
           if (response.statusCode == 302 ||
               response.statusCode == 301 ||
@@ -259,7 +272,8 @@ class SupportRepository {
             final html = response.data.toString();
             final doc = html_parser.parse(html);
             final links = doc.querySelectorAll(
-                'a[href*="/agent"], a[href*="/support"], a[href*="/tickets"], a[href*="/view"]');
+              'a[href*="/agent"], a[href*="/support"], a[href*="/tickets"], a[href*="/view"]',
+            );
             for (final link in links) {
               final href = link.attributes['href'] ?? '';
               final id = _extractTicketId(href);
@@ -288,16 +302,19 @@ class SupportRepository {
             lastMessage: old.lastMessage,
           );
           if (_cachedMessages.containsKey(localTicketId)) {
-            _cachedMessages[serverTicketId] =
-                _cachedMessages.remove(localTicketId)!;
+            _cachedMessages[serverTicketId] = _cachedMessages.remove(
+              localTicketId,
+            )!;
           }
           await _persistTickets();
           await _persistMessages();
         }
       }
     } catch (e) {
-      developer.log('[SupportRepository] background server sync note: $e',
-          name: 'support');
+      developer.log(
+        '[SupportRepository] background server sync note: $e',
+        name: 'support',
+      );
     }
   }
 
@@ -359,21 +376,24 @@ class SupportRepository {
                   lastUpdated = _parseRelativeDate(dateText);
                 }
 
-                final badge =
-                    row?.querySelector('.sx-badge, .badge, [class*="status"]');
+                final badge = row?.querySelector(
+                  '.sx-badge, .badge, [class*="status"]',
+                );
                 if (badge != null && badge.text.trim().isNotEmpty) {
                   statusText = badge.text.trim().toLowerCase();
                 }
 
-                tickets.add(Ticket(
-                  id: ticketId,
-                  subject: subject.isNotEmpty ? subject : 'Ticket #$ticketId',
-                  category: '',
-                  status: _parseStatus(statusText),
-                  createdAt: lastUpdated,
-                  lastUpdatedAt: lastUpdated,
-                  lastMessage: lastMessage,
-                ));
+                tickets.add(
+                  Ticket(
+                    id: ticketId,
+                    subject: subject.isNotEmpty ? subject : 'Ticket #$ticketId',
+                    category: '',
+                    status: _parseStatus(statusText),
+                    createdAt: lastUpdated,
+                    lastUpdatedAt: lastUpdated,
+                    lastMessage: lastMessage,
+                  ),
+                );
               }
 
               if (tickets.isNotEmpty) break;
@@ -401,8 +421,10 @@ class SupportRepository {
       throw _handleDioError(e);
     } catch (e) {
       if (e is Failure) rethrow;
-      developer.log('[SupportRepository] getTickets error: $e',
-          name: 'support');
+      developer.log(
+        '[SupportRepository] getTickets error: $e',
+        name: 'support',
+      );
       throw UnknownFailure('Failed to load tickets: $e');
     }
   }
@@ -460,7 +482,8 @@ class SupportRepository {
 
           final classes = el.className.toLowerCase();
           final fullElText = el.outerHtml.toLowerCase();
-          final isAgent = classes.contains('agent') ||
+          final isAgent =
+              classes.contains('agent') ||
               classes.contains('support') ||
               classes.contains('staff') ||
               classes.contains('admin') ||
@@ -470,7 +493,8 @@ class SupportRepository {
           final sender = isAgent ? MessageSender.agent : MessageSender.buyer;
 
           final timeEl = el.querySelector(
-              'time, .time, .timestamp, [class*="time"], [class*="date"]');
+            'time, .time, .timestamp, [class*="time"], [class*="date"]',
+          );
           DateTime sentAt = DateTime.now();
           if (timeEl != null) {
             final datetime = timeEl.attributes['datetime'];
@@ -481,12 +505,14 @@ class SupportRepository {
             }
           }
 
-          backendMessages.add(TicketMessage(
-            id: msgId++,
-            text: text,
-            sender: sender,
-            sentAt: sentAt,
-          ));
+          backendMessages.add(
+            TicketMessage(
+              id: msgId++,
+              text: text,
+              sender: sender,
+              sentAt: sentAt,
+            ),
+          );
         }
       }
 
@@ -495,9 +521,9 @@ class SupportRepository {
       final merged = <TicketMessage>[...localList];
 
       for (final bMsg in backendMessages) {
-        final alreadyExists = merged.any((m) =>
-            m.text.trim().toLowerCase() ==
-            bMsg.text.trim().toLowerCase());
+        final alreadyExists = merged.any(
+          (m) => m.text.trim().toLowerCase() == bMsg.text.trim().toLowerCase(),
+        );
         if (!alreadyExists) {
           merged.add(bMsg);
         }
@@ -512,8 +538,10 @@ class SupportRepository {
       throw _handleDioError(e);
     } catch (e) {
       if (e is Failure) rethrow;
-      developer.log('[SupportRepository] getMessages error: $e',
-          name: 'support');
+      developer.log(
+        '[SupportRepository] getMessages error: $e',
+        name: 'support',
+      );
       throw UnknownFailure('Failed to load messages: $e');
     }
   }
@@ -538,7 +566,9 @@ class SupportRepository {
 
     // 2. Attempt background delivery to available backend endpoints
     try {
-      final csrfToken = await _extractCsrfToken('/store/support/tickets/$ticketId');
+      final csrfToken = await _extractCsrfToken(
+        '/store/support/tickets/$ticketId',
+      );
 
       final formData = {
         if (csrfToken.isNotEmpty) ...{
@@ -575,8 +605,10 @@ class SupportRepository {
         } catch (_) {}
       }
     } catch (e) {
-      developer.log('[SupportRepository] sendMessage background sync: $e',
-          name: 'support');
+      developer.log(
+        '[SupportRepository] sendMessage background sync: $e',
+        name: 'support',
+      );
     }
   }
 
@@ -614,7 +646,8 @@ class SupportRepository {
         return TimeoutFailure('Connection timed out. Please try again.');
       case DioExceptionType.connectionError:
         return NetworkFailure(
-            'No internet connection. Please check your network.');
+          'No internet connection. Please check your network.',
+        );
       case DioExceptionType.badResponse:
         final statusCode = e.response?.statusCode;
         if (statusCode == 401) {
@@ -624,8 +657,10 @@ class SupportRepository {
           return NotFoundFailure('Resource not found.');
         }
         if (statusCode != null && statusCode >= 500) {
-          return ServerFailure('Server error. Please try again later.',
-              statusCode: statusCode);
+          return ServerFailure(
+            'Server error. Please try again later.',
+            statusCode: statusCode,
+          );
         }
         return ServerFailure('Request failed.', statusCode: statusCode);
       default:
