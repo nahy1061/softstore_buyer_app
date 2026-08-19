@@ -97,17 +97,27 @@ class CartItem extends Equatable {
   int get iconCodePoint => 0xe59c;
   IconData get icon => const IconData(0xe59c, fontFamily: 'MaterialIcons');
 
-  CartItem copyWith({int? quantity, double? unitPriceSnapshot}) {
+  CartItem copyWith({
+    String? uuid,
+    int? productId,
+    String? productName,
+    String? productSlug,
+    int? variantId,
+    String? variantLabel,
+    int? quantity,
+    double? unitPriceSnapshot,
+    String? imageUrl,
+  }) {
     return CartItem(
-      uuid: uuid,
-      productId: productId,
-      productName: productName,
-      productSlug: productSlug,
-      variantId: variantId,
-      variantLabel: variantLabel,
+      uuid: uuid ?? this.uuid,
+      productId: productId ?? this.productId,
+      productName: productName ?? this.productName,
+      productSlug: productSlug ?? this.productSlug,
+      variantId: variantId ?? this.variantId,
+      variantLabel: variantLabel ?? this.variantLabel,
       quantity: quantity ?? this.quantity,
       unitPriceSnapshot: unitPriceSnapshot ?? this.unitPriceSnapshot,
-      imageUrl: imageUrl,
+      imageUrl: imageUrl ?? this.imageUrl,
     );
   }
 
@@ -137,7 +147,17 @@ class CartItem extends Equatable {
       );
 
   @override
-  List<Object?> get props => [uuid];
+  List<Object?> get props => [
+        uuid,
+        productId,
+        productName,
+        productSlug,
+        variantId,
+        variantLabel,
+        quantity,
+        unitPriceSnapshot,
+        imageUrl,
+      ];
 }
 
 // ─── ShippingQuote ────────────────────────────────────────────────────────────

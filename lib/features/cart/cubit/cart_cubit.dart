@@ -15,7 +15,7 @@ class CartCubit extends Cubit<CartState> {
     emit(state.copyWith(items: items));
   }
 
-  void addItem(CartItem item) async {
+  Future<void> addItem(CartItem item) async {
     final items = await _repo.getCart();
     final existingIndex = items.indexWhere(
         (i) => i.productId == item.productId && i.variantId == item.variantId);
@@ -33,28 +33,36 @@ class CartCubit extends Cubit<CartState> {
     emit(state.copyWith(items: updated));
   }
 
-  void removeItem(String id) async {
+  Future<void> removeItems(Iterable<String> ids) async {
+    final idSet = ids.toSet();
     final items = await _repo.getCart();
-    final updated = items.where((i) => i.id != id).toList();
+    final updated = items
+        .where((i) =>
+            !idSet.contains(i.id) &&
+            !idSet.contains(i.uuid) &&
+            !idSet.contains(i.productId.toString()))
+        .toList();
     await _repo.saveCart(updated);
     emit(state.copyWith(items: updated));
   }
 
-  void updateQuantity(String id, int quantity) async {
+  Future<void> removeItem(String id) => removeItems([id]);
+
+  Future<void> updateQuantity(String id, int quantity) async {
     if (quantity <= 0) {
-      removeItem(id);
+      await removeItem(id);
       return;
     }
     final items = await _repo.getCart();
     final updated = items.map((i) {
-      if (i.id != id) return i;
+      if (i.id != id && i.uuid != id && i.productId.toString() != id) return i;
       return i.copyWith(quantity: quantity);
     }).toList();
     await _repo.saveCart(updated);
     emit(state.copyWith(items: updated));
   }
 
-  void clearCart() async {
+  Future<void> clearCart() async {
     await _repo.clearCart();
     emit(const CartState());
   }

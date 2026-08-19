@@ -140,14 +140,12 @@ class _CartScreenState extends State<CartScreen> {
                 ? null
                 : [
                     IconButton(
-                      icon: const Icon(Icons.delete_outline),
+                      icon: const Icon(Icons.delete_outline, color: AppColors.error),
                       tooltip: 'Delete selected',
                       onPressed: () {
                         final toDelete = Set<String>.from(_selectedIds);
                         setState(() => _selectedIds.clear());
-                        for (final id in toDelete) {
-                          context.read<CartCubit>().removeItem(id);
-                        }
+                        context.read<CartCubit>().removeItems(toDelete);
                       },
                     ),
                   ],
@@ -288,12 +286,117 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Widget _buildCartView(BuildContext context, CartState state) {
+    final isAllSelected = state.items.isNotEmpty &&
+        state.items.every((i) => _selectedIds.contains(i.id));
+    final isPartiallySelected =
+        _selectedIds.isNotEmpty && !isAllSelected;
+
     return Column(
       children: [
         Expanded(
           child: SingleChildScrollView(
             child: Column(
               children: [
+                // ── Select All header bar ──────────────────────────────────
+                Container(
+                  margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFE5E7EB)),
+                  ),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: Checkbox(
+                          value: isAllSelected
+                              ? true
+                              : (isPartiallySelected ? null : false),
+                          tristate: true,
+                          activeColor: AppColors.primary,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          onChanged: (_) {
+                            setState(() {
+                              if (isAllSelected) {
+                                _selectedIds.clear();
+                              } else {
+                                _selectedIds.addAll(state.items.map((i) => i.id));
+                              }
+                            });
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () {
+                          setState(() {
+                            if (isAllSelected) {
+                              _selectedIds.clear();
+                            } else {
+                              _selectedIds.addAll(state.items.map((i) => i.id));
+                            }
+                          });
+                        },
+                        child: Text(
+                          isAllSelected
+                              ? 'Deselect All (${state.items.length})'
+                              : (_selectedIds.isNotEmpty
+                                  ? '${_selectedIds.length} of ${state.items.length} selected'
+                                  : 'Select All (${state.items.length} items)'),
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF111827),
+                          ),
+                        ),
+                      ),
+                      const Spacer(),
+                      if (_selectedIds.isNotEmpty)
+                        TextButton.icon(
+                          onPressed: () {
+                            final toDelete = Set<String>.from(_selectedIds);
+                            setState(() => _selectedIds.clear());
+                            context.read<CartCubit>().removeItems(toDelete);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  toDelete.length == state.items.length
+                                      ? 'All items removed from cart'
+                                      : '${toDelete.length} item${toDelete.length > 1 ? 's' : ''} removed from cart',
+                                ),
+                                behavior: SnackBarBehavior.floating,
+                                duration: const Duration(seconds: 2),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.delete_outline,
+                              color: AppColors.error, size: 18),
+                          label: Text(
+                            'Delete (${_selectedIds.length})',
+                            style: const TextStyle(
+                              color: AppColors.error,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+
                 ListView.separated(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
@@ -3447,16 +3550,22 @@ class _QtyButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 28,
-        height: 28,
-        decoration: BoxDecoration(
-          border: Border.all(color: AppColors.divider),
-          borderRadius: BorderRadius.circular(6),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          width: 32,
+          height: 32,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: const Color(0xFFF3F4F6),
+            border: Border.all(color: AppColors.divider),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Icon(icon, size: 16, color: AppColors.textPrimary),
         ),
-        child: Icon(icon, size: 16, color: AppColors.textPrimary),
       ),
     );
   }
