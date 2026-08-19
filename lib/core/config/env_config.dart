@@ -34,6 +34,12 @@ class EnvConfig {
         '40211309448-3v1tcc991u2fru0l8im5g2p1od2c3e.apps.googleusercontent.com',
   );
 
+  /// OneSignal App ID for push notifications and announcements
+  static const String oneSignalAppId = String.fromEnvironment(
+    'ONESIGNAL_APP_ID',
+    defaultValue: 'YOUR_ONESIGNAL_APP_ID',
+  );
+
   // Helper methods
   static bool get isProd => environment == 'prod';
   static bool get isDev => environment == 'dev';

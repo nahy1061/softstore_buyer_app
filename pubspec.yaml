@@ -37,6 +37,8 @@ dependencies:
   path_provider: ^2.1.1
   connectivity_plus: ^5.0.1
   url_launcher: ^6.3.0
+  # Push Notifications & Announcements
+  onesignal_flutter: ^5.2.7
 
 dev_dependencies:
   flutter_test:

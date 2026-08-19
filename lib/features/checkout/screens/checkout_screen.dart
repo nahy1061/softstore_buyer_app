@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/router.dart';
 import '../../../core/errors/failures.dart';
+import '../../../core/services/notification_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_bottom_nav_bar.dart';
 import '../../auth/cubit/auth_cubit.dart';
@@ -245,6 +246,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       ],
     );
     await _orderRepo.saveLocalOrder(placedOrder);
+    NotificationService.instance.tagOrderTracking(
+      orderId: invoice,
+      referenceNumber: invoice,
+      status: 'pending',
+    );
 
     if (mounted) {
       final firstItem = cartState.items.isNotEmpty ? cartState.items.first : null;
