@@ -239,11 +239,18 @@ class OrderService {
       );
       final html = response.data ?? '';
       if (_isSessionExpired(response, html)) {
-        return [];
+        throw const AuthFailure('Session expired. Please log in to view returns.');
       }
       return OrderHtmlParser.parseReturnsList(html);
+    } on Failure {
+      rethrow;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
+        throw const AuthFailure('Session expired. Please log in to view returns.');
+      }
+      throw NetworkFailure(e.message ?? 'Failed to load returns.');
     } catch (e) {
-      return [];
+      throw ServerFailure('Unable to load returns: $e');
     }
   }
 

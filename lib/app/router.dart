@@ -30,6 +30,7 @@ import '../features/orders/screens/order_confirmation_screen.dart';
 import '../features/orders/screens/order_detail_screen.dart';
 import '../features/orders/screens/order_lookup_screen.dart';
 import '../features/orders/screens/orders_screen.dart';
+import '../features/orders/screens/returns_list_screen.dart';
 
 import '../features/product/screens/product_detail_screen.dart';
 
@@ -222,6 +223,10 @@ final GoRouter goRouter = GoRouter(
           productQty: (extra['productQty'] as num?)?.toInt(),
           productPrice: (extra['productPrice'] as num?)?.toInt(),
           iconCodePoint: (extra['iconCodePoint'] as num?)?.toInt(),
+          customerName: extra['customerName']?.toString(),
+          customerPhone: extra['customerPhone']?.toString(),
+          customerAddress: extra['customerAddress']?.toString(),
+          customerCity: extra['customerCity']?.toString(),
         );
       },
     ),
@@ -277,7 +282,7 @@ final GoRouter goRouter = GoRouter(
       path: AppRoutes.returns,
       builder: (context, state) => BlocProvider(
         create: (_) => OrderCubit(),
-        child: const OrdersScreen(initialTab: 7),
+        child: const ReturnsListScreen(),
       ),
     ),
 

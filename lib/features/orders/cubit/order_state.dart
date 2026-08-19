@@ -218,3 +218,25 @@ class OrderError extends OrderState {
   @override
   List<Object?> get props => [message];
 }
+
+class OrderReturnsLoading extends OrderState {
+  const OrderReturnsLoading();
+}
+
+class OrderReturnsLoaded extends OrderState {
+  final List<Map<String, dynamic>> returns;
+
+  const OrderReturnsLoaded({required this.returns});
+
+  @override
+  List<Object?> get props => [returns];
+}
+
+class OrderReturnsError extends OrderState {
+  final String message;
+
+  const OrderReturnsError({required this.message});
+
+  @override
+  List<Object?> get props => [message];
+}

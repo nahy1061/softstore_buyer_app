@@ -194,12 +194,17 @@ class OrderCubit extends Cubit<OrderState> {
 
   Future<void> cancelOrder(String orderId, {String? reason}) async {
     emit(const OrderCancelling());
+    bool success = false;
     try {
-      await _repo.cancelOrder(orderId: orderId, reason: reason);
+      success = await _repo.cancelOrder(orderId: orderId, reason: reason);
     } catch (_) {
       try {
-        await _orderService.cancelOrder(orderId: orderId, reason: reason);
+        success = await _orderService.cancelOrder(orderId: orderId, reason: reason);
       } catch (_) {}
+    }
+    if (!success) {
+      emit(const OrderError(message: 'Failed to cancel order on server. Local status updated.'));
+      return;
     }
     emit(OrderCancelled(orderId: orderId));
     await loadOrders();
@@ -214,8 +219,9 @@ class OrderCubit extends Cubit<OrderState> {
     List<String>? photoPaths,
   }) async {
     emit(const OrderReturning());
+    bool success = false;
     try {
-      await _repo.requestReturn(
+      success = await _repo.requestReturn(
         orderId: orderId,
         reason: reason,
         details: details,
@@ -225,7 +231,7 @@ class OrderCubit extends Cubit<OrderState> {
       );
     } catch (_) {
       try {
-        await _orderService.requestReturn(
+        success = await _orderService.requestReturn(
           orderId: orderId,
           reason: reason,
           returnType: returnType,
@@ -234,8 +240,23 @@ class OrderCubit extends Cubit<OrderState> {
         );
       } catch (_) {}
     }
-    emit(OrderReturnRequested(orderId: orderId));
+    emit(OrderReturnRequested(
+      orderId: orderId,
+      message: success
+          ? 'Return request submitted successfully'
+          : 'Return request saved locally. Server confirmation pending.',
+    ));
     await loadOrders();
+  }
+
+  Future<void> loadReturns() async {
+    emit(const OrderReturnsLoading());
+    try {
+      final returns = await _orderService.fetchReturns();
+      emit(OrderReturnsLoaded(returns: returns));
+    } catch (e) {
+      emit(OrderReturnsError(message: 'Failed to load returns: $e'));
+    }
   }
 
   void reset() => emit(const OrderInitial());

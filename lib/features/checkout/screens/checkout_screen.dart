@@ -234,10 +234,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           'invoiceNumber': invoice,
           'subtotal': subtotal.toInt(),
           'delivery': _deliveryFee.toInt(),
-          'productName': firstItem?.name,
-          'productQty': firstItem?.quantity,
-          'productPrice': firstItem?.price.toInt(),
-          'iconCodePoint': firstItem?.iconCodePoint,
+          'productName': firstItem?.name ?? 'SoftStore Item',
+          'productQty': firstItem?.quantity ?? 1,
+          'productPrice': firstItem?.price.toInt() ?? cartState.totalPrice.toInt(),
+          'iconCodePoint': firstItem?.iconCodePoint ?? Icons.inventory_2_outlined.codePoint,
+          'customerName': _nameCtrl.text.trim(),
+          'customerPhone': _phoneCtrl.text.trim(),
+          'customerAddress': _addressCtrl.text.trim(),
+          'customerCity': 'Lahore',
         },
       );
     }

@@ -16,6 +16,10 @@ class OrderConfirmationScreen extends StatefulWidget {
   final int? productQty;
   final int? productPrice;
   final int? iconCodePoint;
+  final String? customerName;
+  final String? customerPhone;
+  final String? customerAddress;
+  final String? customerCity;
 
   const OrderConfirmationScreen({
     super.key,
@@ -27,6 +31,10 @@ class OrderConfirmationScreen extends StatefulWidget {
     this.productQty,
     this.productPrice,
     this.iconCodePoint,
+    this.customerName,
+    this.customerPhone,
+    this.customerAddress,
+    this.customerCity,
   });
 
   @override
@@ -92,17 +100,17 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen>
           sku: 'SKU-$inv',
         ),
       ],
-      deliveryAddress: const OrderAddress(
-        name: 'Customer',
-        phone: '03408014187',
-        addressLine: 'Delivery Address',
-        city: 'Lahore',
+      deliveryAddress: OrderAddress(
+        name: widget.customerName ?? 'Customer',
+        phone: widget.customerPhone ?? '',
+        addressLine: widget.customerAddress ?? 'Delivery Address',
+        city: widget.customerCity ?? '',
       ),
       subtotal: _subtotal.toDouble(),
       deliveryFee: _delivery.toDouble(),
       discount: 0,
       storeName: 'SoftStore Official Partner',
-      storeCity: 'Lahore',
+      storeCity: widget.customerCity,
       estimatedDelivery: 'Expected in 2-3 business days',
       statusHistory: [
         OrderStatusEvent(

@@ -467,7 +467,7 @@ class OrderRepository {
     // 2. Update local storage: change status to OrderStatus.cancelled & append to timeline history
     await _markOrderCancelledLocally(cleanId, reason: reason);
 
-    return true;
+    return serverSuccess;
   }
 
   Future<void> _markOrderCancelledLocally(String orderId, {String? reason}) async {
@@ -735,8 +735,8 @@ class OrderRepository {
 
   OrderStatus _parseStatus(String text) {
     final lower = text.toLowerCase();
-    if (lower.contains('confirm') || lower.contains('processing') ||
-        lower.contains('packing')) return OrderStatus.processing;
+    if (lower.contains('confirm')) return OrderStatus.confirmed;
+    if (lower.contains('processing') || lower.contains('packing')) return OrderStatus.processing;
     if (lower.contains('ship') || lower.contains('dispatch')) return OrderStatus.shipped;
     if (lower.contains('deliver') || lower.contains('complete')) return OrderStatus.delivered;
     if (lower.contains('cancel')) return OrderStatus.cancelled;
@@ -748,6 +748,7 @@ class OrderRepository {
     if (text.isEmpty) return 0;
     final cleaned = text
         .replaceAll('PKR', '')
+        .replaceAll('Rs.', '')
         .replaceAll('Rs', '')
         .replaceAll(',', '')
         .replaceAll(' ', '');
