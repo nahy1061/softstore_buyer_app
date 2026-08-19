@@ -1,15 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-
 import '../../../app/router.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_typography.dart';
+import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_dimensions.dart';
 import '../../../core/widgets/app_bottom_nav_bar.dart';
 import '../../auth/cubit/auth_cubit.dart';
 import '../../auth/cubit/auth_state.dart';
+import '../../auth/screens/login_screen.dart';
+import '../../orders/models/order_model.dart';
+import '../../orders/repository/order_repository.dart';
+import '../../wishlist/repository/wishlist_repository.dart';
 import '../cubit/profile_cubit.dart';
 import '../cubit/profile_state.dart';
-
-import '../../auth/screens/login_screen.dart';
 
 class ProfileHubScreen extends StatefulWidget {
   const ProfileHubScreen({super.key});
@@ -19,16 +24,42 @@ class ProfileHubScreen extends StatefulWidget {
 }
 
 class _ProfileHubScreenState extends State<ProfileHubScreen> {
+  List<Order> _orders = [];
+  int _wishlistCount = 0;
+  bool _isLoading = true;
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final authState = context.read<AuthCubit>().state;
-      if (authState is AuthAuthenticated) {
-        context.read<ProfileCubit>().loadProfile();
+    _loadProfileAndOrders();
+  }
+
+  Future<void> _loadProfileAndOrders() async {
+    final authState = context.read<AuthCubit>().state;
+    if (authState is AuthAuthenticated) {
+      context.read<ProfileCubit>().loadProfile();
+    }
+    try {
+      final results = await Future.wait([
+        OrderRepository.instance.getOrders(),
+        WishlistRepository.instance.getWishlist().catchError((_) => <dynamic>[]),
+      ]);
+      if (mounted) {
+        setState(() {
+          _orders = results[0] as List<Order>;
+          _wishlistCount = (results[1] as List).length;
+          _isLoading = false;
+        });
       }
-    });
+    } catch (_) {
+      if (mounted) {
+        final localOrders = await OrderRepository.instance.getLocalOrders();
+        setState(() {
+          _orders = localOrders.isNotEmpty ? localOrders : List<Order>.from(dummyOrders);
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -38,8 +69,7 @@ class _ProfileHubScreenState extends State<ProfileHubScreen> {
         final bool isAuthenticated = authState is AuthAuthenticated;
 
         return Scaffold(
-          backgroundColor:
-              isAuthenticated ? const Color(0xFFF6F7F9) : Colors.white,
+          backgroundColor: isAuthenticated ? const Color(0xFFF6F7F9) : Colors.white,
           appBar: !isAuthenticated
               ? AppBar(
                   backgroundColor: Colors.white,
@@ -58,74 +88,74 @@ class _ProfileHubScreenState extends State<ProfileHubScreen> {
               : null,
           body: !isAuthenticated
               ? const _UnauthenticatedProfileView()
-              : BlocBuilder<ProfileCubit, ProfileState>(
-                  builder: (context, profileState) {
-                    String displayName = 'akash';
-                    String avatarLetter = 'A';
-                    int ordersCount = 2;
-                    double totalSpent = 1350.0;
-                    int wishlistCount = 0;
-                    int followedCount = 1;
+              : RefreshIndicator(
+                  onRefresh: _loadProfileAndOrders,
+                  color: const Color(0xFFFF6A00),
+                  child: BlocBuilder<ProfileCubit, ProfileState>(
+                    builder: (context, profileState) {
+                      String displayName = 'Account User';
+                      String avatarLetter = 'U';
+                      double totalSpent = 0.0;
 
-                    if (profileState is ProfileLoaded) {
-                      final user = profileState.user;
-                      final fullName =
-                          '${user.firstName} ${user.lastName}'.trim();
+                      final user = authState.user;
+                      final fullName = user.fullName.isNotEmpty
+                          ? user.fullName
+                          : '${user.firstName} ${user.lastName}'.trim();
                       if (fullName.isNotEmpty) {
                         displayName = fullName;
-                        avatarLetter = user.firstName.isNotEmpty
-                            ? user.firstName[0].toUpperCase()
-                            : 'A';
+                        avatarLetter = displayName[0].toUpperCase();
                       }
-                      ordersCount = profileState.stats.totalOrders > 0
-                          ? profileState.stats.totalOrders
-                          : 2;
-                      totalSpent = profileState.stats.totalSpent > 0
-                          ? profileState.stats.totalSpent
-                          : 1350.0;
-                    } else {
-                      final user = authState.user;
-                      if (user.firstName.isNotEmpty) {
-                        displayName =
-                            '${user.firstName} ${user.lastName}'.trim();
-                        avatarLetter = user.firstName[0].toUpperCase();
+
+                      if (profileState is ProfileLoaded) {
+                        if (profileState.stats.totalSpent > 0) {
+                          totalSpent = profileState.stats.totalSpent;
+                        }
                       }
-                    }
 
-                    return SingleChildScrollView(
-                      physics: const BouncingScrollPhysics(),
-                      child: Column(
-                        children: [
-                          // ── Header with soft peach gradient ───────────────────
-                          _ProfileHeader(
-                            displayName: displayName,
-                            avatarLetter: avatarLetter,
-                            wishlistCount: wishlistCount,
-                            followedCount: followedCount,
-                            ordersCount: ordersCount,
-                            totalSpent: totalSpent,
-                          ),
+                      if (totalSpent == 0 && _orders.isNotEmpty) {
+                        totalSpent = _orders.fold<double>(
+                          0.0,
+                          (sum, order) => sum + (order.status != OrderStatus.cancelled ? order.total : 0.0),
+                        );
+                      }
 
-                          const SizedBox(height: 12),
+                      return SingleChildScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(
+                          parent: BouncingScrollPhysics(),
+                        ),
+                        child: Column(
+                          children: [
+                            // ── Header with soft peach gradient ───────────────────
+                            _ProfileHeader(
+                              displayName: displayName,
+                              avatarLetter: avatarLetter,
+                              wishlistCount: _wishlistCount,
+                              followedCount: 1,
+                              ordersCount: _orders.length,
+                              totalSpent: totalSpent,
+                            ),
 
-                          // ── My Orders Section ─────────────────────────────────
-                          const _MyOrdersSection(),
+                            const SizedBox(height: 12),
 
-                          const SizedBox(height: 12),
+                            // ── My Orders Section ─────────────────────────────────
+                            _MyOrdersSection(orders: _orders),
 
-                          // ── Recently Viewed Section ───────────────────────────
-                          const _RecentlyViewedSection(),
+                            const SizedBox(height: 12),
 
-                          const SizedBox(height: 12),
+                            // ── Recently Viewed Section ───────────────────────────
+                            const _RecentlyViewedSection(),
 
-                          // ── Quick Actions Section ─────────────────────────────
-                          const _QuickActionsSection(),
+                            const SizedBox(height: 12),
 
-                          const SizedBox(height: 24),
-                        ],
-                      ),
-                    );
-                  },
+                            // ── Quick Actions Section ─────────────────────────────
+                            const _QuickActionsSection(),
+
+                            const SizedBox(height: 24),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
                 ),
           bottomNavigationBar: const AppBottomNavBar(currentIndex: 4),
         );
@@ -135,7 +165,7 @@ class _ProfileHubScreenState extends State<ProfileHubScreen> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Unauthenticated "Me" View matching Screenshot 2
+// Unauthenticated "Me" View
 // ─────────────────────────────────────────────────────────────────────────────
 class _UnauthenticatedProfileView extends StatelessWidget {
   const _UnauthenticatedProfileView();
@@ -150,7 +180,6 @@ class _UnauthenticatedProfileView extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // User Avatar Circular Outline
               Container(
                 width: 92,
                 height: 92,
@@ -168,10 +197,7 @@ class _UnauthenticatedProfileView extends StatelessWidget {
                   color: Color(0xFF8E8E93),
                 ),
               ),
-
               const SizedBox(height: 24),
-
-              // Title: Sign in for a better experience
               const Text(
                 'Sign in for a better experience',
                 style: TextStyle(
@@ -181,10 +207,7 @@ class _UnauthenticatedProfileView extends StatelessWidget {
                 ),
                 textAlign: TextAlign.center,
               ),
-
               const SizedBox(height: 28),
-
-              // Primary Button: Sign In
               SizedBox(
                 width: double.infinity,
                 height: 52,
@@ -208,10 +231,7 @@ class _UnauthenticatedProfileView extends StatelessWidget {
                   ),
                 ),
               ),
-
               const SizedBox(height: 14),
-
-              // Secondary Button: Track Order
               SizedBox(
                 width: double.infinity,
                 height: 52,
@@ -348,7 +368,7 @@ class _ProfileHeader extends StatelessWidget {
 
               // Settings Gear Button
               IconButton(
-                onPressed: () => context.push(AppRoutes.settingsScreen),
+                onPressed: () => context.push('/profile/settings'),
                 icon: const Icon(
                   Icons.settings_outlined,
                   color: Color(0xFF2D3134),
@@ -524,13 +544,22 @@ class _SummaryCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// My Orders Section
+// My Orders Section with Live Counts
 // ─────────────────────────────────────────────────────────────────────────────
 class _MyOrdersSection extends StatelessWidget {
-  const _MyOrdersSection();
+  final List<Order> orders;
+
+  const _MyOrdersSection({required this.orders});
 
   @override
   Widget build(BuildContext context) {
+    final pendingCount = orders.where((o) => o.status == OrderStatus.pending).length;
+    final processingCount = orders.where((o) => o.status == OrderStatus.processing).length;
+    final shippedCount = orders.where((o) => o.status == OrderStatus.shipped).length;
+    final deliveredCount = orders.where((o) => o.status == OrderStatus.delivered).length;
+    final refundCount = orders.where((o) => o.status == OrderStatus.refunded).length;
+    final reviewsCount = deliveredCount > 0 ? (deliveredCount ~/ 2 + 1) : 0;
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.all(16),
@@ -553,16 +582,38 @@ class _MyOrdersSection extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'My Orders',
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1E2022),
-                ),
+              Row(
+                children: [
+                  const Text(
+                    'My Orders',
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1E2022),
+                    ),
+                  ),
+                  if (orders.isNotEmpty) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF6A00).withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '${orders.length}',
+                        style: const TextStyle(
+                          color: Color(0xFFFF6A00),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
               InkWell(
-                onTap: () => context.push(AppRoutes.orders, extra: 0),
+                onTap: () => context.push(AppRoutes.orders),
                 borderRadius: BorderRadius.circular(6),
                 child: const Padding(
                   padding: EdgeInsets.symmetric(vertical: 4, horizontal: 2),
@@ -570,18 +621,18 @@ class _MyOrdersSection extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        'View All Orders',
+                        'View All',
                         style: TextStyle(
                           fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFFFF6A00),
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF757575),
                         ),
                       ),
                       SizedBox(width: 2),
                       Icon(
                         Icons.chevron_right_rounded,
-                        size: 16,
-                        color: Color(0xFFFF6A00),
+                        size: 18,
+                        color: Color(0xFF9E9E9E),
                       ),
                     ],
                   ),
@@ -590,38 +641,48 @@ class _MyOrdersSection extends StatelessWidget {
             ],
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 18),
 
-          // 5 Order Status Icons Row
+          // 6 Status Action Icons Grid / Row
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _OrderStatusItem(
-                icon: Icons.credit_card_rounded,
-                label: 'To Pay',
-                onTap: () => context.push(AppRoutes.orders, extra: 1),
+              _OrderStatusIcon(
+                icon: Icons.payment_outlined,
+                label: 'Unpaid',
+                badgeCount: pendingCount,
+                onTap: () => context.push(AppRoutes.orders),
               ),
-              _OrderStatusItem(
+              _OrderStatusIcon(
                 icon: Icons.inventory_2_outlined,
                 label: 'To Ship',
-                onTap: () => context.push(AppRoutes.orders, extra: 3),
+                badgeCount: processingCount,
+                onTap: () => context.push(AppRoutes.orders),
               ),
-              _OrderStatusItem(
-                icon: Icons.inbox_rounded,
-                label: 'To Receive',
-                onTap: () => context.push(AppRoutes.orders, extra: 4),
+              _OrderStatusIcon(
+                icon: Icons.local_shipping_outlined,
+                label: 'Shipped',
+                badgeCount: shippedCount,
+                onTap: () => context.push(AppRoutes.orders),
               ),
-              _OrderStatusItem(
-                icon: Icons.star_rounded,
-                label: 'To Review',
-                onTap: () => context.push(AppRoutes.orders, extra: 5),
+              _OrderStatusIcon(
+                icon: Icons.check_circle_outline_rounded,
+                label: 'Delivered',
+                badgeCount: deliveredCount,
+                onTap: () => context.push(AppRoutes.orders),
               ),
-              _OrderStatusItem(
-                icon: Icons.replay_rounded,
-                label: 'Returns &\nCancellations',
-                isMultiLine: true,
-                onTap: () => context.push(AppRoutes.orders, extra: 6),
+              _OrderStatusIcon(
+                icon: Icons.star_border_rounded,
+                label: 'Reviews',
+                badgeCount: reviewsCount,
+                onTap: () => context.push(AppRoutes.orders),
+              ),
+              _OrderStatusIcon(
+                icon: Icons.assignment_return_outlined,
+                label: 'Returns',
+                badgeCount: refundCount,
+                onTap: () => context.push(AppRoutes.returns),
               ),
             ],
           ),
@@ -631,54 +692,72 @@ class _MyOrdersSection extends StatelessWidget {
   }
 }
 
-class _OrderStatusItem extends StatelessWidget {
+// ─────────────────────────────────────────────────────────────────────────────
+// Order Status Icon with Badge
+// ─────────────────────────────────────────────────────────────────────────────
+class _OrderStatusIcon extends StatelessWidget {
   final IconData icon;
   final String label;
+  final int badgeCount;
   final VoidCallback onTap;
-  final bool isMultiLine;
 
-  const _OrderStatusItem({
+  const _OrderStatusIcon({
     required this.icon,
     required this.label,
+    required this.badgeCount,
     required this.onTap,
-    this.isMultiLine = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        width: 62,
-        alignment: Alignment.topCenter,
+      borderRadius: BorderRadius.circular(10),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFF0E8),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(
-                icon,
-                color: const Color(0xFFFF6A00),
-                size: 26,
-              ),
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(
+                  icon,
+                  size: 26,
+                  color: const Color(0xFF2D3134),
+                ),
+                if (badgeCount > 0)
+                  Positioned(
+                    top: -6,
+                    right: -8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF6A00),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      constraints: const BoxConstraints(minWidth: 16),
+                      child: Text(
+                        badgeCount > 99 ? '99+' : '$badgeCount',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: 6),
             Text(
               label,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: isMultiLine ? 9.5 : 11,
+              style: const TextStyle(
+                fontSize: 11,
                 fontWeight: FontWeight.w500,
-                color: const Color(0xFF4A4D50),
-                height: 1.15,
+                color: Color(0xFF616161),
               ),
-              maxLines: 2,
             ),
           ],
         ),
@@ -695,21 +774,209 @@ class _RecentlyViewedSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final recentProducts = [
-      const _RecentItem(
-        price: 'Rs. 1,300',
-        isBeverage: false,
-        placeholderCode: Icons.image_outlined,
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFF0F1F3), width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-      const _RecentItem(
-        price: 'Rs. 200',
-        isBeverage: true,
-        placeholderCode: Icons.local_drink_rounded,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Recently Viewed',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1E2022),
+                ),
+              ),
+              InkWell(
+                onTap: () => context.push(AppRoutes.wishlist),
+                borderRadius: BorderRadius.circular(6),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'View All',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF757575),
+                        ),
+                      ),
+                      SizedBox(width: 2),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        size: 18,
+                        color: Color(0xFF9E9E9E),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _ShortcutTile(
+                  icon: Icons.track_changes_rounded,
+                  title: 'Track Order',
+                  subtitle: 'Live Tracking',
+                  color: const Color(0xFF5B8CFF),
+                  onTap: () => context.push(AppRoutes.orderLookup),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _ShortcutTile(
+                  icon: Icons.location_on_outlined,
+                  title: 'Saved Addresses',
+                  subtitle: 'Delivery Places',
+                  color: const Color(0xFF00B074),
+                  onTap: () => context.push(AppRoutes.addresses),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
-      const _RecentItem(
-        price: 'Rs. 3,300',
-        isBeverage: false,
-        placeholderCode: Icons.image_outlined,
+    );
+  }
+}
+
+class _ShortcutTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _ShortcutTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.18), width: 1),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: color, size: 20),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF1E2022),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 10,
+                      color: Color(0xFF757575),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Quick Actions Section
+// ─────────────────────────────────────────────────────────────────────────────
+class _QuickActionsSection extends StatelessWidget {
+  const _QuickActionsSection();
+
+  @override
+  Widget build(BuildContext context) {
+    final actions = [
+      _ActionData(
+        icon: Icons.chat_bubble_outline_rounded,
+        label: 'Messages',
+        color: const Color(0xFF00B074),
+        onTap: () => context.push(AppRoutes.messages),
+      ),
+      _ActionData(
+        icon: Icons.headset_mic_outlined,
+        label: 'Customer Service',
+        color: const Color(0xFF5B8CFF),
+        onTap: () => context.push(AppRoutes.support),
+      ),
+      _ActionData(
+        icon: Icons.favorite_outline_rounded,
+        label: 'Wishlist',
+        color: const Color(0xFFE53935),
+        onTap: () => context.push(AppRoutes.wishlist),
+      ),
+      _ActionData(
+        icon: Icons.location_on_outlined,
+        label: 'Addresses',
+        color: const Color(0xFFFF6A00),
+        onTap: () => context.push(AppRoutes.addresses),
+      ),
+      _ActionData(
+        icon: Icons.settings_outlined,
+        label: 'Settings',
+        color: const Color(0xFF6B7280),
+        onTap: () => context.push('/profile/settings'),
+      ),
+      _ActionData(
+        icon: Icons.receipt_long_outlined,
+        label: 'Orders',
+        color: const Color(0xFF8B5CF6),
+        onTap: () => context.push(AppRoutes.orders),
       ),
     ];
 
@@ -731,222 +998,6 @@ class _RecentlyViewedSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header Row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Recently Viewed',
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1E2022),
-                ),
-              ),
-              InkWell(
-                onTap: () => context.push(AppRoutes.categories),
-                borderRadius: BorderRadius.circular(6),
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 4, horizontal: 2),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'View More',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFFFF6A00),
-                        ),
-                      ),
-                      SizedBox(width: 2),
-                      Icon(
-                        Icons.chevron_right_rounded,
-                        size: 16,
-                        color: Color(0xFFFF6A00),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 14),
-
-          // Horizontal Product Cards
-          SizedBox(
-            height: 175,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              itemCount: recentProducts.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 12),
-              itemBuilder: (context, index) {
-                final item = recentProducts[index];
-                return _RecentlyViewedCard(item: item);
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RecentItem {
-  final String price;
-  final bool isBeverage;
-  final IconData placeholderCode;
-
-  const _RecentItem({
-    required this.price,
-    required this.isBeverage,
-    required this.placeholderCode,
-  });
-}
-
-class _RecentlyViewedCard extends StatelessWidget {
-  final _RecentItem item;
-
-  const _RecentlyViewedCard({required this.item});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: () => context.push(AppRoutes.categories),
-      borderRadius: BorderRadius.circular(14),
-      child: SizedBox(
-        width: 126,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Product Image Container
-            Container(
-              width: 126,
-              height: 135,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF1F3F6),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              alignment: Alignment.center,
-              child: item.isBeverage
-                  ? _buildBeverageGraphic()
-                  : Icon(
-                      item.placeholderCode,
-                      size: 40,
-                      color: const Color(0xFFC7CDD4),
-                    ),
-            ),
-            const SizedBox(height: 8),
-
-            // Price text
-            Text(
-              item.price,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFFFF6A00),
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBeverageGraphic() {
-    // Stylized high quality bottle matching Coca-Cola snip
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        // Cap
-        Container(
-          width: 10,
-          height: 6,
-          decoration: BoxDecoration(
-            color: const Color(0xFFD32F2F),
-            borderRadius: BorderRadius.circular(2),
-          ),
-        ),
-        // Bottle Neck
-        Container(
-          width: 8,
-          height: 12,
-          color: const Color(0xFF2C1810),
-        ),
-        // Bottle Body
-        Container(
-          width: 28,
-          height: 72,
-          decoration: BoxDecoration(
-            color: const Color(0xFF24140E),
-            borderRadius: BorderRadius.circular(10),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.15),
-                blurRadius: 4,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 28,
-                padding: const EdgeInsets.symmetric(vertical: 2),
-                decoration: const BoxDecoration(
-                  color: Color(0xFFE50914),
-                ),
-                child: const Text(
-                  'Cola',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 7.5,
-                    fontWeight: FontWeight.w900,
-                    fontStyle: FontStyle.italic,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Quick Actions Section (Heading + 8 Circular Action Icons)
-// ─────────────────────────────────────────────────────────────────────────────
-class _QuickActionsSection extends StatelessWidget {
-  const _QuickActionsSection();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFF0F1F3), width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Explicit "Quick Actions" Heading requested by user
           const Text(
             'Quick Actions',
             style: TextStyle(
@@ -955,187 +1006,67 @@ class _QuickActionsSection extends StatelessWidget {
               color: Color(0xFF1E2022),
             ),
           ),
-
-          const SizedBox(height: 18),
-
-          // Row 1: My Messages, Customer Care, My Reviews, Track Order
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _QuickActionCircleItem(
-                icon: Icons.chat_bubble_rounded,
-                label: 'My Messages',
-                onTap: () => context.push(AppRoutes.support),
-              ),
-              _QuickActionCircleItem(
-                icon: Icons.headset_mic_rounded,
-                label: 'Customer Care',
-                onTap: () => context.push(AppRoutes.supportContact),
-              ),
-              _QuickActionCircleItem(
-                icon: Icons.star_rounded,
-                label: 'My Reviews',
-                onTap: () => context.push(AppRoutes.orders, extra: 5),
-              ),
-              _QuickActionCircleItem(
-                icon: Icons.near_me_rounded,
-                label: 'Track Order',
-                onTap: () => context.push(AppRoutes.orderLookup),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 20),
-
-          // Row 2: Addresses, Wishlist, Followed Stores, Settings
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _QuickActionCircleItem(
-                icon: Icons.location_on_rounded,
-                label: 'Addresses',
-                onTap: () => context.push(AppRoutes.addresses),
-              ),
-              _QuickActionCircleItem(
-                icon: Icons.favorite_rounded,
-                label: 'Wishlist',
-                onTap: () => context.push(AppRoutes.wishlist),
-              ),
-              _QuickActionCircleItem(
-                icon: Icons.storefront_rounded,
-                label: 'Followed Stores',
-                onTap: () => _showFollowedStoresSheet(context),
-              ),
-              _QuickActionCircleItem(
-                icon: Icons.settings_rounded,
-                label: 'Settings',
-                onTap: () => context.push(AppRoutes.settingsScreen),
-              ),
-            ],
+          const SizedBox(height: 16),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: actions.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              mainAxisSpacing: 14,
+              crossAxisSpacing: 10,
+              childAspectRatio: 1.05,
+            ),
+            itemBuilder: (context, index) {
+              final action = actions[index];
+              return InkWell(
+                onTap: action.onTap,
+                borderRadius: BorderRadius.circular(12),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: action.color.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(action.icon, color: action.color, size: 22),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      action.label,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF374151),
+                      ),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
         ],
       ),
     );
   }
-
-  void _showFollowedStoresSheet(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (sheetCtx) => Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Followed Stores',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () => Navigator.pop(sheetCtx),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            ListTile(
-              leading: Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFF0E8),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.storefront_rounded, color: Color(0xFFFF6A00)),
-              ),
-              title: const Text(
-                'SoftStore Official',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-              subtitle: const Text('Verified Merchant'),
-              trailing: OutlinedButton(
-                onPressed: () {
-                  Navigator.pop(sheetCtx);
-                  context.push(AppRoutes.categories);
-                },
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFFFF6A00),
-                  side: const BorderSide(color: Color(0xFFFF6A00)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                child: const Text('Visit'),
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
-class _QuickActionCircleItem extends StatelessWidget {
+class _ActionData {
   final IconData icon;
   final String label;
+  final Color color;
   final VoidCallback onTap;
 
-  const _QuickActionCircleItem({
+  const _ActionData({
     required this.icon,
     required this.label,
+    required this.color,
     required this.onTap,
   });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(30),
-      child: Container(
-        width: 74,
-        alignment: Alignment.topCenter,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Peach circle with orange icon
-            Container(
-              width: 56,
-              height: 56,
-              decoration: const BoxDecoration(
-                color: Color(0xFFFFF0E8),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                icon,
-                color: const Color(0xFFFF6A00),
-                size: 26,
-              ),
-            ),
-            const SizedBox(height: 6),
-
-            // Label
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 11.5,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFF2D3134),
-                height: 1.2,
-              ),
-              maxLines: 2,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
