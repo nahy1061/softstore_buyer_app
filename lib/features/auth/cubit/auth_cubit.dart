@@ -1,5 +1,4 @@
-import 'dart:developer' as developer;
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/errors/failures.dart';
@@ -24,13 +23,13 @@ class AuthCubit extends Cubit<AuthState> {
     try {
       final user = await _repo.restoreSession();
       if (user != null) {
-        developer.log('[AuthCubit] Session restored: ${user.email}', name: 'auth');
+        debugPrint('[AuthCubit] Session restored: ${user.email}');
         emit(AuthAuthenticated(user));
       } else {
         emit(const AuthUnauthenticated());
       }
     } catch (e) {
-      developer.log('[AuthCubit] Session restore failed: $e', name: 'auth');
+      debugPrint('[AuthCubit] Session restore failed: $e');
       emit(const AuthUnauthenticated());
     }
   }
@@ -40,7 +39,7 @@ class AuthCubit extends Cubit<AuthState> {
   Future<void> login({
     required String email,
     required String password,
-    required String recaptchaToken,
+    String recaptchaToken = '',
   }) async {
     emit(const AuthLoading());
     try {
@@ -67,10 +66,12 @@ class AuthCubit extends Cubit<AuthState> {
     required String password,
     String? lastName,
     String? phone,
-    required String recaptchaToken,
+    String recaptchaToken = '',
   }) async {
+    debugPrint('[AuthCubit] Register attempt: email=$email');
     emit(const AuthLoading());
     try {
+      debugPrint('[AuthCubit] Captcha token length: ${recaptchaToken.length}');
       final user = await _repo.register(
         firstName: firstName,
         email: email,
@@ -79,12 +80,16 @@ class AuthCubit extends Cubit<AuthState> {
         phone: phone,
         recaptchaToken: recaptchaToken,
       );
+      debugPrint('[AuthCubit] Register SUCCESS: ${user.email}');
       emit(AuthAuthenticated(user));
     } on AuthFailure catch (e) {
+      debugPrint('[AuthCubit] Register AuthFailure: ${e.message}');
       emit(AuthError(e.message));
     } on NetworkFailure catch (e) {
+      debugPrint('[AuthCubit] Register NetworkFailure: ${e.message}');
       emit(AuthError(e.message));
     } catch (e) {
+      debugPrint('[AuthCubit] Register unexpected error: $e');
       emit(AuthError(e.toString()));
     }
   }

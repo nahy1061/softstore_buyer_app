@@ -1,5 +1,5 @@
 import 'dart:developer' as developer;
-
+import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 
 import '../../../core/config/env_config.dart';
@@ -100,14 +100,24 @@ class AuthRepository {
           );
         }
 
-        // Case B: Check if session was successfully established
+        // Case B: 302 back to /login = validation error (wrong creds, captcha, etc.)
+        if (status == 302 && location.contains('/login')) {
+          final errorPage = await _fetchRedirectPage(location);
+          if (errorPage != null) {
+            final error = HtmlParserUtil.extractFormError(errorPage);
+            throw AuthFailure(error ?? 'Invalid email or password. Please verify your credentials.');
+          }
+          throw const AuthFailure('Invalid email or password. Please verify your credentials.');
+        }
+
+        // Case C: Check if session was successfully established
         final userAfterLogin = await restoreSession();
         if (userAfterLogin != null && userAfterLogin.email.isNotEmpty) {
           _csrf.clearAll();
           return userAfterLogin;
         }
 
-        // Case C: Surface server form error from HTML response
+        // Case D: Surface server form error from HTML response
         if (rawData is String && rawData.isNotEmpty) {
           final error = HtmlParserUtil.extractFormError(rawData);
           if (error != null && !error.toLowerCase().contains('captcha')) {
@@ -234,7 +244,14 @@ class AuthRepository {
       final location = response.headers.value('location') ?? '';
       final rawData = response.data;
 
+      debugPrint('[Auth] Register response: status=$status, location=$location');
+      if (rawData is String) {
+        debugPrint('[Auth] Register response body (first 500 chars): ${rawData.substring(0, rawData.length > 500 ? 500 : rawData.length)}');
+      }
+
+      // 302 to success (not /login or /register) = registration succeeded
       if (status == 302 && !location.contains('/login') && !location.contains('/register')) {
+        debugPrint('[Auth] Register SUCCESS - redirected to: $location');
         _csrf.clearAll();
         final user = await restoreSession();
         if (user != null) return user;
@@ -246,12 +263,27 @@ class AuthRepository {
         );
       }
 
+      // 302 back to /register = validation error (captcha, duplicate email, etc.)
+      if (status == 302 && location.contains('/register')) {
+        debugPrint('[Auth] Register FAILED - redirected back to /register');
+        final errorPage = await _fetchRedirectPage(location);
+        if (errorPage != null) {
+          debugPrint('[Auth] Error page (first 500 chars): ${errorPage.substring(0, errorPage.length > 500 ? 500 : errorPage.length)}');
+          final error = HtmlParserUtil.extractFormError(errorPage);
+          debugPrint('[Auth] Extracted error: $error');
+          throw AuthFailure(error ?? 'Registration failed. Please check your information and try again.');
+        }
+        throw const AuthFailure('Registration failed. Please check your information and try again.');
+      }
+
+      // Check if session was established (some servers 200 with auto-login)
       final userAfterReg = await restoreSession();
       if (userAfterReg != null && userAfterReg.email.isNotEmpty) {
         _csrf.clearAll();
         return userAfterReg;
       }
 
+      // Try to extract error from response body
       if (rawData is String && rawData.isNotEmpty) {
         final error = HtmlParserUtil.extractFormError(rawData);
         throw AuthFailure(error ?? 'Registration failed. Please check the entered information.');
@@ -290,7 +322,7 @@ class AuthRepository {
       );
     } catch (e) {
       // Log but do not throw — client-side cleanup still happens
-      developer.log('[Auth] Logout request failed: $e', name: 'auth');
+      debugPrint('[Auth] Logout request failed: $e');
     } finally {
       _csrf.clearAll();
     }
@@ -338,7 +370,7 @@ class AuthRepository {
 
       return null;
     } catch (e) {
-      developer.log('[Auth] restoreSession error: $e', name: 'auth');
+      debugPrint('[Auth] restoreSession error: $e');
       return null;
     }
   }
@@ -388,6 +420,29 @@ class AuthRepository {
 
   // ─── Parsing ──────────────────────────────────────────────────────────────
 
+  /// Follows a redirect URL and returns the HTML body.
+  ///
+  /// Used to extract error messages from flash-message pages
+  /// (e.g., 302 back to /register with validation errors).
+  Future<String?> _fetchRedirectPage(String location) async {
+    try {
+      final redirectUrl = location.startsWith('http')
+          ? location
+          : '${_client.dio.options.baseUrl}$location';
+      final response = await _client.get<String>(
+        redirectUrl,
+        options: Options(
+          responseType: ResponseType.plain,
+          validateStatus: (s) => s != null && s < 500,
+        ),
+      );
+      return response.data;
+    } catch (e) {
+      debugPrint('[Auth] Failed to fetch redirect page: $e');
+      return null;
+    }
+  }
+
   /// Extracts [User] data from the profile page HTML.
   ///
   /// The profile page has a form with named inputs for each field.
@@ -413,7 +468,7 @@ class AuthRepository {
   // ─── Error Handling ───────────────────────────────────────────────────────
 
   Never _handleDioError(DioException e) {
-    developer.log('[Auth] DioException: ${e.message}', name: 'auth');
+    debugPrint('[Auth] DioException: ${e.message}');
 
     if (e.type == DioExceptionType.connectionTimeout ||
         e.type == DioExceptionType.receiveTimeout ||

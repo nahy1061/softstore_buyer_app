@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -143,7 +144,9 @@ class _LoginScreenState extends State<LoginScreen> {
       children: [
         BlocListener<AuthCubit, AuthState>(
           listener: (context, state) {
+            debugPrint('[LoginScreen] BlocListener fired: ${state.runtimeType}');
             if (state is AuthAuthenticated) {
+              debugPrint('[LoginScreen] Authenticated!');
               if (widget.isModal) {
                 Navigator.of(context).pop(true);
               } else {
@@ -154,11 +157,18 @@ class _LoginScreenState extends State<LoginScreen> {
                 }
               }
             } else if (state is AuthError) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
+              debugPrint('[LoginScreen] AuthError: ${state.message}');
+              showDialog(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('Login Failed'),
                   content: Text(state.message),
-                  backgroundColor: AppColors.error,
-                  behavior: SnackBarBehavior.floating,
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(ctx).pop(),
+                      child: const Text('OK', style: TextStyle(color: Color(0xFFFF6A00))),
+                    ),
+                  ],
                 ),
               );
             }
