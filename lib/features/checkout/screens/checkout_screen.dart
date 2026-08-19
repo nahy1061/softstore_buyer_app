@@ -226,6 +226,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     await _orderRepo.saveLocalOrder(placedOrder);
 
     if (mounted) {
+      final firstItem = cartState.items.isNotEmpty ? cartState.items.first : null;
       context.read<CartCubit>().clearCart();
       context.go(
         '/order-confirmation/$invoice',

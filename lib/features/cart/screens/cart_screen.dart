@@ -2386,11 +2386,11 @@ Future<void> _processOrderPlacement({
       '/order-confirmation/$finalInvoice',
       extra: {
         'invoiceNumber': finalInvoice,
-        'subtotal': cartState.totalPrice,
+        'subtotal': cartState.totalPrice.toInt(),
         'delivery': shippingFee,
         'productName': firstItem?.name ?? 'Marketplace Item',
         'productQty': firstItem?.quantity ?? 1,
-        'productPrice': firstItem?.unitPrice.toInt() ?? cartState.totalPrice,
+        'productPrice': firstItem?.unitPrice.toInt() ?? cartState.totalPrice.toInt(),
         'iconCodePoint': Icons.inventory_2_outlined.codePoint,
       },
     );

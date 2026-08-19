@@ -13,6 +13,7 @@ import '../../../core/widgets/app_bottom_nav_bar.dart';
 
 class OrdersScreen extends StatefulWidget {
   final int initialTab;
+
   const OrdersScreen({super.key, this.initialTab = 0});
 
   @override
@@ -30,12 +31,13 @@ class _OrdersScreenState extends State<OrdersScreen> {
     'Shipped',
     'Delivered',
     'Cancelled',
+    'Returns',
   ];
 
   @override
   void initState() {
     super.initState();
-    _selectedTab = widget.initialTab;
+    _selectedTab = widget.initialTab.clamp(0, _tabs.length - 1);
     context.read<OrderCubit>().loadOrders();
   }
 
@@ -165,9 +167,11 @@ class _OrdersScreenState extends State<OrdersScreen> {
                     displayOrders = filtered;
                   } else if (tabName == 'cancelled') {
                     displayOrders = filtered
-                        .where((o) =>
-                            o.status == OrderStatus.cancelled ||
-                            o.status == OrderStatus.refunded)
+                        .where((o) => o.status == OrderStatus.cancelled)
+                        .toList();
+                  } else if (tabName == 'returns') {
+                    displayOrders = filtered
+                        .where((o) => o.status == OrderStatus.refunded)
                         .toList();
                   } else {
                     final statusFilter = OrderStatus.values.firstWhere(

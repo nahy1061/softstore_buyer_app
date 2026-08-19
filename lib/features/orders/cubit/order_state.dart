@@ -193,6 +193,23 @@ class OrderCancelled extends OrderState {
   List<Object?> get props => [orderId];
 }
 
+class OrderReturning extends OrderState {
+  const OrderReturning();
+}
+
+class OrderReturnRequested extends OrderState {
+  final String orderId;
+  final String message;
+
+  const OrderReturnRequested({
+    required this.orderId,
+    this.message = 'Return request submitted successfully',
+  });
+
+  @override
+  List<Object?> get props => [orderId, message];
+}
+
 class OrderError extends OrderState {
   final String message;
 
