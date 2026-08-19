@@ -43,21 +43,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         if (state is OrderCancelled) {
           // Update order status to cancelled
           setState(() {
-            currentOrder = Order(
-              id: currentOrder.id,
-              referenceNumber: currentOrder.referenceNumber,
-              placedAt: currentOrder.placedAt,
+            currentOrder = currentOrder.copyWith(
               status: OrderStatus.cancelled,
-              items: currentOrder.items,
-              deliveryAddress: currentOrder.deliveryAddress,
-              subtotal: currentOrder.subtotal,
-              deliveryFee: currentOrder.deliveryFee,
-              discount: currentOrder.discount,
-              storeName: currentOrder.storeName,
-              storeCity: currentOrder.storeCity,
-              storeContact: currentOrder.storeContact,
-              estimatedDelivery: currentOrder.estimatedDelivery,
-              statusHistory: currentOrder.statusHistory,
+              statusHistory: [
+                ...currentOrder.statusHistory
+                    .where((e) => e.status != OrderStatus.cancelled),
+                OrderStatusEvent(
+                  status: OrderStatus.cancelled,
+                  timestamp: DateTime.now(),
+                  note: 'Cancelled by customer',
+                ),
+              ],
             );
           });
 
@@ -75,6 +71,30 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             context.read<OrderCubit>().loadOrders();
             context.go('/orders');
           });
+        }
+        if (state is OrderReturnRequested) {
+          setState(() {
+            currentOrder = currentOrder.copyWith(
+              status: OrderStatus.refunded,
+              statusHistory: [
+                ...currentOrder.statusHistory,
+                OrderStatusEvent(
+                  status: OrderStatus.refunded,
+                  timestamp: DateTime.now(),
+                  note: 'Return requested by customer',
+                ),
+              ],
+            );
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                  'Return request submitted successfully. Our support team will contact you shortly.'),
+              backgroundColor: AppColors.primary,
+              duration: Duration(seconds: 3),
+            ),
+          );
         }
         if (state is OrderError) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -747,14 +767,7 @@ class _ActionButtons extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.md),
           OutlinedButton.icon(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Return initiated...'),
-                  duration: Duration(seconds: 2),
-                ),
-              );
-            },
+            onPressed: () => _showReturnRequestDialog(context),
             icon: const Icon(Icons.assignment_return_rounded, size: 18),
             label: const Text('Request Return'),
             style: OutlinedButton.styleFrom(
@@ -776,6 +789,16 @@ class _ActionButtons extends StatelessWidget {
       context: context,
       builder: (ctx) => _OrderCancellationReasonDialog(
         orderId: order.id,
+        parentContext: context,
+      ),
+    );
+  }
+
+  void _showReturnRequestDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => _OrderReturnRequestDialog(
+        order: order,
         parentContext: context,
       ),
     );
@@ -944,17 +967,7 @@ class _OrderCancellationReasonDialogState extends State<_OrderCancellationReason
                           Navigator.pop(context);
                           widget.parentContext
                               .read<OrderCubit>()
-                              .cancelOrder(widget.orderId);
-                          ScaffoldMessenger.of(widget.parentContext)
-                              .showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                'Order cancelled\nReason: $reason',
-                              ),
-                              backgroundColor: AppColors.primary,
-                              duration: const Duration(seconds: 3),
-                            ),
-                          );
+                              .cancelOrder(widget.orderId, reason: reason);
                         }
                         : null,
                     style: ElevatedButton.styleFrom(
@@ -962,6 +975,355 @@ class _OrderCancellationReasonDialogState extends State<_OrderCancellationReason
                       foregroundColor: Colors.white,
                     ),
                     child: const Text('Confirm Cancel'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Return Request Dialog ───────────────────────────────────────────────────
+
+class _OrderReturnRequestDialog extends StatefulWidget {
+  final Order order;
+  final BuildContext parentContext;
+
+  const _OrderReturnRequestDialog({
+    required this.order,
+    required this.parentContext,
+  });
+
+  @override
+  State<_OrderReturnRequestDialog> createState() =>
+      _OrderReturnRequestDialogState();
+}
+
+class _OrderReturnRequestDialogState
+    extends State<_OrderReturnRequestDialog> {
+  static const List<String> returnReasons = [
+    'Defective or damaged product',
+    'Item not as described / different from photo',
+    'Received wrong item',
+    'Quality not up to expectations',
+    'Missing parts or accessories',
+    'Changed mind / no longer needed',
+  ];
+
+  String? selectedReason = returnReasons.first;
+  String returnType = 'refund';
+  final TextEditingController detailsCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    detailsCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        constraints: const BoxConstraints(maxWidth: 420, maxHeight: 600),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.assignment_return_rounded,
+                    color: AppColors.primary,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Request Return / Exchange',
+                        style: AppTypography.titleMedium.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      Text(
+                        'Invoice #${widget.order.referenceNumber}',
+                        style: AppTypography.labelSmall.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, size: 20),
+                  onPressed: () => Navigator.pop(context),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ),
+            const Divider(height: 24),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Preferred Resolution',
+                      style: AppTypography.labelMedium.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: InkWell(
+                            onTap: () => setState(() => returnType = 'refund'),
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 10, horizontal: 12),
+                              decoration: BoxDecoration(
+                                color: returnType == 'refund'
+                                    ? AppColors.primary.withValues(alpha: 0.08)
+                                    : AppColors.surface,
+                                border: Border.all(
+                                  color: returnType == 'refund'
+                                      ? AppColors.primary
+                                      : AppColors.divider,
+                                  width: returnType == 'refund' ? 1.5 : 1,
+                                ),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.payments_outlined,
+                                    size: 16,
+                                    color: returnType == 'refund'
+                                        ? AppColors.primary
+                                        : AppColors.textSecondary,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    'Refund',
+                                    style: AppTypography.labelMedium.copyWith(
+                                      color: returnType == 'refund'
+                                          ? AppColors.primary
+                                          : AppColors.textSecondary,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: InkWell(
+                            onTap: () =>
+                                setState(() => returnType = 'replacement'),
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 10, horizontal: 12),
+                              decoration: BoxDecoration(
+                                color: returnType == 'replacement'
+                                    ? AppColors.primary.withValues(alpha: 0.08)
+                                    : AppColors.surface,
+                                border: Border.all(
+                                  color: returnType == 'replacement'
+                                      ? AppColors.primary
+                                      : AppColors.divider,
+                                  width:
+                                      returnType == 'replacement' ? 1.5 : 1,
+                                ),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.swap_horiz_rounded,
+                                    size: 18,
+                                    color: returnType == 'replacement'
+                                        ? AppColors.primary
+                                        : AppColors.textSecondary,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    'Replacement',
+                                    style: AppTypography.labelMedium.copyWith(
+                                      color: returnType == 'replacement'
+                                          ? AppColors.primary
+                                          : AppColors.textSecondary,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    Text(
+                      'Reason for Return',
+                      style: AppTypography.labelMedium.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    ...returnReasons.map(
+                      (reason) => Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: InkWell(
+                          onTap: () =>
+                              setState(() => selectedReason = reason),
+                          borderRadius: BorderRadius.circular(6),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                vertical: 6, horizontal: 4),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 18,
+                                  height: 18,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: selectedReason == reason
+                                          ? AppColors.primary
+                                          : AppColors.divider,
+                                      width: 2,
+                                    ),
+                                  ),
+                                  child: selectedReason == reason
+                                      ? Center(
+                                          child: Container(
+                                            width: 10,
+                                            height: 10,
+                                            decoration: const BoxDecoration(
+                                              shape: BoxShape.circle,
+                                              color: AppColors.primary,
+                                            ),
+                                          ),
+                                        )
+                                      : null,
+                                ),
+                                const SizedBox(width: AppSpacing.md),
+                                Expanded(
+                                  child: Text(
+                                    reason,
+                                    style: AppTypography.bodySmall.copyWith(
+                                      color: selectedReason == reason
+                                          ? AppColors.textPrimary
+                                          : AppColors.textSecondary,
+                                      fontWeight: selectedReason == reason
+                                          ? FontWeight.w600
+                                          : FontWeight.w400,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    Text(
+                      'Additional Comments (Optional)',
+                      style: AppTypography.labelMedium.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    TextField(
+                      controller: detailsCtrl,
+                      maxLines: 3,
+                      decoration: InputDecoration(
+                        hintText:
+                            'Describe the issue with the product in detail...',
+                        hintStyle: AppTypography.bodySmall.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide:
+                              const BorderSide(color: AppColors.divider),
+                        ),
+                        contentPadding: const EdgeInsets.all(AppSpacing.md),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Cancel'),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: selectedReason != null
+                        ? () {
+                            final reason = selectedReason!;
+                            final details = detailsCtrl.text.trim();
+                            final rType = returnType;
+                            final items = widget.order.items
+                                .map((item) => {
+                                      'productId': item.id,
+                                      'quantity': item.quantity,
+                                    })
+                                .toList();
+                            Navigator.pop(context);
+                            widget.parentContext
+                                .read<OrderCubit>()
+                                .requestReturn(
+                                  widget.order.referenceNumber.isNotEmpty
+                                      ? widget.order.referenceNumber
+                                      : widget.order.id,
+                                  reason: reason,
+                                  details: details.isNotEmpty ? details : null,
+                                  returnType: rType,
+                                  items: items,
+                                );
+                          }
+                        : null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text('Submit Return'),
                   ),
                 ),
               ],

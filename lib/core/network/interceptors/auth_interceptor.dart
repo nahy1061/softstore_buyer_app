@@ -19,6 +19,12 @@ class AuthInterceptor extends Interceptor {
   void onResponse(Response response, ResponseInterceptorHandler handler) {
     final status = response.statusCode;
     final location = response.headers.value('location') ?? '';
+    final path = response.requestOptions.path;
+
+    // Do NOT treat 302 on login or register as session expired
+    if (path.contains('/login') || path.contains('/register')) {
+      return handler.next(response);
+    }
 
     // 302 → /login means the session cookie has expired
     if (status == 302 && location.contains('/login')) {

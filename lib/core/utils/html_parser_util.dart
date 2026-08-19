@@ -69,24 +69,47 @@ class HtmlParserUtil {
 
   // ─── Form Error Extraction ────────────────────────────────────────────────
 
-  /// Returns the first `.invalid-feedback` or `.alert-danger` error text, or
-  /// null if the HTML contains no visible error messages.
+  /// Returns the first error text found in HTML body or JSON, or
+  /// null if no visible error message is found.
   static String? extractFormError(String htmlBody) {
     try {
-      final doc = html_parser.parse(htmlBody);
-
-      // Primary: Bootstrap's .invalid-feedback
-      final invalidFeedback = doc.querySelector('.invalid-feedback');
-      if (invalidFeedback != null) {
-        final text = invalidFeedback.text.trim();
-        if (text.isNotEmpty) return text;
+      final trimmed = htmlBody.trim();
+      if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+        try {
+          final jsonMap = jsonDecode(trimmed) as Map<String, dynamic>;
+          final msg = jsonMap['message'] ?? jsonMap['error'] ?? jsonMap['msg'];
+          if (msg != null && msg.toString().isNotEmpty) {
+            return msg.toString();
+          }
+        } catch (_) {}
       }
 
-      // Fallback: page-level danger alert
-      final alertDanger = doc.querySelector('.alert-danger, .alert-error');
-      if (alertDanger != null) {
-        final text = alertDanger.text.trim();
-        if (text.isNotEmpty) return text;
+      final doc = html_parser.parse(htmlBody);
+
+      // Check common alert & validation message containers
+      const selectors = [
+        '.invalid-feedback',
+        '.alert-danger',
+        '.alert-error',
+        '.alert-warning',
+        '.text-danger',
+        '.error-message',
+        '.error-msg',
+        '.form-error',
+        '.alert',
+        '[role="alert"]',
+        '.error',
+        '.help-block.text-danger',
+      ];
+
+      for (final selector in selectors) {
+        final el = doc.querySelector(selector);
+        if (el != null) {
+          final text = el.text.trim();
+          if (text.isNotEmpty && !text.toLowerCase().contains('javascript')) {
+            return text;
+          }
+        }
       }
     } catch (e) {
       developer.log('[HtmlParser] Error extraction failed: $e', name: 'html');

@@ -165,14 +165,16 @@ final GoRouter goRouter = GoRouter(
       path: AppRoutes.productDetail,
       builder: (context, state) {
         final slug = state.pathParameters['slug'] ?? '';
-        final extra = state.extra as Map<String, dynamic>? ?? {};
+        final extra = state.extra is Map<String, dynamic>
+            ? (state.extra as Map<String, dynamic>)
+            : <String, dynamic>{};
         return ProductDetailScreen(
-          id: extra['id'] as int?,
+          id: (extra['id'] as num?)?.toInt(),
           slug: slug,
           name: extra['name'] as String? ?? slug,
-          price: extra['price'] as int? ?? 0,
+          price: (extra['price'] as num?)?.toInt() ?? 0,
           imageUrl: extra['imageUrl'] as String?,
-          iconCodePoint: extra['iconCodePoint'] as int? ?? 0xe59c,
+          iconCodePoint: (extra['iconCodePoint'] as num?)?.toInt() ?? 0xe59c,
           colors: (extra['colors'] as List?)
                   ?.cast<Map<String, dynamic>>() ??
               const [],
@@ -208,16 +210,18 @@ final GoRouter goRouter = GoRouter(
       path: AppRoutes.orderConfirmation,
       builder: (context, state) {
         final ref = state.pathParameters['ref'] ?? '';
-        final extra = state.extra as Map<String, dynamic>? ?? {};
+        final extra = state.extra is Map<String, dynamic>
+            ? (state.extra as Map<String, dynamic>)
+            : <String, dynamic>{};
         return OrderConfirmationScreen(
           referenceNumber: ref,
-          invoiceNumber: extra['invoiceNumber'] as String?,
-          subtotal: extra['subtotal'] as int?,
-          delivery: extra['delivery'] as int?,
-          productName: extra['productName'] as String?,
-          productQty: extra['productQty'] as int?,
-          productPrice: extra['productPrice'] as int?,
-          iconCodePoint: extra['iconCodePoint'] as int?,
+          invoiceNumber: extra['invoiceNumber']?.toString(),
+          subtotal: (extra['subtotal'] as num?)?.toInt(),
+          delivery: (extra['delivery'] as num?)?.toInt(),
+          productName: extra['productName']?.toString(),
+          productQty: (extra['productQty'] as num?)?.toInt(),
+          productPrice: (extra['productPrice'] as num?)?.toInt(),
+          iconCodePoint: (extra['iconCodePoint'] as num?)?.toInt(),
         );
       },
     ),
@@ -225,10 +229,13 @@ final GoRouter goRouter = GoRouter(
     // Orders & Returns
     GoRoute(
       path: AppRoutes.orders,
-      builder: (context, state) => BlocProvider(
-        create: (_) => OrderCubit(),
-        child: const OrdersScreen(),
-      ),
+      builder: (context, state) {
+        final tab = state.extra is int ? state.extra as int : 0;
+        return BlocProvider(
+          create: (_) => OrderCubit(),
+          child: OrdersScreen(initialTab: tab),
+        );
+      },
     ),
     GoRoute(
       path: AppRoutes.orderDetail,
@@ -268,8 +275,10 @@ final GoRouter goRouter = GoRouter(
     ),
     GoRoute(
       path: AppRoutes.returns,
-      builder: (context, state) =>
-          const SecondaryPlaceholderScreen(label: 'Returns', navIndex: 1),
+      builder: (context, state) => BlocProvider(
+        create: (_) => OrderCubit(),
+        child: const OrdersScreen(initialTab: 7),
+      ),
     ),
 
     // Auth

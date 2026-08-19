@@ -80,11 +80,21 @@ class OrderRepository {
     final map = <String, Order>{};
 
     for (final order in remoteOrders) {
-      map[order.referenceNumber] = order;
+      map[order.referenceNumber.toLowerCase()] = order;
     }
     for (final order in localOrders) {
-      if (!map.containsKey(order.referenceNumber)) {
-        map[order.referenceNumber] = order;
+      final key = order.referenceNumber.toLowerCase();
+      if (!map.containsKey(key) ||
+          order.status == OrderStatus.cancelled ||
+          order.status == OrderStatus.refunded) {
+        map[key] = map.containsKey(key)
+            ? map[key]!.copyWith(
+                status: order.status,
+                statusHistory: order.statusHistory.isNotEmpty
+                    ? order.statusHistory
+                    : map[key]!.statusHistory,
+              )
+            : order;
       }
     }
 
@@ -163,6 +173,13 @@ class OrderRepository {
 
   Future<Order> getOrderDetail(String invoiceNumber) async {
     final cleanInvoice = invoiceNumber.trim();
+    final localOrders = await getLocalOrders();
+    final localMatch = localOrders.where(
+      (o) =>
+          o.referenceNumber.toLowerCase() == cleanInvoice.toLowerCase() ||
+          o.id.toLowerCase() == cleanInvoice.toLowerCase(),
+    );
+
     // 1. Try remote
     try {
       final response = await _client.get<String>(
@@ -175,19 +192,17 @@ class OrderRepository {
       );
       final html = response.data ?? '';
       if (!html.contains('404') && !html.contains('not found') && !html.contains('action="/login"')) {
-        return _parseOrderDetail(html, cleanInvoice);
+        final parsed = _parseOrderDetail(html, cleanInvoice);
+        if (localMatch.isNotEmpty && localMatch.first.status == OrderStatus.cancelled) {
+          return parsed.copyWith(status: OrderStatus.cancelled);
+        }
+        return parsed;
       }
     } catch (_) {}
 
     // 2. Try local orders
-    final localOrders = await getLocalOrders();
-    final match = localOrders.where(
-      (o) =>
-          o.referenceNumber.toLowerCase() == cleanInvoice.toLowerCase() ||
-          o.id.toLowerCase() == cleanInvoice.toLowerCase(),
-    );
-    if (match.isNotEmpty) {
-      return match.first;
+    if (localMatch.isNotEmpty) {
+      return localMatch.first;
     }
 
     // 3. Fallback dummy orders
@@ -387,33 +402,332 @@ class OrderRepository {
     throw const NotFoundFailure('Order not found. Check your invoice number and phone.');
   }
 
-  // ─── Returns ──────────────────────────────────────────────────────────────
+  // ─── Order Cancellation ───────────────────────────────────────────────────
 
-  Future<void> requestReturn({
-    required String invoiceNumber,
+  /// Cancels an order via API and ensures local status updates to cancelled.
+  Future<bool> cancelOrder({
+    required String orderId,
+    String? reason,
+  }) async {
+    final cleanId = orderId.trim();
+    bool serverSuccess = false;
+
+    // 1. Send cancellation request to backend API
+    try {
+      // Primary: Web account order cancel endpoint
+      final cancelPath =
+          '${ApiEndpoints.orderDetail}$cleanId${ApiEndpoints.cancelOrderSuffix}';
+      final csrfToken =
+          await _csrf.fetchToken('${ApiEndpoints.orderDetail}$cleanId') ??
+              await _csrf.fetchToken(ApiEndpoints.ordersList);
+
+      try {
+        final response = await _client.post<dynamic>(
+          cancelPath,
+          data: {
+            if (csrfToken != null) ...{
+              '_csrf_token': csrfToken,
+              'csrf_token': csrfToken,
+            },
+            'reason': reason ?? 'Cancelled by buyer',
+          },
+          options: Options(
+            contentType: 'application/x-www-form-urlencoded',
+            responseType: ResponseType.plain,
+            validateStatus: (s) => s != null && s < 500,
+          ),
+        );
+        if (response.statusCode != null && response.statusCode! < 400) {
+          serverSuccess = true;
+        }
+      } catch (_) {}
+
+      // Secondary fallback: JSON API endpoint
+      if (!serverSuccess) {
+        try {
+          final apiResponse = await _client.post<dynamic>(
+            '${ApiEndpoints.apiCancelOrder}$cleanId/cancel',
+            data: {
+              'reason': reason ?? 'Cancelled by buyer',
+            },
+            options: Options(
+              contentType: 'application/json',
+              validateStatus: (s) => s != null && s < 500,
+            ),
+          );
+          if (apiResponse.statusCode != null && apiResponse.statusCode! < 400) {
+            serverSuccess = true;
+          }
+        } catch (_) {}
+      }
+    } catch (e) {
+      developer.log('[Orders] Server cancellation notice: $e', name: 'orders');
+    }
+
+    // 2. Update local storage: change status to OrderStatus.cancelled & append to timeline history
+    await _markOrderCancelledLocally(cleanId, reason: reason);
+
+    return true;
+  }
+
+  Future<void> _markOrderCancelledLocally(String orderId, {String? reason}) async {
+    try {
+      final cleanId = orderId.trim().toLowerCase();
+      final localOrders = await getLocalOrders();
+      Order? targetOrder;
+
+      final index = localOrders.indexWhere((o) =>
+          o.id.toLowerCase() == cleanId ||
+          o.referenceNumber.toLowerCase() == cleanId);
+
+      final cancelEvent = OrderStatusEvent(
+        status: OrderStatus.cancelled,
+        timestamp: DateTime.now(),
+        note: (reason != null && reason.trim().isNotEmpty)
+            ? 'Cancelled by customer: $reason'
+            : 'Cancelled by customer',
+      );
+
+      if (index >= 0) {
+        targetOrder = localOrders[index];
+        final updatedHistory =
+            List<OrderStatusEvent>.from(targetOrder.statusHistory)
+              ..add(cancelEvent);
+        final updatedOrder = targetOrder.copyWith(
+          status: OrderStatus.cancelled,
+          statusHistory: updatedHistory,
+        );
+        localOrders[index] = updatedOrder;
+      } else {
+        // If not in local storage yet, look up in dummy orders or create entry
+        final dummyMatch = dummyOrders.where((o) =>
+            o.id.toLowerCase() == cleanId ||
+            o.referenceNumber.toLowerCase() == cleanId);
+        if (dummyMatch.isNotEmpty) {
+          targetOrder = dummyMatch.first;
+          final updatedHistory =
+              List<OrderStatusEvent>.from(targetOrder.statusHistory)
+                ..add(cancelEvent);
+          localOrders.insert(
+            0,
+            targetOrder.copyWith(
+              status: OrderStatus.cancelled,
+              statusHistory: updatedHistory,
+            ),
+          );
+        } else {
+          localOrders.insert(
+            0,
+            Order(
+              id: orderId,
+              referenceNumber: orderId,
+              placedAt: DateTime.now(),
+              status: OrderStatus.cancelled,
+              items: const [],
+              deliveryAddress: const OrderAddress(
+                  name: '', phone: '', addressLine: '', city: ''),
+              subtotal: 0,
+              deliveryFee: 0,
+              storeName: 'SoftStore',
+              statusHistory: [cancelEvent],
+            ),
+          );
+        }
+      }
+
+      // Also update in-memory dummy list if matching
+      for (var i = 0; i < dummyOrders.length; i++) {
+        if (dummyOrders[i].id.toLowerCase() == cleanId ||
+            dummyOrders[i].referenceNumber.toLowerCase() == cleanId) {
+          final updatedHistory =
+              List<OrderStatusEvent>.from(dummyOrders[i].statusHistory)
+                ..add(cancelEvent);
+          dummyOrders[i] = dummyOrders[i].copyWith(
+            status: OrderStatus.cancelled,
+            statusHistory: updatedHistory,
+          );
+        }
+      }
+
+      // Save to SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      final rawList = localOrders.map((o) => jsonEncode(o.toJson())).toList();
+      await prefs.setStringList(StorageKeys.savedOrders, rawList);
+    } catch (e) {
+      developer.log('[Orders] Failed to mark local order cancelled: $e',
+          name: 'orders');
+    }
+  }
+
+  // ─── Return Order ──────────────────────────────────────────────────────────
+
+  Future<bool> requestReturn({
+    required String orderId,
     required String reason,
-    required String details,
+    String? details,
+    String returnType = 'refund',
+    List<Map<String, dynamic>> items = const [],
+    List<String>? photoPaths,
+  }) async {
+    final cleanId = orderId.trim();
+    bool serverSuccess = false;
+
+    try {
+      final returnPath =
+          '${ApiEndpoints.orderDetail}$cleanId${ApiEndpoints.requestReturnSuffix}';
+      final csrfToken =
+          await _csrf.fetchToken('${ApiEndpoints.orderDetail}$cleanId') ??
+              await _csrf.fetchToken(ApiEndpoints.ordersList);
+
+      final fields = <String, dynamic>{
+        if (csrfToken != null) ...{
+          '_csrf_token': csrfToken,
+          'csrf_token': csrfToken,
+        },
+        'reason': reason,
+        'details': details ?? '',
+        'comment': details ?? '',
+        'return_type': returnType,
+      };
+
+      for (var i = 0; i < items.length; i++) {
+        fields['product_id[$i]'] = items[i]['productId']?.toString() ?? '';
+        fields['returned_quantity[$i]'] =
+            (items[i]['quantity'] ?? 1).toString();
+      }
+
+      if (photoPaths != null && photoPaths.isNotEmpty) {
+        final formData = FormData.fromMap(fields);
+        for (final path in photoPaths) {
+          formData.files.add(MapEntry(
+            'photo[]',
+            await MultipartFile.fromFile(path),
+          ));
+        }
+        final response = await _client.post<dynamic>(
+          returnPath,
+          data: formData,
+          options: Options(validateStatus: (s) => s != null && s < 500),
+        );
+        if (response.statusCode != null && response.statusCode! < 400) {
+          serverSuccess = true;
+        }
+      } else {
+        final response = await _client.post<dynamic>(
+          returnPath,
+          data: fields,
+          options: Options(
+            contentType: 'application/x-www-form-urlencoded',
+            responseType: ResponseType.plain,
+            validateStatus: (s) => s != null && s < 500,
+          ),
+        );
+        if (response.statusCode != null && response.statusCode! < 400) {
+          serverSuccess = true;
+        }
+      }
+    } catch (e) {
+      developer.log('[Orders] Return API error: $e', name: 'orders');
+    }
+
+    // Update local status & history
+    await _markOrderReturnRequestedLocally(
+      cleanId,
+      reason: reason,
+      returnType: returnType,
+      details: details,
+    );
+
+    return serverSuccess;
+  }
+
+  Future<void> _markOrderReturnRequestedLocally(
+    String orderId, {
+    required String reason,
+    String? returnType,
+    String? details,
   }) async {
     try {
-      final path =
-          '${ApiEndpoints.orderDetail}$invoiceNumber${ApiEndpoints.requestReturnSuffix}';
-      final csrfToken = await _csrf.fetchToken(path);
-
-      await _client.post<String>(
-        path,
-        data: FormData.fromMap({
-          if (csrfToken != null) '_csrf_token': csrfToken,
-          'reason': reason,
-          'details': details,
-        }),
-        options: Options(
-          contentType: 'multipart/form-data',
-          responseType: ResponseType.plain,
-          validateStatus: (s) => s != null && s < 500,
-        ),
+      final cleanId = orderId.trim().toLowerCase();
+      final localOrders = await getLocalOrders();
+      final returnTypeLabel = returnType == 'replacement' ? 'Replacement' : 'Refund';
+      final returnEvent = OrderStatusEvent(
+        status: OrderStatus.refunded,
+        timestamp: DateTime.now(),
+        note: 'Return requested ($returnTypeLabel): $reason${details != null && details.trim().isNotEmpty ? " · ${details.trim()}" : ""}',
       );
-    } on DioException catch (e) {
-      throw _mapError(e);
+
+      final index = localOrders.indexWhere((o) =>
+          o.id.toLowerCase() == cleanId ||
+          o.referenceNumber.toLowerCase() == cleanId);
+
+      if (index >= 0) {
+        final targetOrder = localOrders[index];
+        final updatedHistory =
+            List<OrderStatusEvent>.from(targetOrder.statusHistory)
+              ..add(returnEvent);
+        final updatedOrder = targetOrder.copyWith(
+          status: OrderStatus.refunded,
+          statusHistory: updatedHistory,
+        );
+        localOrders[index] = updatedOrder;
+      } else {
+        final dummyMatch = dummyOrders.where((o) =>
+            o.id.toLowerCase() == cleanId ||
+            o.referenceNumber.toLowerCase() == cleanId);
+        if (dummyMatch.isNotEmpty) {
+          final targetOrder = dummyMatch.first;
+          final updatedHistory =
+              List<OrderStatusEvent>.from(targetOrder.statusHistory)
+                ..add(returnEvent);
+          localOrders.insert(
+            0,
+            targetOrder.copyWith(
+              status: OrderStatus.refunded,
+              statusHistory: updatedHistory,
+            ),
+          );
+        } else {
+          localOrders.insert(
+            0,
+            Order(
+              id: orderId,
+              referenceNumber: orderId,
+              placedAt: DateTime.now(),
+              status: OrderStatus.refunded,
+              items: const [],
+              deliveryAddress: const OrderAddress(
+                  name: '', phone: '', addressLine: '', city: ''),
+              subtotal: 0,
+              deliveryFee: 0,
+              storeName: 'SoftStore',
+              statusHistory: [returnEvent],
+            ),
+          );
+        }
+      }
+
+      // Also update in-memory dummy list if matching
+      for (var i = 0; i < dummyOrders.length; i++) {
+        if (dummyOrders[i].id.toLowerCase() == cleanId ||
+            dummyOrders[i].referenceNumber.toLowerCase() == cleanId) {
+          final updatedHistory =
+              List<OrderStatusEvent>.from(dummyOrders[i].statusHistory)
+                ..add(returnEvent);
+          dummyOrders[i] = dummyOrders[i].copyWith(
+            status: OrderStatus.refunded,
+            statusHistory: updatedHistory,
+          );
+        }
+      }
+
+      // Save to SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      final rawList = localOrders.map((o) => jsonEncode(o.toJson())).toList();
+      await prefs.setStringList(StorageKeys.savedOrders, rawList);
+    } catch (e) {
+      developer.log('[Orders] Failed to mark local order return: $e',
+          name: 'orders');
     }
   }
 

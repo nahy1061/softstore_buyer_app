@@ -24,14 +24,17 @@ class AuthService {
       await _dio.post(
         ApiEndpoints.login,
         data: {
-          if (csrfToken.isNotEmpty) '_csrf_token': csrfToken,
+          if (csrfToken.isNotEmpty) ...{
+            '_csrf_token': csrfToken,
+            'csrf_token': csrfToken,
+          },
           'email': email,
           'password': password,
         },
         options: Options(
           contentType: 'application/x-www-form-urlencoded',
           followRedirects: false,
-          validateStatus: (status) => status != null && status < 400,
+          validateStatus: (status) => status != null && status < 500,
         ),
       );
 
@@ -61,7 +64,10 @@ class AuthService {
       await _dio.post(
         ApiEndpoints.register,
         data: {
-          if (csrfToken.isNotEmpty) '_csrf_token': csrfToken,
+          if (csrfToken.isNotEmpty) ...{
+            '_csrf_token': csrfToken,
+            'csrf_token': csrfToken,
+          },
           'first_name': firstName,
           'last_name': lastName,
           'email': email,
@@ -70,7 +76,7 @@ class AuthService {
         options: Options(
           contentType: 'application/x-www-form-urlencoded',
           followRedirects: false,
-          validateStatus: (status) => status != null && status < 400,
+          validateStatus: (status) => status != null && status < 500,
         ),
       );
 
@@ -95,12 +101,15 @@ class AuthService {
       await _dio.post(
         ApiEndpoints.logout,
         data: {
-          if (csrfToken.isNotEmpty) '_csrf_token': csrfToken,
+          if (csrfToken.isNotEmpty) ...{
+            '_csrf_token': csrfToken,
+            'csrf_token': csrfToken,
+          },
         },
         options: Options(
           contentType: 'application/x-www-form-urlencoded',
           followRedirects: false,
-          validateStatus: (status) => status != null && status < 400,
+          validateStatus: (status) => status != null && status < 500,
         ),
       );
     } on DioException {

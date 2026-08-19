@@ -102,7 +102,9 @@ class OrderService {
         ApiEndpoints.trackOrder,
         data: {
           '_csrf_token': csrfToken,
+          'csrf_token': csrfToken,
           'invoice_number': cleanRef,
+          'invoice': cleanRef,
           'phone': cleanPhone,
         },
         options: Options(
@@ -130,6 +132,118 @@ class OrderService {
       throw NetworkFailure(e.message ?? 'Failed to track order.');
     } catch (e) {
       throw ServerFailure('Unable to track order: $e');
+    }
+  }
+
+  /// Submits an order return request to `/store/account/orders/{orderId}/return`.
+  Future<bool> requestReturn({
+    required String orderId,
+    required String reason,
+    required String returnType,
+    required List<Map<String, dynamic>> items,
+    List<String>? photoPaths,
+  }) async {
+    try {
+      final orderUrl = '${ApiEndpoints.getOrderDetail}/$orderId';
+      final pageResponse = await _client.get<String>(
+        orderUrl,
+        options: Options(responseType: ResponseType.plain),
+      );
+      final csrfToken = CsrfExtractor.extract(pageResponse.data ?? '') ?? '';
+
+      final Map<String, dynamic> fields = {
+        '_csrf_token': csrfToken,
+        'csrf_token': csrfToken,
+        'reason': reason,
+        'return_type': returnType,
+      };
+
+      for (var i = 0; i < items.length; i++) {
+        fields['product_id[$i]'] = items[i]['productId'].toString();
+        fields['returned_quantity[$i]'] = (items[i]['quantity'] ?? 1).toString();
+      }
+
+      final returnPath = '$orderUrl${ApiEndpoints.requestReturnSuffix}';
+
+      if (photoPaths != null && photoPaths.isNotEmpty) {
+        final formData = FormData.fromMap(fields);
+        for (final path in photoPaths) {
+          formData.files.add(MapEntry(
+            'photo[]',
+            await MultipartFile.fromFile(path),
+          ));
+        }
+        final res = await _client.post(
+          returnPath,
+          data: formData,
+          options: Options(validateStatus: (s) => s != null && s < 500),
+        );
+        return res.statusCode == 200 || res.statusCode == 302;
+      } else {
+        final res = await _client.post<String>(
+          returnPath,
+          data: fields,
+          options: Options(
+            contentType: Headers.formUrlEncodedContentType,
+            validateStatus: (s) => s != null && s < 500,
+          ),
+        );
+        return res.statusCode == 200 || res.statusCode == 302;
+      }
+    } catch (e) {
+      throw ServerFailure('Failed to submit return request: $e');
+    }
+  }
+
+  /// Cancels an order via `/store/account/orders/{orderId}/cancel`
+  Future<bool> cancelOrder({
+    required String orderId,
+    String? reason,
+  }) async {
+    try {
+      final cleanInvoice = orderId.trim();
+      final orderUrl = '${ApiEndpoints.getOrderDetail}/$cleanInvoice';
+      final pageResponse = await _client.get<String>(
+        orderUrl,
+        options: Options(responseType: ResponseType.plain),
+      );
+      final csrfToken = CsrfExtractor.extract(pageResponse.data ?? '') ?? '';
+
+      final cancelPath = '$orderUrl${ApiEndpoints.cancelOrderSuffix}';
+      final res = await _client.post<String>(
+        cancelPath,
+        data: {
+          if (csrfToken.isNotEmpty) ...{
+            '_csrf_token': csrfToken,
+            'csrf_token': csrfToken,
+          },
+          'reason': reason ?? 'Cancelled by buyer',
+        },
+        options: Options(
+          contentType: Headers.formUrlEncodedContentType,
+          validateStatus: (s) => s != null && s < 500,
+        ),
+      );
+      return res.statusCode == 200 || res.statusCode == 302;
+    } catch (e) {
+      throw ServerFailure('Failed to cancel order: $e');
+    }
+  }
+
+  /// Fetches returns history list from `/store/account/returns`.
+  Future<List<Map<String, dynamic>>> fetchReturns() async {
+    try {
+      final response = await _client.get<String>(
+        ApiEndpoints.returnsList,
+        options: Options(responseType: ResponseType.plain),
+      );
+      final html = response.data ?? '';
+      if (_isSessionExpired(response, html)) {
+        return [];
+      }
+      return OrderHtmlParser.parseReturnsList(html);
+    } catch (e) {
+      return [];
     }
   }
 

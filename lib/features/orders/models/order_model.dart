@@ -274,6 +274,40 @@ class Order {
     );
   }
 
+  Order copyWith({
+    String? id,
+    String? referenceNumber,
+    DateTime? placedAt,
+    OrderStatus? status,
+    List<OrderItem>? items,
+    OrderAddress? deliveryAddress,
+    double? subtotal,
+    double? deliveryFee,
+    double? discount,
+    String? storeName,
+    String? storeCity,
+    String? storeContact,
+    String? estimatedDelivery,
+    List<OrderStatusEvent>? statusHistory,
+  }) {
+    return Order(
+      id: id ?? this.id,
+      referenceNumber: referenceNumber ?? this.referenceNumber,
+      placedAt: placedAt ?? this.placedAt,
+      status: status ?? this.status,
+      items: items ?? this.items,
+      deliveryAddress: deliveryAddress ?? this.deliveryAddress,
+      subtotal: subtotal ?? this.subtotal,
+      deliveryFee: deliveryFee ?? this.deliveryFee,
+      discount: discount ?? this.discount,
+      storeName: storeName ?? this.storeName,
+      storeCity: storeCity ?? this.storeCity,
+      storeContact: storeContact ?? this.storeContact,
+      estimatedDelivery: estimatedDelivery ?? this.estimatedDelivery,
+      statusHistory: statusHistory ?? this.statusHistory,
+    );
+  }
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'reference_number': referenceNumber,

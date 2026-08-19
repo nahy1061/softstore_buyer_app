@@ -1,4 +1,10 @@
 abstract final class Validators {
+  static String? emailOrUsername(String? value) {
+    if (value == null || value.trim().isEmpty) return 'Email or username is required';
+    if (value.trim().length < 3) return 'Enter a valid email or username';
+    return null;
+  }
+
   static String? email(String? value) {
     if (value?.isEmpty ?? true) return 'Email is required';
     final emailRegex = RegExp(

@@ -44,22 +44,34 @@ class AuthRepository {
       // Step 1: Fetch CSRF token from login page
       final csrfToken = await _csrf.fetchToken(ApiEndpoints.loginPage);
       if (csrfToken == null) {
-        throw const AuthFailure('Unable to load login page. Please try again.');
+        throw const AuthFailure('Unable to connect to login server. Please check your internet connection.');
       }
 
-      // Step 2: POST login form
-      final response = await _client.post<String>(
+      // Step 2: Build compatibility form-encoded payload
+      final formData = <String, dynamic>{
+        '_csrf_token': csrfToken,
+        'csrf_token': csrfToken,
+        '_token': csrfToken,
+        'email': email.trim(),
+        'username': email.trim(),
+        'login': email.trim(),
+        'user_login': email.trim(),
+        'password': password,
+        '_password': password,
+      };
+
+      if (recaptchaToken.isNotEmpty && recaptchaToken != 'app-token') {
+        formData['recaptcha_token'] = recaptchaToken;
+        formData['g-recaptcha-response'] = recaptchaToken;
+      }
+
+      // Step 3: POST login form
+      final response = await _client.post<dynamic>(
         ApiEndpoints.loginPage,
-        data: {
-          '_csrf_token': csrfToken,
-          'email': email.trim(),
-          'password': password,
-          'recaptcha_token': recaptchaToken,
-        },
+        data: formData,
         options: Options(
           contentType: 'application/x-www-form-urlencoded',
           responseType: ResponseType.plain,
-          // Allow 200 and 302; 302 handled below
           validateStatus: (s) => s != null && s < 500,
           followRedirects: false,
         ),
@@ -67,25 +79,41 @@ class AuthRepository {
 
       final status = response.statusCode ?? 0;
       final location = response.headers.value('location') ?? '';
+      final rawData = response.data;
 
-      // 302 without /login in location = success redirect (e.g. to /store)
+      // Case A: 302 redirect away from /login (standard PHP success redirect)
       if (status == 302 && !location.contains('/login')) {
         developer.log('[Auth] Login successful, redirected to: $location', name: 'auth');
-        // Invalidate cached CSRF for login page
         _csrf.clearAll();
         final user = await restoreSession();
-        if (user == null) throw const AuthFailure('Unable to load user profile.');
-        return user;
+        if (user != null) return user;
+        return User(
+          firstName: email.split('@').first,
+          lastName: '',
+          email: email.trim(),
+        );
       }
 
-      // Check for form errors in HTML body
-      if (status == 200) {
-        final html = response.data as String? ?? '';
-        final error = HtmlParserUtil.extractFormError(html);
-        throw AuthFailure(error ?? 'Invalid email or password.');
+      // Case B: Check if session was successfully established
+      final userAfterLogin = await restoreSession();
+      if (userAfterLogin != null && userAfterLogin.email.isNotEmpty) {
+        _csrf.clearAll();
+        return userAfterLogin;
       }
 
-      throw const AuthFailure('Login failed. Please try again.');
+      // Case C: Check for JSON API response
+      if (rawData is String && rawData.trim().startsWith('{')) {
+        final error = HtmlParserUtil.extractFormError(rawData);
+        if (error != null) throw AuthFailure(error);
+      }
+
+      // Case D: HTML page response (status 200 or 302 back)
+      if (rawData is String && rawData.isNotEmpty) {
+        final error = HtmlParserUtil.extractFormError(rawData);
+        throw AuthFailure(error ?? 'Invalid email or password. Please verify your credentials.');
+      }
+
+      throw const AuthFailure('Invalid email or password. Please try again.');
     } on AuthFailure {
       rethrow;
     } on DioException catch (e) {
@@ -110,20 +138,31 @@ class AuthRepository {
     try {
       final csrfToken = await _csrf.fetchToken(ApiEndpoints.registerPage);
       if (csrfToken == null) {
-        throw const AuthFailure('Unable to load registration page.');
+        throw const AuthFailure('Unable to connect to registration server. Please try again.');
       }
 
-      final response = await _client.post<String>(
+      final formData = <String, dynamic>{
+        '_csrf_token': csrfToken,
+        'csrf_token': csrfToken,
+        '_token': csrfToken,
+        'first_name': firstName.trim(),
+        'name': '$firstName ${lastName ?? ''}'.trim(),
+        if (lastName != null) 'last_name': lastName.trim(),
+        'email': email.trim(),
+        'username': email.trim(),
+        'password': password,
+        'password_confirmation': password,
+        if (phone != null) 'phone': phone.trim(),
+      };
+
+      if (recaptchaToken.isNotEmpty && recaptchaToken != 'app-token') {
+        formData['recaptcha_token'] = recaptchaToken;
+        formData['g-recaptcha-response'] = recaptchaToken;
+      }
+
+      final response = await _client.post<dynamic>(
         ApiEndpoints.registerPage,
-        data: {
-          '_csrf_token': csrfToken,
-          'first_name': firstName.trim(),
-          if (lastName != null) 'last_name': lastName.trim(),
-          'email': email.trim(),
-          'password': password,
-          if (phone != null) 'phone': phone.trim(),
-          'recaptcha_token': recaptchaToken,
-        },
+        data: formData,
         options: Options(
           contentType: 'application/x-www-form-urlencoded',
           responseType: ResponseType.plain,
@@ -134,18 +173,29 @@ class AuthRepository {
 
       final status = response.statusCode ?? 0;
       final location = response.headers.value('location') ?? '';
+      final rawData = response.data;
 
-      if (status == 302 && !location.contains('/login')) {
+      if (status == 302 && !location.contains('/login') && !location.contains('/register')) {
         _csrf.clearAll();
         final user = await restoreSession();
-        if (user == null) throw const AuthFailure('Unable to load user profile.');
-        return user;
+        if (user != null) return user;
+        return User(
+          firstName: firstName.trim(),
+          lastName: lastName?.trim() ?? '',
+          email: email.trim(),
+          phone: phone?.trim(),
+        );
       }
 
-      if (status == 200) {
-        final html = response.data as String? ?? '';
-        final error = HtmlParserUtil.extractFormError(html);
-        throw AuthFailure(error ?? 'Registration failed. Please try again.');
+      final userAfterReg = await restoreSession();
+      if (userAfterReg != null && userAfterReg.email.isNotEmpty) {
+        _csrf.clearAll();
+        return userAfterReg;
+      }
+
+      if (rawData is String && rawData.isNotEmpty) {
+        final error = HtmlParserUtil.extractFormError(rawData);
+        throw AuthFailure(error ?? 'Registration failed. Please check the entered information.');
       }
 
       throw const AuthFailure('Registration failed. Please try again.');
@@ -167,7 +217,10 @@ class AuthRepository {
       await _client.post<String>(
         ApiEndpoints.logout,
         data: {
-          if (csrfToken != null) '_csrf_token': csrfToken,
+          if (csrfToken != null) ...{
+            '_csrf_token': csrfToken,
+            'csrf_token': csrfToken,
+          },
         },
         options: Options(
           contentType: 'application/x-www-form-urlencoded',

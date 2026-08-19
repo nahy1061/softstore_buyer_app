@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import '../../../core/constants/api_endpoints.dart';
 import '../../../core/errors/failures.dart';
 import '../../../core/network/dio_client.dart';
+import '../../../core/utils/csrf_extractor.dart';
 import '../../../core/utils/html_parser_util.dart';
 import '../models/catalog_models.dart';
 
@@ -133,6 +134,76 @@ class CatalogRepository {
       totalCount: totalCount ?? products.length,
       hasNextPage: nextLink != null,
     );
+  }
+
+  // ─── Search Suggestions ───────────────────────────────────────────────────
+
+  /// Real JSON search autocomplete suggestions matching iOS CatalogService.
+  Future<Map<String, dynamic>> searchSuggest(String query) async {
+    try {
+      final response = await _client.get(
+        ApiEndpoints.searchSuggest,
+        queryParameters: {'q': query.trim()},
+        options: Options(responseType: ResponseType.json),
+      );
+      if (response.data is Map<String, dynamic>) {
+        return response.data as Map<String, dynamic>;
+      }
+      return {'products': [], 'categories': []};
+    } catch (e) {
+      developer.log('[Catalog] searchSuggest error: $e', name: 'catalog');
+      return {'products': [], 'categories': []};
+    }
+  }
+
+  // ─── Store Follow / Unfollow ───────────────────────────────────────────────
+
+  /// Follows a seller store by scraping tenant_id and submitting to /store/follow.
+  Future<bool> followStore(String tenantSlug) async {
+    return _toggleStoreFollow(tenantSlug, ApiEndpoints.followStore);
+  }
+
+  /// Unfollows a seller store by submitting to /store/unfollow.
+  Future<bool> unfollowStore(String tenantSlug) async {
+    return _toggleStoreFollow(tenantSlug, ApiEndpoints.unfollowStore);
+  }
+
+  Future<bool> _toggleStoreFollow(String tenantSlug, String endpoint) async {
+    try {
+      final storeUrl = '${ApiEndpoints.sellerProfile}$tenantSlug';
+      final pageResponse = await _client.get<String>(
+        storeUrl,
+        options: Options(responseType: ResponseType.plain),
+      );
+      final html = pageResponse.data ?? '';
+      final csrfToken = CsrfExtractor.extract(html);
+      if (csrfToken == null || csrfToken.isEmpty) return false;
+
+      // Extract tenant_id from data-tenant-id or hidden input
+      final tenantIdMatch = RegExp(r'data-tenant-id="(\d+)"').firstMatch(html) ??
+          RegExp(r'name="tenant_id"[^>]*value="(\d+)"').firstMatch(html);
+      final tenantId = tenantIdMatch?.group(1);
+      if (tenantId == null || tenantId.isEmpty) return false;
+
+      final res = await _client.post(
+        endpoint,
+        data: {
+          'tenant_id': tenantId,
+          '_csrf_token': csrfToken,
+          'csrf_token': csrfToken,
+        },
+        options: Options(
+          contentType: 'application/x-www-form-urlencoded',
+          validateStatus: (s) => s != null && s < 500,
+        ),
+      );
+      final data = res.data;
+      if (data is Map) return data['success'] == true;
+      return res.statusCode == 200 || res.statusCode == 302;
+    } catch (e) {
+      developer.log('[Catalog] toggleStoreFollow error: $e', name: 'catalog');
+      return false;
+    }
   }
 
   // ─── Product Detail ───────────────────────────────────────────────────────
