@@ -22,6 +22,7 @@ abstract final class AppColors {
   static const Color warning = Color(0xFFE65100);
 
   // UI Colors
+  static const Color border = Color(0xFFE0E0E0);
   static const Color divider = Color(0xFFE5E7EB);
   static const Color disabled = Color(0xFFE5E7EB);
   static const Color shimmerBase = Color(0xFFE5E7EB);

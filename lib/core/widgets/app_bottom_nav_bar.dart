@@ -5,6 +5,9 @@ import 'package:go_router/go_router.dart';
 import '../../app/router.dart';
 import '../../features/cart/cubit/cart_cubit.dart';
 import '../../features/cart/cubit/cart_state.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_dimensions.dart';
+import '../theme/app_typography.dart';
 
 class AppBottomNavBar extends StatelessWidget {
   final int currentIndex;
@@ -37,15 +40,15 @@ class AppBottomNavBar extends StatelessWidget {
       builder: (context, cartState) {
         return Container(
           decoration: const BoxDecoration(
-            color: Colors.white,
+            color: AppColors.surface,
             border: Border(
-              top: BorderSide(color: Color(0xFFEEEEEE), width: 1),
+              top: BorderSide(color: AppColors.border, width: 1),
             ),
           ),
           child: SafeArea(
             top: false,
             child: SizedBox(
-              height: 58,
+              height: AppDimensions.bottomNavHeight,
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
@@ -63,7 +66,7 @@ class AppBottomNavBar extends StatelessWidget {
                     label: 'Messages',
                     index: 1,
                   ),
-                  // Center Glowing Browse Button from Munaza's code
+                  // Center Glowing Browse Button
                   _buildBrowseButton(context),
                   _buildNavItem(
                     context: context,
@@ -94,7 +97,7 @@ class AppBottomNavBar extends StatelessWidget {
     return Expanded(
       child: InkWell(
         onTap: () => _navigate(context, 2),
-        splashColor: const Color(0xFFFF6A00).withValues(alpha: 0.12),
+        splashColor: AppColors.primary.withValues(alpha: 0.12),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
@@ -109,9 +112,9 @@ class AppBottomNavBar extends StatelessWidget {
                   height: 38,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: const Color(0xFFFF9500).withValues(alpha: 0.18),
+                    color: AppColors.secondary.withValues(alpha: 0.18),
                     border: Border.all(
-                      color: const Color(0xFFFF8C00).withValues(alpha: 0.38),
+                      color: AppColors.primary.withValues(alpha: 0.38),
                       width: 1.5,
                     ),
                   ),
@@ -122,19 +125,19 @@ class AppBottomNavBar extends StatelessWidget {
                   height: 32,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 1.8),
+                    border: Border.all(color: AppColors.surface, width: 1.8),
                     gradient: const LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
                       colors: [
-                        Color(0xFFFFA21D),
-                        Color(0xFFFF6A00),
-                        Color(0xFFE94E00),
+                        AppColors.secondary,
+                        AppColors.primary,
+                        AppColors.primaryDark,
                       ],
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFFFF6A00).withValues(alpha: 0.45),
+                        color: AppColors.primary.withValues(alpha: 0.45),
                         blurRadius: 6,
                         offset: const Offset(0, 1.5),
                       ),
@@ -152,7 +155,7 @@ class AppBottomNavBar extends StatelessWidget {
                       height: 1.0,
                       shadows: [
                         Shadow(
-                          color: Color(0x33000000),
+                          color: AppColors.scrim,
                           offset: Offset(0, 1),
                           blurRadius: 2,
                         ),
@@ -165,10 +168,10 @@ class AppBottomNavBar extends StatelessWidget {
             const SizedBox(height: 2),
             Text(
               'Browse',
-              style: TextStyle(
+              style: AppTypography.labelSmall.copyWith(
                 fontSize: 10,
                 fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                color: isActive ? const Color(0xFFFF6A00) : const Color(0xFF6B7280),
+                color: isActive ? AppColors.primary : AppColors.textSecondary,
               ),
             ),
           ],
@@ -186,12 +189,12 @@ class AppBottomNavBar extends StatelessWidget {
     int badgeCount = 0,
   }) {
     final bool isActive = index == currentIndex;
-    final Color color = isActive ? const Color(0xFFFF6A00) : const Color(0xFF6B7280);
+    final Color color = isActive ? AppColors.primary : AppColors.textSecondary;
 
     return Expanded(
       child: InkWell(
         onTap: () => _navigate(context, index),
-        splashColor: const Color(0xFFFF6A00).withValues(alpha: 0.08),
+        splashColor: AppColors.primary.withValues(alpha: 0.08),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -206,7 +209,7 @@ class AppBottomNavBar extends StatelessWidget {
                     child: Container(
                       padding: const EdgeInsets.all(2),
                       decoration: const BoxDecoration(
-                        color: Color(0xFFFF6A00),
+                        color: AppColors.badgeRed,
                         shape: BoxShape.circle,
                       ),
                       constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
@@ -226,7 +229,7 @@ class AppBottomNavBar extends StatelessWidget {
             const SizedBox(height: 3),
             Text(
               label,
-              style: TextStyle(
+              style: AppTypography.labelSmall.copyWith(
                 fontSize: 10,
                 color: color,
                 fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,

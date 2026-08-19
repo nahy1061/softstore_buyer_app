@@ -32,7 +32,7 @@ class CsrfService {
         path,
         options: Options(responseType: ResponseType.plain),
       );
-      final html = response.data as String? ?? '';
+      final html = response.data ?? '';
       final token = HtmlParserUtil.extractCsrfToken(html);
       if (token != null) {
         _cache[path] = token;

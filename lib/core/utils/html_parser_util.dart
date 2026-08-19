@@ -159,9 +159,9 @@ class HtmlParserUtil {
   ///
   /// The field can be:
   ///   - a String                  → `["url"]`
-  ///   - a List<String>            → as-is
+  ///   - a `List<String>`            → as-is
   ///   - an ImageObject Map        → `[imageObject["url"]]`
-  ///   - a List<ImageObject/String>
+  ///   - a `List<ImageObject/String>`
   static List<String> extractSchemaImages(dynamic imageField) {
     if (imageField == null) return [];
     final raw = imageField is List ? imageField : [imageField];
