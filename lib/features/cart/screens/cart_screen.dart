@@ -13,6 +13,8 @@ import '../models/cart_models.dart' as cart_models;
 import '../repository/cart_repository.dart' as cart_repo;
 import '../../orders/models/order_model.dart';
 import '../../orders/repository/order_repository.dart';
+import '../../catalog/models/catalog_models.dart';
+import '../../catalog/repository/catalog_repository.dart';
 // Shared bottom navigation bar used across all main screens
 import '../../../core/widgets/app_bottom_nav_bar.dart';
 import '../../../core/utils/validators.dart';
@@ -26,57 +28,96 @@ class CartScreen extends StatefulWidget {
 
 class _CartScreenState extends State<CartScreen> {
   final Set<String> _selectedIds = {};
+  final CatalogRepository _catalogRepo = CatalogRepository.instance;
 
-  static final List<Map<String, dynamic>> _recommendations = [
-    {
-      'name': 'Wireless Earbuds Pro',
-      'price': 4500,
-      'discount': 50,
-      'rating': 4.4,
-      'sold': '13.3k',
-      'icon': Icons.headphones,
-    },
-    {
-      'name': 'Smart Watch Series X',
-      'price': 12000,
-      'discount': 33,
-      'rating': 4.8,
-      'sold': '24.8k',
-      'icon': Icons.watch,
-    },
-    {
-      'name': 'Mechanical RGB Keyboard',
-      'price': 8500,
-      'discount': 23,
-      'rating': 4.3,
-      'sold': '5.2k',
-      'icon': Icons.keyboard,
-    },
-    {
-      'name': 'Coffee Maker',
-      'price': 5500,
-      'discount': 21,
-      'rating': 4.6,
-      'sold': '8.1k',
-      'icon': Icons.coffee,
-    },
-    {
-      'name': 'Premium T-Shirt',
-      'price': 1200,
-      'discount': 40,
-      'rating': 4.5,
-      'sold': '3.9k',
-      'icon': Icons.checkroom,
-    },
-    {
-      'name': 'Premium Olive Oil 1L',
-      'price': 2800,
-      'discount': 20,
-      'rating': 4.7,
-      'sold': '6.4k',
-      'icon': Icons.local_drink,
-    },
+  List<Product> _liveRecommendations = [];
+  bool _isLoadingRecommendations = false;
+
+  static final List<Product> _fallbackProducts = [
+    const Product(
+      id: 101,
+      name: 'Wireless Earbuds Pro',
+      slug: 'wireless_earbuds_pro',
+      displayPrice: 4500,
+      listPrice: 9000,
+      discountPercent: 50,
+    ),
+    const Product(
+      id: 102,
+      name: 'Smart Watch Series X',
+      slug: 'smart_watch_series_x',
+      displayPrice: 12000,
+      listPrice: 18000,
+      discountPercent: 33,
+    ),
+    const Product(
+      id: 103,
+      name: 'Mechanical RGB Keyboard',
+      slug: 'mechanical_rgb_keyboard',
+      displayPrice: 8500,
+      listPrice: 11000,
+      discountPercent: 23,
+    ),
+    const Product(
+      id: 104,
+      name: 'Coffee Maker',
+      slug: 'coffee_maker',
+      displayPrice: 5500,
+      listPrice: 7000,
+      discountPercent: 21,
+    ),
+    const Product(
+      id: 105,
+      name: 'Premium T-Shirt',
+      slug: 'premium_t_shirt',
+      displayPrice: 1200,
+      listPrice: 2000,
+      discountPercent: 40,
+    ),
+    const Product(
+      id: 106,
+      name: 'Premium Olive Oil 1L',
+      slug: 'premium_olive_oil_1l',
+      displayPrice: 2800,
+      listPrice: 3500,
+      discountPercent: 20,
+    ),
   ];
+
+  List<Product> get _recommendationsToDisplay =>
+      _liveRecommendations.isNotEmpty ? _liveRecommendations : _fallbackProducts;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLiveRecommendations();
+  }
+
+  Future<void> _loadLiveRecommendations() async {
+    if (!mounted) return;
+    setState(() => _isLoadingRecommendations = true);
+    try {
+      final homepage = await _catalogRepo.getHomepage();
+      final all = [
+        ...homepage.topDeals,
+        ...homepage.featuredProducts,
+        ...homepage.heroBanners,
+      ];
+      final seen = <int>{};
+      final unique = all.where((p) => seen.add(p.id)).toList();
+      if (mounted && unique.isNotEmpty) {
+        setState(() {
+          _liveRecommendations = unique;
+          _isLoadingRecommendations = false;
+        });
+        return;
+      }
+    } catch (_) {}
+
+    if (mounted) {
+      setState(() => _isLoadingRecommendations = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -174,54 +215,65 @@ class _CartScreenState extends State<CartScreen> {
 
           const SizedBox(height: 16),
 
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            gridDelegate:
-                const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              childAspectRatio: 0.62,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
-            ),
-            itemCount: _recommendations.length,
-            itemBuilder: (context, index) {
-              final p = _recommendations[index];
-              final iconData = p['icon'] as IconData;
-              final productId = (p['name'] as String)
-                  .toLowerCase()
-                  .replaceAll(' ', '_');
-              return _RecommendationCard(
-                name: p['name'] as String,
-                price: p['price'] as int,
-                discount: p['discount'] as int,
-                rating: p['rating'] as double,
-                sold: p['sold'] as String,
-                icon: iconData,
-                onTap: () => context.push(
-                  '/product/$productId',
-                  extra: {
-                    'name': p['name'] as String,
-                    'price': p['price'] as int,
-                    'iconCodePoint': iconData.codePoint,
-                  },
+          if (_isLoadingRecommendations && _liveRecommendations.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                child: CircularProgressIndicator(
+                  color: AppColors.primary,
+                  strokeWidth: 2.5,
                 ),
-                onAddToCart: () {
-                  final price = (p['price'] as num).toDouble();
-                  context.read<CartCubit>().addItem(
-                        CartItem(
-                          uuid: productId,
-                          productId: productId.hashCode.abs(),
-                          productName: p['name'] as String,
-                          quantity: 1,
-                          unitPriceSnapshot: price,
-                        ),
-                      );
-                },
-              );
-            },
-          ),
+              ),
+            )
+          else
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              gridDelegate:
+                  const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                childAspectRatio: 0.62,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
+              ),
+              itemCount: _recommendationsToDisplay.length,
+              itemBuilder: (context, index) {
+                final p = _recommendationsToDisplay[index];
+                return _RecommendationCard(
+                  product: p,
+                  onTap: () => context.push(
+                    '/product/${p.slug}',
+                    extra: {
+                      'id': p.id,
+                      'name': p.name,
+                      'price': p.displayPrice.toInt(),
+                      'imageUrl': p.imageUrl,
+                    },
+                  ),
+                  onAddToCart: () {
+                    context.read<CartCubit>().addItem(
+                          CartItem(
+                            uuid: '${p.id}',
+                            productId: p.id,
+                            productName: p.name,
+                            productSlug: p.slug,
+                            quantity: 1,
+                            unitPriceSnapshot: p.displayPrice,
+                            imageUrl: p.imageUrl,
+                          ),
+                        );
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('${p.name} added to cart'),
+                        duration: const Duration(seconds: 1),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
 
           const SizedBox(height: 24),
         ],
@@ -284,53 +336,64 @@ class _CartScreenState extends State<CartScreen> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      GridView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          childAspectRatio: 0.62,
-                          crossAxisSpacing: 10,
-                          mainAxisSpacing: 10,
-                        ),
-                        itemCount: _recommendations.length,
-                        itemBuilder: (context, index) {
-                          final p = _recommendations[index];
-                          final iconData = p['icon'] as IconData;
-                          final productId = (p['name'] as String)
-                              .toLowerCase()
-                              .replaceAll(' ', '_');
-                          return _RecommendationCard(
-                            name: p['name'] as String,
-                            price: p['price'] as int,
-                            discount: p['discount'] as int,
-                            rating: p['rating'] as double,
-                            sold: p['sold'] as String,
-                            icon: iconData,
-                            onTap: () => context.push(
-                              '/product/$productId',
-                              extra: {
-                                'name': p['name'] as String,
-                                'price': p['price'] as int,
-                                'iconCodePoint': iconData.codePoint,
-                              },
+                      if (_isLoadingRecommendations && _liveRecommendations.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 24),
+                          child: Center(
+                            child: CircularProgressIndicator(
+                              color: AppColors.primary,
+                              strokeWidth: 2.5,
                             ),
-                            onAddToCart: () {
-                              final price = (p['price'] as num).toDouble();
-                              context.read<CartCubit>().addItem(
-                                    CartItem(
-                                      uuid: productId,
-                                      productId: productId.hashCode.abs(),
-                                      productName: p['name'] as String,
-                                      quantity: 1,
-                                      unitPriceSnapshot: price,
-                                    ),
-                                  );
-                            },
-                          );
-                        },
-                      ),
+                          ),
+                        )
+                      else
+                        GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            childAspectRatio: 0.62,
+                            crossAxisSpacing: 10,
+                            mainAxisSpacing: 10,
+                          ),
+                          itemCount: _recommendationsToDisplay.length,
+                          itemBuilder: (context, index) {
+                            final p = _recommendationsToDisplay[index];
+                            return _RecommendationCard(
+                              product: p,
+                              onTap: () => context.push(
+                                '/product/${p.slug}',
+                                extra: {
+                                  'id': p.id,
+                                  'name': p.name,
+                                  'price': p.displayPrice.toInt(),
+                                  'imageUrl': p.imageUrl,
+                                },
+                              ),
+                              onAddToCart: () {
+                                context.read<CartCubit>().addItem(
+                                      CartItem(
+                                        uuid: '${p.id}',
+                                        productId: p.id,
+                                        productName: p.name,
+                                        productSlug: p.slug,
+                                        quantity: 1,
+                                        unitPriceSnapshot: p.displayPrice,
+                                        imageUrl: p.imageUrl,
+                                      ),
+                                    );
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('${p.name} added to cart'),
+                                    duration: const Duration(seconds: 1),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              },
+                            );
+                          },
+                        ),
                     ],
                   ),
                 ),
@@ -487,9 +550,21 @@ class _CartItemTile extends StatelessWidget {
                       color: AppColors.background,
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Center(
-                      child:
-                          Icon(item.icon, size: 36, color: AppColors.primary),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: item.imageUrl != null && item.imageUrl!.isNotEmpty
+                          ? Image.network(
+                              item.imageUrl!,
+                              fit: BoxFit.contain,
+                              errorBuilder: (_, __, ___) => Center(
+                                child: Icon(item.icon,
+                                    size: 36, color: AppColors.primary),
+                              ),
+                            )
+                          : Center(
+                              child: Icon(item.icon,
+                                  size: 36, color: AppColors.primary),
+                            ),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -3478,28 +3553,23 @@ class _EmptyCartIllustration extends StatelessWidget {
 // ── Recommendation card ───────────────────────────────────────────────────
 
 class _RecommendationCard extends StatelessWidget {
-  final String name;
-  final int price;
-  final int discount;
-  final double rating;
-  final String sold;
-  final IconData icon;
+  final Product product;
   final VoidCallback onAddToCart;
   final VoidCallback onTap;
 
   const _RecommendationCard({
-    required this.name,
-    required this.price,
-    required this.discount,
-    required this.rating,
-    required this.sold,
-    required this.icon,
+    required this.product,
     required this.onAddToCart,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final discount = product.discountPercent?.toInt() ??
+        (product.listPrice != null && product.listPrice! > product.displayPrice
+            ? (((product.listPrice! - product.displayPrice) / product.listPrice!) * 100).toInt()
+            : 0);
+
     return Card(
       elevation: AppDimensions.elevationCard,
       shape:
@@ -3508,72 +3578,98 @@ class _RecommendationCard extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: double.infinity,
-            height: 120,
-            color: AppColors.background,
-            child: Center(
-              child: Icon(icon, size: 50, color: AppColors.primary),
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: double.infinity,
+              height: 120,
+              color: Colors.white,
+              padding: const EdgeInsets.all(6),
+              child: product.imageUrl != null && product.imageUrl!.isNotEmpty
+                  ? Image.network(
+                      product.imageUrl!,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => const Center(
+                        child: Icon(Icons.image_outlined,
+                            size: 40, color: Color(0xFF9CA3AF)),
+                      ),
+                    )
+                  : const Center(
+                      child: Icon(Icons.shopping_bag_outlined,
+                          size: 40, color: AppColors.primary),
+                    ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(name,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    product.name,
                     style: AppTypography.productName,
                     maxLines: 2,
-                    overflow: TextOverflow.ellipsis),
-                const SizedBox(height: 5),
-                Row(
-                  children: [
-                    Text('Rs.$price',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 5),
+                  Row(
+                    children: [
+                      Text(
+                        'Rs ${product.displayPrice.toInt()}',
                         style: const TextStyle(
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13)),
-                    const SizedBox(width: 4),
-                    Text('-$discount%',
-                        style: const TextStyle(
-                            color: AppColors.primary, fontSize: 11)),
-                  ],
-                ),
-                const SizedBox(height: 5),
-                Row(
-                  children: [
-                    const Icon(Icons.star,
-                        color: Colors.amber, size: 13),
-                    const SizedBox(width: 2),
-                    Text('$rating ($sold sold)',
-                        style: const TextStyle(
-                            fontSize: 10,
-                            color: AppColors.textSecondary)),
-                    const Spacer(),
-                    GestureDetector(
-                      onTap: onAddToCart,
-                      child: Container(
-                        width: 30,
-                        height: 30,
-                        decoration: const BoxDecoration(
                           color: AppColors.primary,
-                          shape: BoxShape.circle,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
                         ),
-                        child: const Icon(
+                      ),
+                      if (discount > 0) ...[
+                        const SizedBox(width: 4),
+                        Text(
+                          '-$discount%',
+                          style: const TextStyle(
+                            color: AppColors.primary,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 5),
+                  Row(
+                    children: [
+                      const Icon(Icons.star,
+                          color: Colors.amber, size: 13),
+                      const SizedBox(width: 2),
+                      const Text(
+                        '4.8',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      const Spacer(),
+                      GestureDetector(
+                        onTap: onAddToCart,
+                        child: Container(
+                          width: 30,
+                          height: 30,
+                          decoration: const BoxDecoration(
+                            color: AppColors.primary,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
                             Icons.shopping_cart_outlined,
                             color: Colors.white,
-                            size: 16),
+                            size: 16,
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-              ],
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
         ),
       ),
     );

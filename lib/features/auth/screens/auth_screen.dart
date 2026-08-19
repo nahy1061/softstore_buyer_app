@@ -61,7 +61,7 @@ class _AuthScreenState extends State<AuthScreen>
     context.read<AuthCubit>().login(
           email: _loginEmailCtrl.text.trim(),
           password: _loginPassCtrl.text,
-          recaptchaToken: 'app-token',
+          recaptchaToken: '',
         );
   }
 
@@ -72,7 +72,7 @@ class _AuthScreenState extends State<AuthScreen>
           lastName: _regLastNameCtrl.text.trim(),
           email: _regEmailCtrl.text.trim(),
           password: _regPassCtrl.text,
-          recaptchaToken: 'app-token',
+          recaptchaToken: '',
         );
   }
 
@@ -184,15 +184,15 @@ class _AuthScreenState extends State<AuthScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Email
-            _buildFieldLabel('Email'),
+            // Email / Username
+            _buildFieldLabel('Email or Username'),
             const SizedBox(height: 8),
             TextFormField(
               controller: _loginEmailCtrl,
-              validator: Validators.email,
+              validator: Validators.emailOrUsername,
               keyboardType: TextInputType.emailAddress,
               textInputAction: TextInputAction.next,
-              decoration: _inputDecoration('Enter your email', Icons.email_outlined),
+              decoration: _inputDecoration('Enter your email or username', Icons.person_outline),
             ),
             const SizedBox(height: 16),
 
