@@ -2,6 +2,7 @@ import 'dart:developer' as developer;
 
 import 'package:dio/dio.dart';
 
+import '../../../core/config/env_config.dart';
 import '../../../core/constants/api_endpoints.dart';
 import '../../../core/errors/failures.dart';
 import '../../../core/network/dio_client.dart';
@@ -44,7 +45,7 @@ class AuthRepository {
       // Step 1: Fetch CSRF token from login page
       final csrfToken = await _csrf.fetchToken(ApiEndpoints.loginPage);
       if (csrfToken == null) {
-        throw const AuthFailure('Unable to connect to login server. Please check your internet connection.');
+        throw const AuthFailure('Unable to load login page. Please check your internet connection.');
       }
 
       // Step 2: Build compatibility form-encoded payload
@@ -72,6 +73,13 @@ class AuthRepository {
         options: Options(
           contentType: 'application/x-www-form-urlencoded',
           responseType: ResponseType.plain,
+          headers: {
+            'Referer': '${EnvConfig.apiBaseUrl}${ApiEndpoints.loginPage}',
+            'Origin': EnvConfig.apiBaseUrl,
+            if (csrfToken.isNotEmpty) 'X-CSRF-TOKEN': csrfToken,
+            if (csrfToken.isNotEmpty) 'X-CSRF-Token': csrfToken,
+          },
+          // Allow 200, 302, 400, 403, 422 to parse server form validation errors
           validateStatus: (s) => s != null && s < 500,
           followRedirects: false,
         ),
@@ -81,7 +89,7 @@ class AuthRepository {
       final location = response.headers.value('location') ?? '';
       final rawData = response.data;
 
-      // Case A: 302 redirect away from /login (standard PHP success redirect)
+      // 302 without /login in location = success redirect (e.g. to /store or /)
       if (status == 302 && !location.contains('/login')) {
         developer.log('[Auth] Login successful, redirected to: $location', name: 'auth');
         _csrf.clearAll();
@@ -94,26 +102,25 @@ class AuthRepository {
         );
       }
 
-      // Case B: Check if session was successfully established
+      // Check if session was successfully established
       final userAfterLogin = await restoreSession();
       if (userAfterLogin != null && userAfterLogin.email.isNotEmpty) {
         _csrf.clearAll();
         return userAfterLogin;
       }
 
-      // Case C: Check for JSON API response
-      if (rawData is String && rawData.trim().startsWith('{')) {
-        final error = HtmlParserUtil.extractFormError(rawData);
-        if (error != null) throw AuthFailure(error);
+      // Check for form errors in HTML or JSON body
+      final html = rawData is String ? rawData : (rawData?.toString() ?? '');
+      final error = HtmlParserUtil.extractFormError(html);
+      if (error != null && error.isNotEmpty) {
+        throw AuthFailure(error);
       }
 
-      // Case D: HTML page response (status 200 or 302 back)
-      if (rawData is String && rawData.isNotEmpty) {
-        final error = HtmlParserUtil.extractFormError(rawData);
-        throw AuthFailure(error ?? 'Invalid email or password. Please verify your credentials.');
+      if (status == 200 || status == 403 || status == 401) {
+        throw const AuthFailure('Invalid email or password. Please verify your credentials.');
       }
 
-      throw const AuthFailure('Invalid email or password. Please try again.');
+      throw const AuthFailure('Login failed. Please try again.');
     } on AuthFailure {
       rethrow;
     } on DioException catch (e) {
@@ -147,12 +154,12 @@ class AuthRepository {
         '_token': csrfToken,
         'first_name': firstName.trim(),
         'name': '$firstName ${lastName ?? ''}'.trim(),
-        if (lastName != null) 'last_name': lastName.trim(),
+        if (lastName != null && lastName.trim().isNotEmpty) 'last_name': lastName.trim(),
         'email': email.trim(),
         'username': email.trim(),
         'password': password,
         'password_confirmation': password,
-        if (phone != null) 'phone': phone.trim(),
+        if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),
       };
 
       if (recaptchaToken.isNotEmpty && recaptchaToken != 'app-token') {
@@ -166,6 +173,12 @@ class AuthRepository {
         options: Options(
           contentType: 'application/x-www-form-urlencoded',
           responseType: ResponseType.plain,
+          headers: {
+            'Referer': '${EnvConfig.apiBaseUrl}${ApiEndpoints.registerPage}',
+            'Origin': EnvConfig.apiBaseUrl,
+            if (csrfToken.isNotEmpty) 'X-CSRF-TOKEN': csrfToken,
+            if (csrfToken.isNotEmpty) 'X-CSRF-Token': csrfToken,
+          },
           validateStatus: (s) => s != null && s < 500,
           followRedirects: false,
         ),
@@ -193,12 +206,13 @@ class AuthRepository {
         return userAfterReg;
       }
 
-      if (rawData is String && rawData.isNotEmpty) {
-        final error = HtmlParserUtil.extractFormError(rawData);
-        throw AuthFailure(error ?? 'Registration failed. Please check the entered information.');
+      final html = rawData is String ? rawData : (rawData?.toString() ?? '');
+      final regError = HtmlParserUtil.extractFormError(html);
+      if (regError != null && regError.isNotEmpty) {
+        throw AuthFailure(regError);
       }
 
-      throw const AuthFailure('Registration failed. Please try again.');
+      throw const AuthFailure('Registration failed. Please check the entered information.');
     } on AuthFailure {
       rethrow;
     } on DioException catch (e) {

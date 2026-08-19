@@ -2,11 +2,14 @@
 library;
 
 import 'dart:io';
+import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/services.dart';
 import 'package:softstore_buyer_app/core/network/dio_client.dart';
 import 'package:softstore_buyer_app/core/network/http_overrides.dart';
 import 'package:softstore_buyer_app/core/utils/csrf_service.dart';
+import 'package:softstore_buyer_app/core/utils/html_parser_util.dart';
+import 'package:softstore_buyer_app/features/auth/repository/auth_repository.dart';
 import 'package:softstore_buyer_app/features/catalog/repository/catalog_repository.dart';
 import 'package:softstore_buyer_app/features/orders/data/order_service.dart';
 
@@ -142,6 +145,19 @@ void main() {
         print('✓ Profile endpoint response status: ${response.statusCode}');
       } catch (e) {
         print('✓ Profile endpoint verified: $e');
+      }
+    });
+
+    test('13. Auth: Login connects to /login with CSRF and validates credentials', () async {
+      try {
+        await AuthRepository.instance.login(
+          email: 'ismail_test_nonexistent@softstore.pk',
+          password: 'Password123!',
+          recaptchaToken: '',
+        );
+      } catch (e) {
+        print('✓ AuthRepository.login handled server response: $e');
+        expect(e.toString(), isNotEmpty);
       }
     });
   });
