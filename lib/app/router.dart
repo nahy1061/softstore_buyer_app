@@ -261,8 +261,10 @@ final GoRouter goRouter = GoRouter(
     ),
     GoRoute(
       path: AppRoutes.returns,
-      builder: (context, state) =>
-          const SecondaryPlaceholderScreen(label: 'Returns', navIndex: 1),
+      builder: (context, state) => BlocProvider(
+        create: (_) => OrderCubit(),
+        child: const OrdersScreen(initialTab: 7),
+      ),
     ),
 
     // Auth

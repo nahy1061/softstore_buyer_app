@@ -30,9 +30,34 @@ class OrderCubit extends Cubit<OrderState> {
         orders = await _orderService.fetchOrders();
       } catch (_) {}
 
-      if (orders.isEmpty) {
+      if (orders.isNotEmpty) {
+        final currentLocal = await _repo.getLocalOrders();
+        final map = <String, Order>{};
+        for (final o in orders) {
+          map[o.referenceNumber.toLowerCase()] = o;
+        }
+        for (final o in currentLocal) {
+          final key = o.referenceNumber.toLowerCase();
+          if (map.containsKey(key)) {
+            if (o.status == OrderStatus.cancelled ||
+                o.status == OrderStatus.refunded) {
+              map[key] = map[key]!.copyWith(
+                status: o.status,
+                statusHistory: o.statusHistory.isNotEmpty
+                    ? o.statusHistory
+                    : map[key]!.statusHistory,
+              );
+            }
+          } else {
+            map[key] = o;
+          }
+        }
+        orders = map.values.toList()
+          ..sort((a, b) => b.placedAt.compareTo(a.placedAt));
+      } else {
         orders = await _repo.getOrders();
       }
+
       if (orders.isEmpty) {
         orders = List<Order>.from(dummyOrders);
       }
@@ -169,9 +194,48 @@ class OrderCubit extends Cubit<OrderState> {
 
   Future<void> cancelOrder(String orderId, {String? reason}) async {
     emit(const OrderCancelling());
-    await Future.delayed(const Duration(milliseconds: 600));
+    try {
+      await _repo.cancelOrder(orderId: orderId, reason: reason);
+    } catch (_) {
+      try {
+        await _orderService.cancelOrder(orderId: orderId, reason: reason);
+      } catch (_) {}
+    }
     emit(OrderCancelled(orderId: orderId));
-    loadOrders();
+    await loadOrders();
+  }
+
+  Future<void> requestReturn(
+    String orderId, {
+    required String reason,
+    String? details,
+    String returnType = 'refund',
+    List<Map<String, dynamic>> items = const [],
+    List<String>? photoPaths,
+  }) async {
+    emit(const OrderReturning());
+    try {
+      await _repo.requestReturn(
+        orderId: orderId,
+        reason: reason,
+        details: details,
+        returnType: returnType,
+        items: items,
+        photoPaths: photoPaths,
+      );
+    } catch (_) {
+      try {
+        await _orderService.requestReturn(
+          orderId: orderId,
+          reason: reason,
+          returnType: returnType,
+          items: items,
+          photoPaths: photoPaths,
+        );
+      } catch (_) {}
+    }
+    emit(OrderReturnRequested(orderId: orderId));
+    await loadOrders();
   }
 
   void reset() => emit(const OrderInitial());

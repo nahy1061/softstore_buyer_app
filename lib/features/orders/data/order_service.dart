@@ -195,6 +195,41 @@ class OrderService {
     }
   }
 
+  /// Cancels an order via `/store/account/orders/{orderId}/cancel`
+  Future<bool> cancelOrder({
+    required String orderId,
+    String? reason,
+  }) async {
+    try {
+      final cleanInvoice = orderId.trim();
+      final orderUrl = '${ApiEndpoints.getOrderDetail}/$cleanInvoice';
+      final pageResponse = await _client.get<String>(
+        orderUrl,
+        options: Options(responseType: ResponseType.plain),
+      );
+      final csrfToken = CsrfExtractor.extract(pageResponse.data ?? '') ?? '';
+
+      final cancelPath = '$orderUrl${ApiEndpoints.cancelOrderSuffix}';
+      final res = await _client.post<String>(
+        cancelPath,
+        data: {
+          if (csrfToken.isNotEmpty) ...{
+            '_csrf_token': csrfToken,
+            'csrf_token': csrfToken,
+          },
+          'reason': reason ?? 'Cancelled by buyer',
+        },
+        options: Options(
+          contentType: Headers.formUrlEncodedContentType,
+          validateStatus: (s) => s != null && s < 500,
+        ),
+      );
+      return res.statusCode == 200 || res.statusCode == 302;
+    } catch (e) {
+      throw ServerFailure('Failed to cancel order: $e');
+    }
+  }
+
   /// Fetches returns history list from `/store/account/returns`.
   Future<List<Map<String, dynamic>>> fetchReturns() async {
     try {

@@ -97,6 +97,11 @@ class ApiEndpoints {
   static const String requestReturn = '/store/account/orders';
   static const String getReturns = '/store/account/returns';
 
+  /// POST /store/account/orders/{invoice}/cancel
+  static const String cancelOrderSuffix = '/cancel';
+  static const String cancelOrder = '/store/account/orders/';
+  static const String apiCancelOrder = '/api/buyer/orders/';
+
   /// GET — returns list HTML
   static const String returnsList = '/store/account/returns';
 
