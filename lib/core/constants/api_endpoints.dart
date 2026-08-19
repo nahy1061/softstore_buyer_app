@@ -156,8 +156,14 @@ class ApiEndpoints {
   static const String createSupportTicket = '/store/support/tickets';
   static const String getSupportTickets = '/store/support/tickets';
 
-  /// GET /store/support/tickets/{id} — ticket detail; POST to reply
+  /// GET /store/support/tickets/{id} — ticket detail HTML; POST to reply
   static const String ticketDetail = '/store/support/tickets/';
   static const String getSupportTicketMessages = '/store/support/tickets';
   static const String sendSupportMessage = '/store/support/tickets';
+
+  /// JSON API: GET /store/support/tickets/{id}/messages?after_id=N
+  static const String ticketMessagesApi = '/store/support/tickets';
+
+  /// JSON API: POST /store/support/tickets/{id} with JSON {message} and X-CSRF-TOKEN header
+  static const String ticketReplyApi = '/store/support/tickets';
 }
