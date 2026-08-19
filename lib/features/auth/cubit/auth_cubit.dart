@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/errors/failures.dart';
 import '../../../core/services/notification_service.dart';
+import '../../support/data/support_repository.dart';
 import '../repository/auth_repository.dart';
 import 'auth_state.dart';
 
@@ -32,6 +33,7 @@ class AuthCubit extends Cubit<AuthState> {
           phone: user.phone,
           firstName: user.firstName,
         );
+        SupportRepository().setUserId(user.id);
         emit(AuthAuthenticated(user));
       } else {
         emit(const AuthUnauthenticated());
@@ -62,6 +64,7 @@ class AuthCubit extends Cubit<AuthState> {
         phone: user.phone,
         firstName: user.firstName,
       );
+      SupportRepository().setUserId(user.id);
       emit(AuthAuthenticated(user));
     } on AuthFailure catch (e) {
       emit(AuthError(e.message));
@@ -98,6 +101,7 @@ class AuthCubit extends Cubit<AuthState> {
         phone: user.phone,
         firstName: user.firstName,
       );
+      SupportRepository().setUserId(user.id);
       emit(AuthAuthenticated(user));
     } on AuthFailure catch (e) {
       emit(AuthError(e.message));
@@ -111,6 +115,7 @@ class AuthCubit extends Cubit<AuthState> {
   // ─── Logout ───────────────────────────────────────────────────────────────
 
   Future<void> logout() async {
+    await SupportRepository().clearCache();
     await NotificationService.instance.clearUserOnLogout();
     await _repo.logout();
     emit(const AuthUnauthenticated());

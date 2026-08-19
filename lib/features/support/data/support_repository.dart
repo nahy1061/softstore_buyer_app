@@ -18,13 +18,43 @@ class SupportRepository {
   final List<Ticket> _cachedTickets = [];
   final Map<int, List<TicketMessage>> _cachedMessages = {};
   bool _isStorageInitialized = false;
+  String? _currentUserId;
 
   factory SupportRepository({DioClient? dioClient}) {
     return _instance;
   }
 
-  SupportRepository._internal() : _dio = DioClient() {
-    _initStorage();
+  SupportRepository._internal() : _dio = DioClient();
+
+  /// Set the current user ID to namespace storage per account.
+  /// Call this on login. Pass null for guest/unknown users.
+  void setUserId(String? userId) {
+    if (_currentUserId != userId) {
+      _currentUserId = userId;
+      _isStorageInitialized = false;
+      _cachedTickets.clear();
+      _cachedMessages.clear();
+      _initStorage();
+    }
+  }
+
+  /// Clear all cached data. Call this on logout.
+  Future<void> clearCache() async {
+    _cachedTickets.clear();
+    _cachedMessages.clear();
+    _isStorageInitialized = false;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (_currentUserId != null) {
+        await prefs.remove('support_saved_tickets_$_currentUserId');
+        await prefs.remove('support_saved_messages_$_currentUserId');
+      }
+    } catch (e) {
+      developer.log(
+        '[SupportRepository] clearCache error: $e',
+        name: 'support',
+      );
+    }
   }
 
   List<Ticket> get cachedTickets => List.unmodifiable(_cachedTickets);
@@ -34,9 +64,11 @@ class SupportRepository {
     if (_isStorageInitialized) return;
     try {
       final prefs = await SharedPreferences.getInstance();
+      final ticketsKey = 'support_saved_tickets${_currentUserId != null ? '_$_currentUserId' : ''}';
+      final messagesKey = 'support_saved_messages${_currentUserId != null ? '_$_currentUserId' : ''}';
 
       // Load tickets
-      final ticketsJson = prefs.getString('support_saved_tickets');
+      final ticketsJson = prefs.getString(ticketsKey);
       if (ticketsJson != null && ticketsJson.isNotEmpty) {
         final list = jsonDecode(ticketsJson) as List<dynamic>;
         final loaded = list
@@ -50,7 +82,7 @@ class SupportRepository {
       }
 
       // Load messages
-      final messagesJson = prefs.getString('support_saved_messages');
+      final messagesJson = prefs.getString(messagesKey);
       if (messagesJson != null && messagesJson.isNotEmpty) {
         final map = jsonDecode(messagesJson) as Map<String, dynamic>;
         map.forEach((key, val) {
@@ -76,8 +108,9 @@ class SupportRepository {
   Future<void> _persistTickets() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      final ticketsKey = 'support_saved_tickets${_currentUserId != null ? '_$_currentUserId' : ''}';
       final list = _cachedTickets.map((t) => t.toJson()).toList();
-      await prefs.setString('support_saved_tickets', jsonEncode(list));
+      await prefs.setString(ticketsKey, jsonEncode(list));
     } catch (e) {
       developer.log(
         '[SupportRepository] persistTickets error: $e',
@@ -89,11 +122,12 @@ class SupportRepository {
   Future<void> _persistMessages() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      final messagesKey = 'support_saved_messages${_currentUserId != null ? '_$_currentUserId' : ''}';
       final map = <String, dynamic>{};
       _cachedMessages.forEach((ticketId, msgs) {
         map[ticketId.toString()] = msgs.map((m) => m.toJson()).toList();
       });
-      await prefs.setString('support_saved_messages', jsonEncode(map));
+      await prefs.setString(messagesKey, jsonEncode(map));
     } catch (e) {
       developer.log(
         '[SupportRepository] persistMessages error: $e',
