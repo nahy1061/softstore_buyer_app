@@ -69,21 +69,50 @@ class HtmlParserUtil {
 
   // ─── Form Error Extraction ────────────────────────────────────────────────
 
-  /// Returns the first `.invalid-feedback` or `.alert-danger` error text, or
-  /// null if the HTML contains no visible error messages.
+  /// Returns the first error text found in HTML or JSON body, or
+  /// null if the response contains no visible error messages.
   static String? extractFormError(String htmlBody) {
+    if (htmlBody.trim().isEmpty) return null;
+
+    // Check if JSON response e.g. {"success":false,"message":"..."}
+    if (htmlBody.trim().startsWith('{')) {
+      try {
+        final decoded = jsonDecode(htmlBody);
+        if (decoded is Map<String, dynamic>) {
+          final msg = decoded['message'] ?? decoded['error'] ?? decoded['msg'];
+          if (msg != null && msg.toString().isNotEmpty) {
+            return msg.toString();
+          }
+        }
+      } catch (_) {}
+    }
+
     try {
       final doc = html_parser.parse(htmlBody);
 
-      // Primary: Bootstrap's .invalid-feedback
+      // 1. SoftStore specific alert elements (.sx-alert-err, .sx-alert)
+      final sxAlert = doc.querySelector('.sx-alert-err, .sx-alert, .alert-tf.alert-danger');
+      if (sxAlert != null) {
+        final text = sxAlert.text.trim();
+        if (text.isNotEmpty) return text;
+      }
+
+      // 2. Generic role="alert"
+      final roleAlert = doc.querySelector('[role="alert"]');
+      if (roleAlert != null) {
+        final text = roleAlert.text.trim();
+        if (text.isNotEmpty) return text;
+      }
+
+      // 3. Bootstrap's .invalid-feedback
       final invalidFeedback = doc.querySelector('.invalid-feedback');
       if (invalidFeedback != null) {
         final text = invalidFeedback.text.trim();
         if (text.isNotEmpty) return text;
       }
 
-      // Fallback: page-level danger alert
-      final alertDanger = doc.querySelector('.alert-danger, .alert-error');
+      // 4. Page-level danger/error alerts
+      final alertDanger = doc.querySelector('.alert-danger, .alert-error, .error-message, .alert');
       if (alertDanger != null) {
         final text = alertDanger.text.trim();
         if (text.isNotEmpty) return text;

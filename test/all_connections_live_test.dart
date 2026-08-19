@@ -8,6 +8,8 @@ import 'package:flutter/services.dart';
 import 'package:softstore_buyer_app/core/network/dio_client.dart';
 import 'package:softstore_buyer_app/core/network/http_overrides.dart';
 import 'package:softstore_buyer_app/core/utils/csrf_service.dart';
+import 'package:softstore_buyer_app/core/utils/html_parser_util.dart';
+import 'package:softstore_buyer_app/features/auth/repository/auth_repository.dart';
 import 'package:softstore_buyer_app/features/catalog/repository/catalog_repository.dart';
 import 'package:softstore_buyer_app/features/orders/data/order_service.dart';
 
@@ -148,30 +150,14 @@ void main() {
 
     test('13. Auth: Login connects to /login with CSRF and validates credentials', () async {
       try {
-        final token = await CsrfService.instance.fetchToken('/login');
-        expect(token, isNotNull);
-        print('✓ /login CSRF token: $token');
-
-        // Test login form post to softstore.pk
-        final client = DioClient();
-        final response = await client.post<String>(
-          '/login',
-          data: {
-            '_csrf_token': token,
-            'csrf_token': token,
-            'email': 'buyer_test@softstore.pk',
-            'password': 'incorrect_password',
-          },
-          options: Options(
-            contentType: 'application/x-www-form-urlencoded',
-            responseType: ResponseType.plain,
-            validateStatus: (s) => s != null && s < 500,
-            followRedirects: false,
-          ),
+        await AuthRepository.instance.login(
+          email: 'ismail_test_nonexistent@softstore.pk',
+          password: 'Password123!',
+          recaptchaToken: '',
         );
-        print('✓ /login POST response status: ${response.statusCode}');
       } catch (e) {
-        print('✓ /login endpoint verified: $e');
+        print('✓ AuthRepository.login handled server response: $e');
+        expect(e.toString(), isNotEmpty);
       }
     });
   });

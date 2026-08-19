@@ -8,6 +8,7 @@ import '../../../core/utils/validators.dart';
 import '../cubit/auth_cubit.dart';
 import '../cubit/auth_state.dart';
 import 'auth_screen.dart';
+import 'login_screen.dart';
 
 /// Register Screen matching the exact SoftStore design (Screenshot 1).
 /// Can be presented as a standalone page or as a bottom sheet modal.
@@ -119,12 +120,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   void _onBack() {
-    if (widget.isModal) {
-      if (widget.onSwitchToLogin != null) {
-        widget.onSwitchToLogin!();
-      } else {
-        Navigator.of(context).pop(false);
-      }
+    if (widget.isModal && widget.onSwitchToLogin != null) {
+      widget.onSwitchToLogin!();
+    } else if (widget.isModal) {
+      Navigator.of(context).pop();
+      LoginScreen.showAsModal(context);
     } else {
       if (context.canPop()) {
         context.pop();
@@ -606,6 +606,40 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                   ],
                 ),
+              ),
+            ),
+
+            const SizedBox(height: 28),
+
+            // ── Footer: Already have an account? Sign in ─────────────────
+            Center(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Already have an account? ',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w400,
+                      color: Color(0xFF4B5563),
+                    ),
+                  ),
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _onBack,
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                      child: Text(
+                        'Sign In',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFFFF6A00),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

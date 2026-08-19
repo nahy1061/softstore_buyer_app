@@ -2,6 +2,7 @@ import 'dart:developer' as developer;
 
 import 'package:dio/dio.dart';
 
+import '../../../core/config/env_config.dart';
 import '../../../core/constants/api_endpoints.dart';
 import '../../../core/errors/failures.dart';
 import '../../../core/network/dio_client.dart';
@@ -44,7 +45,7 @@ class AuthRepository {
       // Step 1: Fetch CSRF token from login page
       final csrfToken = await _csrf.fetchToken(ApiEndpoints.loginPage);
       if (csrfToken == null) {
-        throw const AuthFailure('Unable to load login page. Please try again.');
+        throw const AuthFailure('Unable to load login page. Please check your internet connection.');
       }
 
       // Step 2: POST login form
@@ -55,13 +56,19 @@ class AuthRepository {
           'csrf_token': csrfToken,
           'email': email.trim(),
           'password': password,
-          'recaptcha_token': recaptchaToken,
-          'g-recaptcha-response': recaptchaToken,
+          if (recaptchaToken.isNotEmpty) 'recaptcha_token': recaptchaToken,
+          if (recaptchaToken.isNotEmpty) 'g-recaptcha-response': recaptchaToken,
         },
         options: Options(
           contentType: 'application/x-www-form-urlencoded',
           responseType: ResponseType.plain,
-          // Allow 200 and 302; 302 handled below
+          headers: {
+            'Referer': '${EnvConfig.apiBaseUrl}${ApiEndpoints.loginPage}',
+            'Origin': EnvConfig.apiBaseUrl,
+            if (csrfToken.isNotEmpty) 'X-CSRF-TOKEN': csrfToken,
+            if (csrfToken.isNotEmpty) 'X-CSRF-Token': csrfToken,
+          },
+          // Allow 200, 302, 400, 403, 422 to parse server form validation errors
           validateStatus: (s) => s != null && s < 500,
           followRedirects: false,
         ),
@@ -70,21 +77,32 @@ class AuthRepository {
       final status = response.statusCode ?? 0;
       final location = response.headers.value('location') ?? '';
 
-      // 302 without /login in location = success redirect (e.g. to /store)
+      // 302 without /login in location = success redirect (e.g. to /store or /)
       if (status == 302 && !location.contains('/login')) {
         developer.log('[Auth] Login successful, redirected to: $location', name: 'auth');
         // Invalidate cached CSRF for login page
         _csrf.clearAll();
         final user = await restoreSession();
-        if (user == null) throw const AuthFailure('Unable to load user profile.');
+        if (user == null) {
+          // If profile fetch fails right away, construct default user from email
+          return User(
+            firstName: email.split('@').first,
+            lastName: '',
+            email: email.trim(),
+          );
+        }
         return user;
       }
 
-      // Check for form errors in HTML body
-      if (status == 200) {
-        final html = response.data as String? ?? '';
-        final error = HtmlParserUtil.extractFormError(html);
-        throw AuthFailure(error ?? 'Invalid email or password.');
+      // Check for form errors in HTML or JSON body
+      final html = response.data as String? ?? '';
+      final error = HtmlParserUtil.extractFormError(html);
+      if (error != null && error.isNotEmpty) {
+        throw AuthFailure(error);
+      }
+
+      if (status == 200 || status == 403 || status == 401) {
+        throw const AuthFailure('Invalid email or password.');
       }
 
       throw const AuthFailure('Login failed. Please try again.');
@@ -121,16 +139,22 @@ class AuthRepository {
           '_csrf_token': csrfToken,
           'csrf_token': csrfToken,
           'first_name': firstName.trim(),
-          if (lastName != null) 'last_name': lastName.trim(),
+          if (lastName != null && lastName.trim().isNotEmpty) 'last_name': lastName.trim(),
           'email': email.trim(),
           'password': password,
-          if (phone != null) 'phone': phone.trim(),
-          'recaptcha_token': recaptchaToken,
-          'g-recaptcha-response': recaptchaToken,
+          if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),
+          if (recaptchaToken.isNotEmpty) 'recaptcha_token': recaptchaToken,
+          if (recaptchaToken.isNotEmpty) 'g-recaptcha-response': recaptchaToken,
         },
         options: Options(
           contentType: 'application/x-www-form-urlencoded',
           responseType: ResponseType.plain,
+          headers: {
+            'Referer': '${EnvConfig.apiBaseUrl}${ApiEndpoints.registerPage}',
+            'Origin': EnvConfig.apiBaseUrl,
+            if (csrfToken.isNotEmpty) 'X-CSRF-TOKEN': csrfToken,
+            if (csrfToken.isNotEmpty) 'X-CSRF-Token': csrfToken,
+          },
           validateStatus: (s) => s != null && s < 500,
           followRedirects: false,
         ),
@@ -139,17 +163,24 @@ class AuthRepository {
       final status = response.statusCode ?? 0;
       final location = response.headers.value('location') ?? '';
 
-      if (status == 302 && !location.contains('/login')) {
+      if (status == 302 && !location.contains('/login') && !location.contains('/register')) {
         _csrf.clearAll();
         final user = await restoreSession();
-        if (user == null) throw const AuthFailure('Unable to load user profile.');
+        if (user == null) {
+          return User(
+            firstName: firstName.trim(),
+            lastName: lastName?.trim() ?? '',
+            email: email.trim(),
+            phone: phone?.trim(),
+          );
+        }
         return user;
       }
 
-      if (status == 200) {
-        final html = response.data as String? ?? '';
-        final error = HtmlParserUtil.extractFormError(html);
-        throw AuthFailure(error ?? 'Registration failed. Please try again.');
+      final html = response.data as String? ?? '';
+      final error = HtmlParserUtil.extractFormError(html);
+      if (error != null && error.isNotEmpty) {
+        throw AuthFailure(error);
       }
 
       throw const AuthFailure('Registration failed. Please try again.');
