@@ -247,8 +247,20 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     await _orderRepo.saveLocalOrder(placedOrder);
 
     if (mounted) {
+      final firstItem = cartState.items.isNotEmpty ? cartState.items.first : null;
       context.read<CartCubit>().clearCart();
-      context.go('/order-confirmation/$invoice');
+      context.go(
+        '/order-confirmation/$invoice',
+        extra: {
+          'invoiceNumber': invoice,
+          'subtotal': cartState.totalPrice.toInt(),
+          'delivery': _deliveryFee.toInt(),
+          'productName': firstItem?.name ?? 'SoftStore Item',
+          'productQty': firstItem?.quantity ?? 1,
+          'productPrice': firstItem?.price.toInt() ?? cartState.totalPrice.toInt(),
+          'iconCodePoint': Icons.inventory_2_outlined.codePoint,
+        },
+      );
     }
   }
 

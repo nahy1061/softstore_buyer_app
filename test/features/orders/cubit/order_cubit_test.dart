@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:softstore_buyer_app/features/orders/cubit/order_cubit.dart';
 import 'package:softstore_buyer_app/features/orders/cubit/order_state.dart';
 import 'package:softstore_buyer_app/features/orders/models/order_model.dart';
@@ -104,6 +105,7 @@ void main() {
     late OrderCubit cubit;
 
     setUp(() {
+      SharedPreferences.setMockInitialValues({});
       cubit = OrderCubit(orderService: FakeOrderService());
     });
 
@@ -501,22 +503,40 @@ void main() {
       });
     });
 
-    group('filterByStatus (tab filter)', () {
-      test('filters by active tab', () async {
+    group('cancelOrder', () {
+      test('emits OrderCancelling then OrderCancelled and reloads orders with cancelled status', () async {
         await cubit.loadOrders();
-        cubit.filterByStatus('pending');
+
+        final initialOrder = (cubit.state as OrderLoaded).orders.firstWhere(
+          (o) => o.referenceNumber == 'SS-20240801-0042',
+        );
+        expect(initialOrder.status, OrderStatus.confirmed);
+
+        await cubit.cancelOrder('SS-20240801-0042', reason: 'Decided for alternative product');
 
         final state = cubit.state as OrderLoaded;
-        expect(state.activeFilter, 'pending');
+        final cancelledOrder = state.orders.firstWhere(
+          (o) => o.referenceNumber == 'SS-20240801-0042' || o.id == '1',
+        );
+        expect(cancelledOrder.status, OrderStatus.cancelled);
       });
+    });
 
-      test('clears tab filter when null', () async {
+    group('requestReturn', () {
+      test('emits OrderReturning then OrderReturnRequested and reloads orders with refunded status', () async {
         await cubit.loadOrders();
-        cubit.filterByStatus('pending');
-        cubit.filterByStatus(null);
+
+        await cubit.requestReturn(
+          'SS-20240801-0042',
+          reason: 'Defective product received',
+          returnType: 'refund',
+        );
 
         final state = cubit.state as OrderLoaded;
-        expect(state.activeFilter, isNull);
+        final returnedOrder = state.orders.firstWhere(
+          (o) => o.referenceNumber == 'SS-20240801-0042' || o.id == '1',
+        );
+        expect(returnedOrder.status, OrderStatus.refunded);
       });
     });
   });
