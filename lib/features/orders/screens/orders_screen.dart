@@ -274,7 +274,7 @@ class _OrderList extends StatelessWidget {
           final order = orders[index];
           return OrderCard(
             order: order,
-            onTap: () => context.push('/orders/${order.id}', extra: order),
+            onTap: () => onOrderTap(order),
           );
         },
       ),

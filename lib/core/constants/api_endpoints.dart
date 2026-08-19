@@ -95,7 +95,6 @@ class ApiEndpoints {
   /// POST multipart /store/account/orders/{invoice}/return
   static const String requestReturnSuffix = '/return';
   static const String requestReturn = '/store/account/orders';
-  static const String getReturns = '/store/account/returns';
 
   /// POST /store/account/orders/{invoice}/cancel
   static const String cancelOrderSuffix = '/cancel';

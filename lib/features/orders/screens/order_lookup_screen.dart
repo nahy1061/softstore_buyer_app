@@ -528,7 +528,7 @@ class _LookupResultCard extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(
                 AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.lg),
             child: ElevatedButton.icon(
-              onPressed: () => context.push('/orders/${order.id}'),
+              onPressed: () => context.push('/orders/${order.referenceNumber}', extra: order),
               icon: const Icon(Icons.open_in_new_rounded, size: 16),
               label: const Text('View Full Order Details'),
               style: ElevatedButton.styleFrom(
