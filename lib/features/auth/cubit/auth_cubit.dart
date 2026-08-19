@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/errors/failures.dart';
+import '../../../core/services/notification_service.dart';
 import '../repository/auth_repository.dart';
 import 'auth_state.dart';
 
@@ -25,6 +26,12 @@ class AuthCubit extends Cubit<AuthState> {
       final user = await _repo.restoreSession();
       if (user != null) {
         developer.log('[AuthCubit] Session restored: ${user.email}', name: 'auth');
+        NotificationService.instance.setBuyerUser(
+          email: user.email,
+          userId: user.id,
+          phone: user.phone,
+          firstName: user.firstName,
+        );
         emit(AuthAuthenticated(user));
       } else {
         emit(const AuthUnauthenticated());
@@ -48,6 +55,12 @@ class AuthCubit extends Cubit<AuthState> {
         email: email,
         password: password,
         recaptchaToken: recaptchaToken,
+      );
+      NotificationService.instance.setBuyerUser(
+        email: user.email,
+        userId: user.id,
+        phone: user.phone,
+        firstName: user.firstName,
       );
       emit(AuthAuthenticated(user));
     } on AuthFailure catch (e) {
@@ -79,6 +92,12 @@ class AuthCubit extends Cubit<AuthState> {
         phone: phone,
         recaptchaToken: recaptchaToken,
       );
+      NotificationService.instance.setBuyerUser(
+        email: user.email,
+        userId: user.id,
+        phone: user.phone,
+        firstName: user.firstName,
+      );
       emit(AuthAuthenticated(user));
     } on AuthFailure catch (e) {
       emit(AuthError(e.message));
@@ -92,6 +111,7 @@ class AuthCubit extends Cubit<AuthState> {
   // ─── Logout ───────────────────────────────────────────────────────────────
 
   Future<void> logout() async {
+    await NotificationService.instance.clearUserOnLogout();
     await _repo.logout();
     emit(const AuthUnauthenticated());
   }

@@ -325,81 +325,133 @@ class SupportRepository {
     try {
       final tickets = <Ticket>[];
 
-      // Fast single-request attempt to fetch server tickets
-      final endpointsToTry = ['/support', '/store/support/tickets'];
+      // Try JSON API first, then fall back to HTML scraping
+      final endpointsToTry = ['/support/ticket', '/agent/tickets', '/store/support/tickets', '/support'];
       for (final endpoint in endpointsToTry) {
         try {
           final response = await _dio.get(
             endpoint,
             options: Options(
               responseType: ResponseType.plain,
+              headers: {'Accept': 'text/html,application/json'},
               sendTimeout: const Duration(seconds: 3),
               receiveTimeout: const Duration(seconds: 3),
             ),
           );
 
           if (response.statusCode == 200 && response.data != null) {
-            final html = response.data as String;
-            if (html.isNotEmpty) {
-              final doc = html_parser.parse(html);
-              final ticketLinks = doc.querySelectorAll(
-                'a[href*="/support/tickets/"], a[href*="/support/ticket/"], a[href*="/support/"], a[href*="/tickets/"]',
-              );
+            final body = response.data.toString();
+            if (body.isEmpty) continue;
 
-              for (final link in ticketLinks) {
-                final href = link.attributes['href'] ?? '';
-                final ticketId = _extractTicketId(href);
-                if (ticketId <= 0 || tickets.any((t) => t.id == ticketId)) {
-                  continue;
+            // Try JSON response first
+            try {
+              final jsonData = jsonDecode(body);
+              if (jsonData is Map && jsonData['tickets'] is List) {
+                for (final item in jsonData['tickets'] as List) {
+                  if (item is Map<String, dynamic>) {
+                    tickets.add(Ticket.fromJson(item));
+                  }
                 }
+                if (tickets.isNotEmpty) break;
+              }
+            } catch (_) {
+              // Not JSON, parse as HTML
+            }
 
-                var row = link.parent;
-                for (int i = 0; i < 4; i++) {
-                  if (row == null) break;
-                  if (row.querySelectorAll('td').isNotEmpty) break;
-                  row = row.parent;
-                }
-                final cells = row?.querySelectorAll('td') ?? [];
+            // HTML scraping with actual SoftStore CSS classes
+            final doc = html_parser.parse(body);
 
-                String subject = link.text.trim();
-                String statusText = 'open';
-                DateTime lastUpdated = DateTime.now();
-                String lastMessage = '';
+            // The actual ticket list uses table rows or card-based layout
+            // Try to find ticket links with the pattern /store/support/tickets/{id}
+            final ticketLinks = doc.querySelectorAll(
+              'a[href*="/store/support/tickets/"], a[href*="/support/tickets/"]',
+            );
 
-                if (cells.length >= 3) {
-                  subject = cells[0].text.trim().isNotEmpty
-                      ? cells[0].text.trim()
-                      : subject;
-                  statusText = cells[1].text.trim().toLowerCase();
-                  final dateText = cells[2].text.trim();
-                  lastMessage = cells.length > 3 ? cells[3].text.trim() : '';
-                  lastUpdated = _parseRelativeDate(dateText);
-                }
-
-                final badge = row?.querySelector(
-                  '.sx-badge, .badge, [class*="status"]',
-                );
-                if (badge != null && badge.text.trim().isNotEmpty) {
-                  statusText = badge.text.trim().toLowerCase();
-                }
-
-                tickets.add(
-                  Ticket(
-                    id: ticketId,
-                    subject: subject.isNotEmpty ? subject : 'Ticket #$ticketId',
-                    category: '',
-                    status: _parseStatus(statusText),
-                    createdAt: lastUpdated,
-                    lastUpdatedAt: lastUpdated,
-                    lastMessage: lastMessage,
-                  ),
-                );
+            for (final link in ticketLinks) {
+              final href = link.attributes['href'] ?? '';
+              final ticketId = _extractTicketId(href);
+              if (ticketId <= 0 || tickets.any((t) => t.id == ticketId)) {
+                continue;
               }
 
-              if (tickets.isNotEmpty) break;
+              // Walk up to find the container with all ticket info
+              var container = link.parent;
+              for (int i = 0; i < 5; i++) {
+                if (container == null) break;
+                // Check for table rows or card containers
+                if (container.localName == 'tr' ||
+                    container.localName == 'div' &&
+                        container.classes.any(
+                          (c) =>
+                              c.contains('card') ||
+                              c.contains('ticket') ||
+                              c.contains('sx-'),
+                        )) {
+                  break;
+                }
+                container = container.parent;
+              }
+
+              String subject = link.text.trim();
+              String statusText = 'open';
+              DateTime lastUpdated = DateTime.now();
+              String lastMessage = '';
+
+              // Extract from table cells
+              final cells =
+                  container?.querySelectorAll('td') ?? <dynamic>[];
+              if (cells.length >= 3) {
+                subject =
+                    cells[0].text.trim().isNotEmpty
+                        ? cells[0].text.trim()
+                        : subject;
+                statusText = cells[1].text.trim().toLowerCase();
+                final dateText = cells[2].text.trim();
+                lastMessage =
+                    cells.length > 3 ? cells[3].text.trim() : '';
+                lastUpdated = _parseRelativeDate(dateText);
+              }
+
+              // Try badge for status
+              final badge = container?.querySelector(
+                '.sx-badge, .badge, [class*="status"]',
+              );
+              if (badge != null && badge.text.trim().isNotEmpty) {
+                statusText = badge.text.trim().toLowerCase();
+              }
+
+              // Also try to find subject in heading elements
+              if (subject.isEmpty || subject == 'Ticket #$ticketId') {
+                final heading = container?.querySelector(
+                  'h1, h2, h3, h4, strong, .sx-head',
+                );
+                if (heading != null && heading.text.trim().isNotEmpty) {
+                  subject = heading.text.trim();
+                }
+              }
+
+              tickets.add(
+                Ticket(
+                  id: ticketId,
+                  subject:
+                      subject.isNotEmpty ? subject : 'Ticket #$ticketId',
+                  category: '',
+                  status: _parseStatus(statusText),
+                  createdAt: lastUpdated,
+                  lastUpdatedAt: lastUpdated,
+                  lastMessage: lastMessage,
+                ),
+              );
             }
+
+            if (tickets.isNotEmpty) break;
           }
-        } catch (_) {}
+        } catch (e) {
+          developer.log(
+            '[SupportRepository] getTickets $endpoint: $e',
+            name: 'support',
+          );
+        }
       }
 
       // Merge with cached tickets
@@ -430,88 +482,166 @@ class SupportRepository {
   }
 
   /// Fetch messages for a specific ticket.
+  /// Tries JSON API first (matching the agent panel pattern), then falls back
+  /// to HTML scraping with the actual CSS classes (.spt-msg, .spt-msg-bubble).
   Future<List<TicketMessage>> getMessages(int ticketId) async {
     await _initStorage();
 
     try {
       final backendMessages = <TicketMessage>[];
-      final endpointsToTry = [
-        '/support/tickets/$ticketId',
-        '/support/$ticketId',
-        '/store/support/tickets/$ticketId',
+
+      // --- 1. Try JSON API endpoint (confirmed: buyer uses /support/ticket/{id}/messages) ---
+      final jsonEndpoints = [
+        '/support/ticket/$ticketId/messages',
+        '/agent/tickets/$ticketId/messages',
+        '/store/support/tickets/$ticketId/messages',
       ];
 
-      String html = '';
-      for (final endpoint in endpointsToTry) {
+      for (final endpoint in jsonEndpoints) {
         try {
           final response = await _dio.get(
             endpoint,
             options: Options(
-              responseType: ResponseType.plain,
-              sendTimeout: const Duration(seconds: 3),
-              receiveTimeout: const Duration(seconds: 3),
+              responseType: ResponseType.json,
+              headers: {'Accept': 'application/json'},
+              sendTimeout: const Duration(seconds: 5),
+              receiveTimeout: const Duration(seconds: 5),
             ),
           );
-          if (response.statusCode == 200 && response.data != null) {
-            html = response.data.toString();
-            if (html.isNotEmpty) break;
-          }
-        } catch (_) {}
-      }
 
-      if (html.isNotEmpty) {
-        final doc = html_parser.parse(html);
-
-        var messageElements = doc.querySelectorAll(
-          '.message, .chat-message, [class*="msg-"], '
-          '[class*="message-item"], [class*="ticket-message"], .ticket-reply, '
-          '.reply, .admin-reply, .staff-reply, blockquote, [class*="reply"], '
-          '.timeline-item, .card-body',
-        );
-
-        if (messageElements.isEmpty) {
-          messageElements = doc.querySelectorAll(
-            '[class*="message"], [class*="comment"]',
-          );
-        }
-
-        int msgId = 1;
-        for (final el in messageElements) {
-          final text = el.text.trim();
-          if (text.isEmpty || text.length < 2) continue;
-
-          final classes = el.className.toLowerCase();
-          final fullElText = el.outerHtml.toLowerCase();
-          final isAgent =
-              classes.contains('agent') ||
-              classes.contains('support') ||
-              classes.contains('staff') ||
-              classes.contains('admin') ||
-              classes.contains('reply') ||
-              fullElText.contains('agent') ||
-              fullElText.contains('support');
-          final sender = isAgent ? MessageSender.agent : MessageSender.buyer;
-
-          final timeEl = el.querySelector(
-            'time, .time, .timestamp, [class*="time"], [class*="date"]',
-          );
-          DateTime sentAt = DateTime.now();
-          if (timeEl != null) {
-            final datetime = timeEl.attributes['datetime'];
-            if (datetime != null) {
-              sentAt = DateTime.tryParse(datetime) ?? DateTime.now();
-            } else {
-              sentAt = _parseRelativeDate(timeEl.text.trim());
+          if (response.statusCode == 200 && response.data is Map) {
+            final data = response.data as Map<String, dynamic>;
+            if (data['success'] == true && data['messages'] is List) {
+              final messages = data['messages'] as List;
+              for (final msg in messages) {
+                if (msg is Map<String, dynamic>) {
+                  backendMessages.add(
+                    TicketMessage(
+                      id: (msg['id'] as int?) ?? backendMessages.length + 1,
+                      text: (msg['body'] ?? msg['text'] ?? '') as String,
+                      sender: _parseSender(
+                        (msg['author_type'] ?? msg['sender'] ?? '') as String,
+                      ),
+                      sentAt: DateTime.tryParse(
+                            (msg['created_at'] ?? '') as String,
+                          ) ??
+                          DateTime.now(),
+                    ),
+                  );
+                }
+              }
+              developer.log(
+                '[SupportRepository] getMessages: got ${backendMessages.length} from JSON API',
+                name: 'support',
+              );
+              if (backendMessages.isNotEmpty) break;
             }
           }
+        } catch (e) {
+          developer.log(
+            '[SupportRepository] getMessages JSON $endpoint: $e',
+            name: 'support',
+          );
+        }
+      }
 
-          backendMessages.add(
-            TicketMessage(
-              id: msgId++,
-              text: text,
-              sender: sender,
-              sentAt: sentAt,
-            ),
+      // --- 2. Fallback: scrape HTML from the ticket detail page ---
+      if (backendMessages.isEmpty) {
+        final htmlEndpoints = [
+          '/support/ticket/$ticketId',
+          '/agent/tickets/$ticketId',
+          '/store/support/tickets/$ticketId',
+        ];
+
+        String html = '';
+        for (final endpoint in htmlEndpoints) {
+          try {
+            final response = await _dio.get(
+              endpoint,
+              options: Options(
+                responseType: ResponseType.plain,
+                sendTimeout: const Duration(seconds: 3),
+                receiveTimeout: const Duration(seconds: 3),
+              ),
+            );
+            if (response.statusCode == 200 && response.data != null) {
+              html = response.data.toString();
+              if (html.isNotEmpty) break;
+            }
+          } catch (_) {}
+        }
+
+        if (html.isNotEmpty) {
+          final doc = html_parser.parse(html);
+
+          // Use the ACTUAL CSS classes from the SoftStore ticket page:
+          // .spt-msg.theirs = buyer messages, .spt-msg.mine = agent messages
+          // .spt-msg-bubble = message text, .spt-msg-meta = sender + timestamp
+          var messageElements = doc.querySelectorAll('.spt-msg');
+
+          // Fallback to broader selectors if .spt-msg not found
+          if (messageElements.isEmpty) {
+            messageElements = doc.querySelectorAll(
+              '.message, .chat-message, .ticket-message, .ticket-reply, '
+              '.reply, blockquote, .timeline-item',
+            );
+          }
+
+          int msgId = 1;
+          for (final el in messageElements) {
+            final text = el.text.trim();
+            if (text.isEmpty || text.length < 2) continue;
+
+            // Determine sender from CSS class (.mine = current user, .theirs = other)
+            final classes = el.className.toLowerCase();
+            final isMine = classes.contains('mine');
+            final isTheirs = classes.contains('theirs');
+            final isAgent =
+                classes.contains('agent') ||
+                classes.contains('support') ||
+                classes.contains('staff') ||
+                classes.contains('admin');
+            final sender = isMine
+                ? MessageSender.buyer
+                : (isAgent || isTheirs ? MessageSender.agent : MessageSender.buyer);
+
+            // Extract timestamp from .spt-msg-meta
+            DateTime sentAt = DateTime.now();
+            final metaEl = el.querySelector('.spt-msg-meta');
+            if (metaEl != null) {
+              final metaText = metaEl.text.trim();
+              // Format: "Name · 19 Aug 2026, 04:57 PM"
+              final datePart = metaText.contains('·')
+                  ? metaText.split('·').last.trim()
+                  : metaText;
+              sentAt = _parseFormattedDate(datePart);
+            } else {
+              final timeEl = el.querySelector(
+                'time, .time, .timestamp, [class*="time"], [class*="date"]',
+              );
+              if (timeEl != null) {
+                final datetime = timeEl.attributes['datetime'];
+                if (datetime != null) {
+                  sentAt = DateTime.tryParse(datetime) ?? DateTime.now();
+                } else {
+                  sentAt = _parseRelativeDate(timeEl.text.trim());
+                }
+              }
+            }
+
+            backendMessages.add(
+              TicketMessage(
+                id: msgId++,
+                text: text,
+                sender: sender,
+                sentAt: sentAt,
+              ),
+            );
+          }
+
+          developer.log(
+            '[SupportRepository] getMessages: got ${backendMessages.length} from HTML scraping',
+            name: 'support',
           );
         }
       }
@@ -546,6 +676,49 @@ class SupportRepository {
     }
   }
 
+  MessageSender _parseSender(String authorType) {
+    final lower = authorType.toLowerCase();
+    if (lower == 'agent' ||
+        lower == 'support' ||
+        lower == 'admin' ||
+        lower == 'staff') {
+      return MessageSender.agent;
+    }
+    return MessageSender.buyer;
+  }
+
+  DateTime _parseFormattedDate(String dateStr) {
+    if (dateStr.isEmpty) return DateTime.now();
+    final now = DateTime.now();
+    try {
+      // Parse "19 Aug 2026, 04:57 PM" format
+      final match = RegExp(
+        r'(\d{1,2})\s+(\w{3})\s+(\d{4})(?:,\s*(\d{1,2}):(\d{2})\s*(AM|PM)?)?',
+      ).firstMatch(dateStr);
+      if (match != null) {
+        final day = int.tryParse(match.group(1) ?? '') ?? now.day;
+        final monthStr = (match.group(2) ?? '').toLowerCase();
+        final year = int.tryParse(match.group(3) ?? '') ?? now.year;
+        final hour = int.tryParse(match.group(4) ?? '') ?? 0;
+        final minute = int.tryParse(match.group(5) ?? '') ?? 0;
+        final ampm = (match.group(6) ?? '').toUpperCase();
+
+        const months = {
+          'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
+          'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12,
+        };
+        final month = months[monthStr] ?? now.month;
+
+        int finalHour = hour;
+        if (ampm == 'PM' && hour < 12) finalHour = hour + 12;
+        if (ampm == 'AM' && hour == 12) finalHour = 0;
+
+        return DateTime(year, month, day, finalHour, minute);
+      }
+    } catch (_) {}
+    return DateTime.tryParse(dateStr) ?? now;
+  }
+
   /// Send a reply to a ticket.
   Future<void> sendMessage(int ticketId, String body) async {
     await _initStorage();
@@ -564,49 +737,94 @@ class SupportRepository {
     _cachedMessages[ticketId] = localList;
     await _persistMessages();
 
-    // 2. Attempt background delivery to available backend endpoints
+    // 2. Send to backend using JSON API with X-CSRF-TOKEN header
+    //    The agent panel JS uses: POST /agent/tickets/{id}/reply with JSON body
+    //    The buyer panel likely uses: POST /store/support/tickets/{id} or /store/support/tickets/{id}/reply
     try {
-      final csrfToken = await _extractCsrfToken(
-        '/store/support/tickets/$ticketId',
-      );
+      final csrfToken = await _extractCsrfToken('/support/ticket/$ticketId');
 
-      final formData = {
-        if (csrfToken.isNotEmpty) ...{
-          '_csrf_token': csrfToken,
-          'csrf_token': csrfToken,
-        },
-        'message': body,
-        'reply': body,
-        'body': body,
-        'ticket_id': ticketId.toString(),
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
       };
+      if (csrfToken.isNotEmpty) {
+        headers['X-CSRF-TOKEN'] = csrfToken;
+      }
+
+      final jsonBody = {'message': body, 'token': ''};
 
       final paths = [
-        '/support/tickets/$ticketId',
-        '/support/$ticketId',
+        '/support/ticket/$ticketId/reply',
+        '/agent/tickets/$ticketId/reply',
         '/store/support/tickets/$ticketId',
-        '/support/reply',
       ];
 
       for (final path in paths) {
         try {
           final response = await _dio.post(
             path,
-            data: formData,
+            data: jsonBody,
             options: Options(
-              contentType: Headers.formUrlEncodedContentType,
-              followRedirects: true,
+              headers: headers,
+              followRedirects: false,
               validateStatus: (status) => status != null && status < 500,
+              sendTimeout: const Duration(seconds: 5),
+              receiveTimeout: const Duration(seconds: 5),
             ),
           );
-          if (response.statusCode != null && response.statusCode! < 400) {
-            break;
+
+          developer.log(
+            '[SupportRepository] sendMessage $path → ${response.statusCode}',
+            name: 'support',
+          );
+
+          // 200 with JSON success, or 302 redirect = message delivered
+          if (response.statusCode == 200 ||
+              response.statusCode == 302 ||
+              response.statusCode == 301 ||
+              response.statusCode == 303) {
+            final data = response.data;
+            if (data is Map && data['success'] == true) {
+              developer.log(
+                '[SupportRepository] sendMessage SUCCESS via $path',
+                name: 'support',
+              );
+              return;
+            }
+            // 302 redirect also means success
+            if (response.statusCode == 302 ||
+                response.statusCode == 301 ||
+                response.statusCode == 303) {
+              developer.log(
+                '[SupportRepository] sendMessage REDIRECT SUCCESS via $path',
+                name: 'support',
+              );
+              return;
+            }
+            // 200 but no success flag — still likely delivered if < 400
+            if (response.statusCode! < 400) {
+              developer.log(
+                '[SupportRepository] sendMessage delivered via $path (status ${response.statusCode})',
+                name: 'support',
+              );
+              return;
+            }
           }
-        } catch (_) {}
+        } catch (e) {
+          developer.log(
+            '[SupportRepository] sendMessage $path error: $e',
+            name: 'support',
+          );
+        }
       }
+
+      developer.log(
+        '[SupportRepository] sendMessage: all endpoints failed for ticket $ticketId',
+        name: 'support',
+      );
     } catch (e) {
       developer.log(
-        '[SupportRepository] sendMessage background sync: $e',
+        '[SupportRepository] sendMessage error: $e',
         name: 'support',
       );
     }

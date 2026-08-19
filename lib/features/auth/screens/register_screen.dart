@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -8,6 +9,7 @@ import '../../../core/utils/validators.dart';
 import '../cubit/auth_cubit.dart';
 import '../cubit/auth_state.dart';
 import 'auth_screen.dart';
+import 'login_screen.dart';
 
 import '../widgets/recaptcha_invisible_view.dart';
 
@@ -85,9 +87,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _confirmPasswordCtrl.text.isNotEmpty;
 
   void _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      debugPrint('[RegisterScreen] Form validation FAILED');
+      return;
+    }
+    debugPrint('[RegisterScreen] Form validation passed');
 
     if (_passwordCtrl.text != _confirmPasswordCtrl.text) {
+      debugPrint('[RegisterScreen] Passwords do not match');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Passwords do not match'),
@@ -105,6 +112,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     if (!mounted) return;
 
+    debugPrint('[RegisterScreen] Calling AuthCubit.register...');
     context.read<AuthCubit>().register(
           firstName: _firstNameCtrl.text.trim(),
           lastName: _lastNameCtrl.text.trim().isEmpty
@@ -115,6 +123,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           password: _passwordCtrl.text,
           recaptchaToken: token,
         );
+    debugPrint('[RegisterScreen] AuthCubit.register called OK');
   }
 
   void _onGoogleSignUp() {
@@ -128,12 +137,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   void _onBack() {
-    if (widget.isModal) {
-      if (widget.onSwitchToLogin != null) {
-        widget.onSwitchToLogin!();
-      } else {
-        Navigator.of(context).pop(false);
-      }
+    if (widget.isModal && widget.onSwitchToLogin != null) {
+      widget.onSwitchToLogin!();
+    } else if (widget.isModal) {
+      Navigator.of(context).pop();
+      LoginScreen.showAsModal(context);
     } else {
       if (context.canPop()) {
         context.pop();
@@ -149,7 +157,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
       children: [
         BlocListener<AuthCubit, AuthState>(
           listener: (context, state) {
+            debugPrint('[RegisterScreen] BlocListener fired: ${state.runtimeType}');
             if (state is AuthAuthenticated) {
+              debugPrint('[RegisterScreen] Authenticated! Navigating...');
               if (widget.isModal) {
                 Navigator.of(context).pop(true);
               } else {
@@ -160,13 +170,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 }
               }
             } else if (state is AuthError) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
+              debugPrint('[RegisterScreen] AuthError: ${state.message}');
+              showDialog(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('Registration Failed'),
                   content: Text(state.message),
-                  backgroundColor: AppColors.error,
-                  behavior: SnackBarBehavior.floating,
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(ctx).pop(),
+                      child: const Text('OK', style: TextStyle(color: Color(0xFFFF6A00))),
+                    ),
+                  ],
                 ),
               );
+            } else if (state is AuthLoading) {
+              debugPrint('[RegisterScreen] Loading...');
             }
           },
           child: widget.isModal ? _buildModalSheet(context) : _buildFullScreen(context),
@@ -514,8 +533,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
             // ── Create Account Button ─────────────────────────────────────
             BlocBuilder<AuthCubit, AuthState>(
               builder: (context, state) {
+                debugPrint('[RegisterScreen] BlocBuilder state: ${state.runtimeType}, isModal: ${widget.isModal}');
                 final isLoading = state is AuthLoading;
                 final isEnabled = _hasValidInput && !isLoading;
+                debugPrint('[RegisterScreen] isLoading=$isLoading, isEnabled=$isEnabled, hasValidInput=$_hasValidInput');
 
                 return SizedBox(
                   width: double.infinity,
@@ -622,6 +643,40 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                   ],
                 ),
+              ),
+            ),
+
+            const SizedBox(height: 28),
+
+            // ── Footer: Already have an account? Sign in ─────────────────
+            Center(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Already have an account? ',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w400,
+                      color: Color(0xFF4B5563),
+                    ),
+                  ),
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _onBack,
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                      child: Text(
+                        'Sign In',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFFFF6A00),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

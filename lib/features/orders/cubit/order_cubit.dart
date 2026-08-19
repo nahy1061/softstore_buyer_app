@@ -1,5 +1,6 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/errors/failures.dart';
+import '../../../core/services/notification_service.dart';
 import '../data/order_service.dart';
 import '../models/order_model.dart';
 import '../repository/order_repository.dart';
@@ -146,11 +147,21 @@ class OrderCubit extends Cubit<OrderState> {
 
     try {
       final order = await _repo.getOrderDetail(cleanInvoice);
+      NotificationService.instance.tagOrderTracking(
+        orderId: order.id,
+        referenceNumber: order.referenceNumber,
+        status: order.status.name,
+      );
       emit(OrderDetailLoaded(order: order));
     } on Failure catch (e) {
       if (localMatch.isEmpty) {
         try {
           final order = await _orderService.fetchOrderDetail(cleanInvoice);
+          NotificationService.instance.tagOrderTracking(
+            orderId: order.id,
+            referenceNumber: order.referenceNumber,
+            status: order.status.name,
+          );
           emit(OrderDetailLoaded(order: order));
         } catch (_) {
           emit(OrderError(message: e.message));
@@ -173,6 +184,11 @@ class OrderCubit extends Cubit<OrderState> {
       final order = await _repo.trackOrderGuest(
         invoiceNumber: referenceNumber.trim(),
         phone: phone.trim(),
+      );
+      NotificationService.instance.tagOrderTracking(
+        orderId: order.id,
+        referenceNumber: order.referenceNumber,
+        status: order.status.name,
       );
       emit(OrderLookupResult(order: order));
     } on NotFoundFailure {
