@@ -3,6 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/theme/app_colors.dart';
+import '../core/theme/app_spacing.dart';
+import '../core/theme/app_typography.dart';
+
 // Feature screen imports
 import '../features/auth/screens/login_screen.dart';
 import '../features/auth/screens/register_screen.dart';
@@ -66,9 +70,16 @@ class SecondaryPlaceholderScreen extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.info_outline, size: 48, color: Colors.grey),
-            const SizedBox(height: 16),
-            Text(label, style: const TextStyle(fontSize: 16)),
+            const Icon(
+              Icons.info_outline,
+              size: 48,
+              color: AppColors.textSecondary,
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Text(
+              label,
+              style: AppTypography.bodyLarge,
+            ),
           ],
         ),
       ),

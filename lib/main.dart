@@ -8,11 +8,11 @@ import 'core/storage/hive_service.dart';
 import 'core/storage/local_storage.dart';
 
 Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
   try {
     HttpOverrides.global = SoftStoreHttpOverrides();
   } catch (_) {}
-
-  WidgetsFlutterBinding.ensureInitialized();
 
   // Initialize core services safely
   try {
