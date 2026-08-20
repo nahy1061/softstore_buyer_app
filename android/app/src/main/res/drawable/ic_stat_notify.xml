@@ -1,31 +1,41 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- SoftStore notification status bar icon — white "S" on transparent background -->
+<!-- SoftStore notification bar icon — Pure monochrome white with cutout matching the bag + S logo -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
 
-    <!-- Letter "S" path — bold, centered, white -->
+    <!-- Handle -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:pathData="M9,7 C9,4.5 10.2,2.8 12,2.8 C13.8,2.8 15,4.5 15,7" />
+
+    <!-- Shopping Bag with S Cutout (Combined Path for Android Status Bar) -->
     <path
         android:fillColor="#FFFFFF"
+        android:fillType="evenOdd"
         android:pathData="
-            M12,3
-            C8.69,3 6,5.24 6,8
-            C6,10.08 7.38,11.86 9.5,12.72
-            L14.5,14.72
-            C15.56,15.14 16,15.74 16,16.5
-            C16,17.88 14.21,19 12,19
-            C9.79,19 8,17.88 8,16.5
-            L6,16.5
-            C6,18.99 8.69,21 12,21
-            C15.31,21 18,18.76 18,16
-            C18,13.92 16.62,12.14 14.5,11.28
-            L9.5,9.28
-            C8.44,8.86 8,8.26 8,7.5
-            C8,6.12 9.79,5 12,5
-            C14.21,5 16,6.12 16,7.5
-            L18,7.5
-            C18,5.01 15.31,3 12,3
+            M6.2,7 L4.5,20 C4.2,21.1 5,22 6.1,22 L17.9,22 C19,22 19.8,21.1 19.5,20 L17.8,7 Z
+            M12,10.2
+            C13.6,10.2 14.8,11.3 14.8,12.7
+            L13.5,12.7
+            C13.5,12 12.9,11.5 12,11.5
+            C11.1,11.5 10.5,12 10.5,12.7
+            C10.5,13.2 10.8,13.5 11.4,13.7
+            L13.2,14.4
+            C14.2,14.8 14.8,15.4 14.8,16.3
+            C14.8,17.7 13.5,18.8 12,18.8
+            C10.4,18.8 9.2,17.7 9.2,16.3
+            L10.5,16.3
+            C10.5,17 11.1,17.5 12,17.5
+            C12.9,17.5 13.5,17 13.5,16.3
+            C13.5,15.8 13.2,15.5 12.6,15.3
+            L10.8,14.6
+            C9.8,14.2 9.2,13.6 9.2,12.7
+            C9.2,11.3 10.4,10.2 12,10.2
             Z" />
 </vector>
