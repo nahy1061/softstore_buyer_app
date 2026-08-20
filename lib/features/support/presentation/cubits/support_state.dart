@@ -48,6 +48,15 @@ class MessageSent extends SupportState {
   const MessageSent();
 }
 
+class TicketStatusUpdated extends SupportState {
+  final Ticket ticket;
+
+  const TicketStatusUpdated({required this.ticket});
+
+  @override
+  List<Object?> get props => [ticket];
+}
+
 class SupportError extends SupportState {
   final String message;
 

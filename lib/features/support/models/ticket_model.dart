@@ -189,6 +189,26 @@ class Ticket {
     'last_message_at': lastUpdatedAt.toIso8601String(),
     'last_message': lastMessage,
   };
+
+  Ticket copyWith({
+    int? id,
+    String? subject,
+    String? category,
+    TicketStatus? status,
+    DateTime? createdAt,
+    DateTime? lastUpdatedAt,
+    String? lastMessage,
+  }) {
+    return Ticket(
+      id: id ?? this.id,
+      subject: subject ?? this.subject,
+      category: category ?? this.category,
+      status: status ?? this.status,
+      createdAt: createdAt ?? this.createdAt,
+      lastUpdatedAt: lastUpdatedAt ?? this.lastUpdatedAt,
+      lastMessage: lastMessage ?? this.lastMessage,
+    );
+  }
 }
 
 final List<Ticket> kMockTickets = [

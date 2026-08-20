@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../data/support_repository.dart';
+import '../../models/ticket_model.dart';
 import 'support_state.dart';
 
 class SupportCubit extends Cubit<SupportState> {
@@ -116,6 +117,47 @@ class SupportCubit extends Cubit<SupportState> {
   void stopPolling() {
     _pollTimer?.cancel();
     _pollTimer = null;
+  }
+
+  /// Detect status change messages and update the ticket accordingly.
+  /// Returns the updated ticket if a status change was detected, null otherwise.
+  Ticket? detectStatusChange(List<TicketMessage> messages, Ticket currentTicket) {
+    TicketStatus? detectedStatus;
+
+    for (final msg in messages) {
+      final lower = msg.text.toLowerCase();
+
+      // Check for status change patterns in agent messages
+      if (msg.sender == MessageSender.agent) {
+        if (lower.contains('status changed to') ||
+            lower.contains('status updated to') ||
+            lower.contains('marked as') ||
+            lower.contains('ticket is now')) {
+          if (lower.contains('resolved') || lower.contains('done') || lower.contains('completed')) {
+            detectedStatus = TicketStatus.resolved;
+          } else if (lower.contains('closed')) {
+            detectedStatus = TicketStatus.closed;
+          } else if (lower.contains('pending') ||
+              lower.contains('waiting') ||
+              lower.contains('in progress') ||
+              lower.contains('in-progress')) {
+            detectedStatus = TicketStatus.inProgress;
+          } else if (lower.contains('open') || lower.contains('reopened')) {
+            detectedStatus = TicketStatus.open;
+          }
+        }
+      }
+    }
+
+    if (detectedStatus != null && detectedStatus != currentTicket.status) {
+      final updated = currentTicket.copyWith(
+        status: detectedStatus,
+        lastUpdatedAt: DateTime.now(),
+      );
+      return updated;
+    }
+
+    return null;
   }
 
   @override

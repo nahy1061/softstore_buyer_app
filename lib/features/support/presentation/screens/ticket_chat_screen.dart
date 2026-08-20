@@ -26,10 +26,12 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
   final _scrollController = ScrollController();
   List<TicketMessage> _messages = [];
   bool _isSending = false;
+  late Ticket _currentTicket;
 
   @override
   void initState() {
     super.initState();
+    _currentTicket = widget.ticket;
     // Seed initial message with description
     _seedInitialDescription();
 
@@ -106,8 +108,8 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
   @override
   Widget build(BuildContext context) {
     final isClosed =
-        widget.ticket.status == TicketStatus.closed ||
-        widget.ticket.status == TicketStatus.resolved;
+        _currentTicket.status == TicketStatus.closed ||
+        _currentTicket.status == TicketStatus.resolved;
 
     return BlocListener<SupportCubit, SupportState>(
       listener: (context, state) {
@@ -117,6 +119,20 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
             // If backend returned messages, use them; ensure initial description is preserved at top
             if (state.messages.isNotEmpty) {
               _messages = state.messages;
+
+              // Detect status changes from messages
+              final cubit = context.read<SupportCubit>();
+              final updated = cubit.detectStatusChange(state.messages, _currentTicket);
+              if (updated != null) {
+                _currentTicket = updated;
+                // Restart polling if ticket is now open/inProgress
+                if (updated.status == TicketStatus.open ||
+                    updated.status == TicketStatus.inProgress) {
+                  cubit.startPolling(updated.id, interval: const Duration(seconds: 5));
+                } else {
+                  cubit.stopPolling();
+                }
+              }
             } else if (_messages.isEmpty) {
               _seedInitialDescription();
             }
@@ -199,7 +215,7 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
             Padding(
               padding: const EdgeInsets.only(right: AppSpacing.md),
               child: TicketStatusBadge(
-                status: widget.ticket.status,
+                status: _currentTicket.status,
                 compact: true,
               ),
             ),
@@ -376,7 +392,7 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
   }
 
   Widget _buildClosedBanner() {
-    final isResolved = widget.ticket.status == TicketStatus.resolved;
+    final isResolved = _currentTicket.status == TicketStatus.resolved;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.lg),
