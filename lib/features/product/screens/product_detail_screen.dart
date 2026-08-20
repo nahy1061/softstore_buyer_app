@@ -500,7 +500,7 @@ class _RatingsTab extends StatelessWidget {
                               fontWeight: FontWeight.bold, fontSize: 15)),
                     ),
                     ElevatedButton(
-                      onPressed: () {},
+                      onPressed: () => context.push('/seller/softstore-official'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
@@ -879,14 +879,14 @@ class _BottomBar extends StatelessWidget {
           _IconAction(
             icon: Icons.store_outlined,
             label: 'Store',
-            onTap: () {},
+            onTap: () => context.push('/seller/softstore-official'),
           ),
           const SizedBox(width: 8),
           // Chat
           _IconAction(
             icon: Icons.chat_bubble_outline,
             label: 'Chat',
-            onTap: () {},
+            onTap: () => context.push(AppRoutes.messages),
           ),
           const SizedBox(width: 8),
           // Buy Now
