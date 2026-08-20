@@ -52,7 +52,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   Timer? _otpResendTimer;
 
   List<CartItem> _selectedItems(CartState cartState) {
-    return cartState.selectedItems;
+    if (cartState.hasSelection && cartState.selectedItems.isNotEmpty) {
+      return cartState.selectedItems;
+    }
+    return cartState.items;
   }
 
   @override

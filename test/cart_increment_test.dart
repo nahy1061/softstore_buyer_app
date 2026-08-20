@@ -112,6 +112,7 @@ void main() {
       quantity: 2,
       unitPriceSnapshot: 1000.0,
     ));
+    cartCubit.clearSelection();
 
     await tester.pumpWidget(
       MaterialApp(

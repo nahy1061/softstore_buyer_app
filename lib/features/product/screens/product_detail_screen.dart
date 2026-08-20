@@ -812,20 +812,23 @@ class _BottomBar extends StatelessWidget {
     if (!context.mounted) return;
 
     if (colors.isEmpty) {
-      context.read<CartCubit>().addItem(CartItem(
-            uuid: slug,
-            productId: id ?? slug.hashCode.abs(),
-            productName: name,
-            productSlug: slug,
-            quantity: 1,
-            unitPriceSnapshot: price.toDouble(),
-            imageUrl: imageUrl,
-          ));
-      _showCheckout(context);
+      final item = CartItem(
+        uuid: slug,
+        productId: id ?? slug.hashCode.abs(),
+        productName: name,
+        productSlug: slug,
+        quantity: 1,
+        unitPriceSnapshot: price.toDouble(),
+        imageUrl: imageUrl,
+      );
+      await context.read<CartCubit>().addItem(item);
+      if (context.mounted) {
+        _showCheckout(context);
+      }
       return;
     }
 
-    final selectedColor = await showModalBottomSheet<String>(
+    final selectedVariant = await showModalBottomSheet<dynamic>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -841,18 +844,34 @@ class _BottomBar extends StatelessWidget {
       ),
     );
 
-    if (selectedColor != null && context.mounted) {
-      context.read<CartCubit>().addItem(CartItem(
-            uuid: '${slug}_$selectedColor',
-            productId: id ?? slug.hashCode.abs(),
-            productName: '$name ($selectedColor)',
-            productSlug: slug,
-            variantLabel: selectedColor,
-            quantity: 1,
-            unitPriceSnapshot: price.toDouble(),
-            imageUrl: imageUrl,
-          ));
-      _showCheckout(context);
+    if (selectedVariant != null && context.mounted) {
+      String? colorName;
+      int qty = 1;
+      if (selectedVariant is Map) {
+        colorName = selectedVariant['color']?.toString();
+        qty = (selectedVariant['quantity'] as int?) ?? 1;
+      } else if (selectedVariant is String) {
+        colorName = selectedVariant;
+      }
+
+      final item = CartItem(
+        uuid: (colorName != null && colorName.isNotEmpty)
+            ? '${slug}_$colorName'
+            : slug,
+        productId: id ?? slug.hashCode.abs(),
+        productName: (colorName != null && colorName.isNotEmpty)
+            ? '$name ($colorName)'
+            : name,
+        productSlug: slug,
+        variantLabel: colorName,
+        quantity: qty,
+        unitPriceSnapshot: price.toDouble(),
+        imageUrl: imageUrl,
+      );
+      await context.read<CartCubit>().addItem(item);
+      if (context.mounted) {
+        _showCheckout(context);
+      }
     }
   }
 
@@ -1185,7 +1204,7 @@ class _ColorSheetState extends State<_ColorSheet> {
             width: double.infinity,
             child: ElevatedButton(
               onPressed: () =>
-                  Navigator.of(context).pop(selectedName),
+                  Navigator.of(context).pop({'color': selectedName, 'quantity': _quantity}),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,

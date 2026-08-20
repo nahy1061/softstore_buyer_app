@@ -77,4 +77,44 @@ void main() {
     // Verify no OTP dialog is prompted
     expect(find.text('Verify Your Email'), findsNothing);
   });
+
+  testWidgets(
+      'CheckoutScreen displays actual product subtotal when navigated via Buy Now',
+      (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 2.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final cartCubit = CartCubit();
+    await cartCubit.clearCart();
+    await cartCubit.addItem(const CartItem(
+      uuid: 'buy_now_item',
+      productId: 505,
+      productName: 'Gaming Mouse',
+      quantity: 2,
+      unitPriceSnapshot: 1500.0,
+    ));
+
+    final authCubit = AuthCubit();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MultiBlocProvider(
+          providers: [
+            BlocProvider<CartCubit>.value(value: cartCubit),
+            BlocProvider<AuthCubit>.value(value: authCubit),
+          ],
+          child: const CheckoutScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Verify subtotal is 3000 (1500 * 2) and NOT 0
+    expect(find.text('Rs 3000'), findsWidgets);
+    expect(find.text('Rs 0'), findsNothing);
+  });
 }

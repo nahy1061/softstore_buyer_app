@@ -97,7 +97,11 @@ class CartCubit extends Cubit<CartState> {
       updated = [...items, item];
     }
     await _repo.saveCart(updated);
-    emit(state.copyWith(items: updated));
+    final updatedSelection = Set<String>.from(state.selectedIds)..add(item.id);
+    emit(state.copyWith(
+      items: updated,
+      selectedIds: updatedSelection,
+    ));
   }
 
   Future<void> removeItem(String id) async {
