@@ -33,7 +33,7 @@ class AuthCubit extends Cubit<AuthState> {
           phone: user.phone,
           firstName: user.firstName,
         );
-        SupportRepository().setUserId(user.id);
+        SupportRepository().setUserId(user.email);
         emit(AuthAuthenticated(user));
       } else {
         emit(const AuthUnauthenticated());
