@@ -481,6 +481,11 @@ class SupportRepository {
                 lastMessage: lastMessage,
               ),
             );
+
+            developer.log(
+              '[SupportRepository] getTickets: #$ticketId status="$statusText" → ${_parseStatus(statusText).name}',
+              name: 'support',
+            );
           }
 
           // Strategy 2: Look for any elements with "ticket" in classes/attributes
@@ -560,6 +565,12 @@ class SupportRepository {
       }
 
       await _persistTickets();
+
+      developer.log(
+        '[SupportRepository] getTickets result: ${_cachedTickets.length} tickets — ${_cachedTickets.map((t) => '#${t.id}:${t.status.name}').join(', ')}',
+        name: 'support',
+      );
+
       return List.unmodifiable(_cachedTickets);
     } on DioException catch (e) {
       throw _handleDioError(e);

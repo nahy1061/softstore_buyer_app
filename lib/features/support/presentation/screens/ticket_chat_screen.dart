@@ -35,17 +35,15 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
     // Seed initial message with description
     _seedInitialDescription();
 
-    // Fetch messages and start polling
+    // Fetch messages
     final cubit = context.read<SupportCubit>();
     cubit.loadMessages(widget.ticket.id);
 
-    if (widget.ticket.status == TicketStatus.open ||
-        widget.ticket.status == TicketStatus.inProgress) {
-      cubit.startPolling(
-        widget.ticket.id,
-        interval: const Duration(seconds: 5),
-      );
-    }
+    // Start polling for both messages AND status
+    cubit.startPolling(
+      widget.ticket.id,
+      interval: const Duration(seconds: 5),
+    );
   }
 
   void _seedInitialDescription() {
@@ -116,31 +114,24 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
         if (state is MessagesLoaded) {
           setState(() {
             _isSending = false;
-            // If backend returned messages, use them; ensure initial description is preserved at top
+            // Filter out status change messages — they update the badge, not the chat
             if (state.messages.isNotEmpty) {
-              // Filter out status change messages — they update the badge, not the chat
               _messages = state.messages
                   .where((m) => !SupportCubit.isStatusChangeMessage(m))
                   .toList();
-
-              // Detect status changes from the full message list (before filtering)
-              final cubit = context.read<SupportCubit>();
-              final updated = cubit.detectStatusChange(state.messages, _currentTicket);
-              if (updated != null) {
-                _currentTicket = updated;
-                // Restart polling if ticket is now open/inProgress
-                if (updated.status == TicketStatus.open ||
-                    updated.status == TicketStatus.inProgress) {
-                  cubit.startPolling(updated.id, interval: const Duration(seconds: 5));
-                } else {
-                  cubit.stopPolling();
-                }
-              }
             } else if (_messages.isEmpty) {
               _seedInitialDescription();
             }
           });
           _scrollToBottom();
+        } else if (state is TicketsLoaded) {
+          // Update current ticket status from the refreshed list
+          final updated = state.tickets.where((t) => t.id == _currentTicket.id).firstOrNull;
+          if (updated != null && updated.status != _currentTicket.status) {
+            setState(() {
+              _currentTicket = updated;
+            });
+          }
         } else if (state is MessageSent) {
           setState(() => _isSending = false);
           context.read<SupportCubit>().loadMessages(widget.ticket.id);

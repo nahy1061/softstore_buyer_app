@@ -97,7 +97,7 @@ class SupportCubit extends Cubit<SupportState> {
     }
   }
 
-  /// Start background polling for new replies.
+  /// Start background polling for new replies and status changes.
   void startPolling(
     int ticketId, {
     Duration interval = const Duration(seconds: 5),
@@ -106,9 +106,19 @@ class SupportCubit extends Cubit<SupportState> {
     _pollTimer = Timer.periodic(interval, (_) async {
       if (isClosed) return;
       try {
+        // Poll messages
         final messages = await _repository.getMessages(ticketId);
         if (!isClosed) {
           emit(MessagesLoaded(messages: messages));
+        }
+      } catch (_) {}
+      try {
+        // Also refresh ticket status from backend
+        final updated = await loadTicketStatus(ticketId);
+        if (!isClosed && updated != null && state is TicketsLoaded) {
+          final currentTickets = (state as TicketsLoaded).tickets;
+          final refreshed = currentTickets.map((t) => t.id == ticketId ? updated : t).toList();
+          emit(TicketsLoaded(tickets: refreshed));
         }
       } catch (_) {}
     });
@@ -119,46 +129,15 @@ class SupportCubit extends Cubit<SupportState> {
     _pollTimer = null;
   }
 
-  /// Detect status change messages and update the ticket accordingly.
-  /// Returns the updated ticket if a status change was detected, null otherwise.
-  Ticket? detectStatusChange(List<TicketMessage> messages, Ticket currentTicket) {
-    // Look for the LAST status change message from agent
-    TicketStatus? detectedStatus;
-
-    for (final msg in messages) {
-      if (msg.sender != MessageSender.agent) continue;
-
-      final text = msg.text.trim();
-
-      // Exact patterns the backend uses for status changes
-      // These are system-generated messages, not human-written
-      if (text.toLowerCase().startsWith('status changed to ') ||
-          text.toLowerCase().startsWith('status updated to ') ||
-          text.toLowerCase() == 'ticket is now pending' ||
-          text.toLowerCase() == 'ticket is now resolved' ||
-          text.toLowerCase() == 'ticket is now closed' ||
-          text.toLowerCase() == 'ticket is now open') {
-        if (text.toLowerCase().contains('resolved')) {
-          detectedStatus = TicketStatus.resolved;
-        } else if (text.toLowerCase().contains('closed')) {
-          detectedStatus = TicketStatus.closed;
-        } else if (text.toLowerCase().contains('pending') ||
-            text.toLowerCase().contains('in progress')) {
-          detectedStatus = TicketStatus.inProgress;
-        } else if (text.toLowerCase().contains('open')) {
-          detectedStatus = TicketStatus.open;
-        }
+  /// Fetch updated ticket status from backend.
+  /// Returns the ticket with current status, or null if not found.
+  Future<Ticket?> loadTicketStatus(int ticketId) async {
+    try {
+      final tickets = await _repository.getTickets();
+      for (final t in tickets) {
+        if (t.id == ticketId) return t;
       }
-    }
-
-    if (detectedStatus != null && detectedStatus != currentTicket.status) {
-      final updated = currentTicket.copyWith(
-        status: detectedStatus,
-        lastUpdatedAt: DateTime.now(),
-      );
-      return updated;
-    }
-
+    } catch (_) {}
     return null;
   }
 
@@ -166,12 +145,13 @@ class SupportCubit extends Cubit<SupportState> {
   static bool isStatusChangeMessage(TicketMessage msg) {
     if (msg.sender != MessageSender.agent) return false;
     final text = msg.text.trim().toLowerCase();
-    return text.startsWith('status changed to ') ||
-        text.startsWith('status updated to ') ||
-        text == 'ticket is now pending' ||
-        text == 'ticket is now resolved' ||
-        text == 'ticket is now closed' ||
-        text == 'ticket is now open';
+    // System status messages are typically short and start with status-related keywords
+    if (text.length > 80) return false; // Real agent replies are usually longer
+    return text.startsWith('status changed') ||
+        text.startsWith('status updated') ||
+        text.startsWith('ticket is now') ||
+        text.startsWith('ticket status') ||
+        (text.contains('status') && text.contains('to') && text.length < 50);
   }
 
   @override
