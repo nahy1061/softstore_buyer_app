@@ -27,7 +27,6 @@ class CartScreen extends StatefulWidget {
 }
 
 class _CartScreenState extends State<CartScreen> {
-  final Set<String> _selectedIds = {};
   final CatalogRepository _catalogRepo = CatalogRepository.instance;
 
   List<Product> _liveRecommendations = [];
@@ -126,9 +125,12 @@ class _CartScreenState extends State<CartScreen> {
         return Scaffold(
           backgroundColor: AppColors.background,
           appBar: AppBar(
-            title: const Text('My Cart'),
+            title: const Text(
+              'My Cart',
+              style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
+            ),
             backgroundColor: Colors.white,
-            foregroundColor: AppColors.textPrimary,
+            foregroundColor: AppColors.primary,
             elevation: 0,
             centerTitle: false,
             bottom: const PreferredSize(
@@ -136,19 +138,18 @@ class _CartScreenState extends State<CartScreen> {
               child: Divider(
                   height: 1, thickness: 1, color: Color(0xFFE8E8E8)),
             ),
-            actions: _selectedIds.isEmpty
-                ? null
-                : [
+            actions: state.hasSelection
+                ? [
                     IconButton(
-                      icon: const Icon(Icons.delete_outline, color: AppColors.error),
+                      icon: const Icon(Icons.delete_outline),
                       tooltip: 'Delete selected',
                       onPressed: () {
-                        final toDelete = Set<String>.from(_selectedIds);
-                        setState(() => _selectedIds.clear());
+                        final toDelete = Set<String>.from(state.selectedIds);
                         context.read<CartCubit>().removeItems(toDelete);
                       },
                     ),
-                  ],
+                  ]
+                : null,
           ),
           // Shared bottom nav — index 3 = Cart (this screen)
           bottomNavigationBar: const AppBottomNavBar(currentIndex: 3),
@@ -286,10 +287,8 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Widget _buildCartView(BuildContext context, CartState state) {
-    final isAllSelected = state.items.isNotEmpty &&
-        state.items.every((i) => _selectedIds.contains(i.id));
-    final isPartiallySelected =
-        _selectedIds.isNotEmpty && !isAllSelected;
+    final isAllSelected = state.allSelected;
+    final isPartiallySelected = state.isPartiallySelected;
 
     return Column(
       children: [
@@ -322,13 +321,11 @@ class _CartScreenState extends State<CartScreen> {
                             borderRadius: BorderRadius.circular(4),
                           ),
                           onChanged: (_) {
-                            setState(() {
-                              if (isAllSelected) {
-                                _selectedIds.clear();
-                              } else {
-                                _selectedIds.addAll(state.items.map((i) => i.id));
-                              }
-                            });
+                            if (isAllSelected) {
+                              context.read<CartCubit>().clearSelection();
+                            } else {
+                              context.read<CartCubit>().selectAll();
+                            }
                           },
                         ),
                       ),
@@ -336,19 +333,17 @@ class _CartScreenState extends State<CartScreen> {
                       GestureDetector(
                         behavior: HitTestBehavior.opaque,
                         onTap: () {
-                          setState(() {
-                            if (isAllSelected) {
-                              _selectedIds.clear();
-                            } else {
-                              _selectedIds.addAll(state.items.map((i) => i.id));
-                            }
-                          });
+                          if (isAllSelected) {
+                            context.read<CartCubit>().clearSelection();
+                          } else {
+                            context.read<CartCubit>().selectAll();
+                          }
                         },
                         child: Text(
                           isAllSelected
                               ? 'Deselect All (${state.items.length})'
-                              : (_selectedIds.isNotEmpty
-                                  ? '${_selectedIds.length} of ${state.items.length} selected'
+                              : (state.hasSelection
+                                  ? '${state.selectedIds.length} of ${state.items.length} selected'
                                   : 'Select All (${state.items.length} items)'),
                           style: const TextStyle(
                             fontSize: 14,
@@ -358,11 +353,10 @@ class _CartScreenState extends State<CartScreen> {
                         ),
                       ),
                       const Spacer(),
-                      if (_selectedIds.isNotEmpty)
+                      if (state.hasSelection)
                         TextButton.icon(
                           onPressed: () {
-                            final toDelete = Set<String>.from(_selectedIds);
-                            setState(() => _selectedIds.clear());
+                            final toDelete = Set<String>.from(state.selectedIds);
                             context.read<CartCubit>().removeItems(toDelete);
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
@@ -379,7 +373,7 @@ class _CartScreenState extends State<CartScreen> {
                           icon: const Icon(Icons.delete_outline,
                               color: AppColors.error, size: 18),
                           label: Text(
-                            'Delete (${_selectedIds.length})',
+                            'Delete (${state.selectedIds.length})',
                             style: const TextStyle(
                               color: AppColors.error,
                               fontWeight: FontWeight.bold,
@@ -396,7 +390,6 @@ class _CartScreenState extends State<CartScreen> {
                     ],
                   ),
                 ),
-
                 ListView.separated(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
@@ -408,16 +401,10 @@ class _CartScreenState extends State<CartScreen> {
                     final item = state.items[index];
                     return _CartItemTile(
                       item: item,
-                      isSelected: _selectedIds.contains(item.id),
-                      onToggle: () => setState(() {
-                        if (_selectedIds.contains(item.id)) {
-                          _selectedIds.remove(item.id);
-                        } else {
-                          _selectedIds.add(item.id);
-                        }
-                      }),
+                      isSelected: state.selectedIds.contains(item.id),
+                      onToggle: () =>
+                          context.read<CartCubit>().toggleSelection(item.id),
                       onDelete: () {
-                        setState(() => _selectedIds.remove(item.id));
                         context.read<CartCubit>().removeItem(item.id);
                       },
                     );
@@ -508,91 +495,105 @@ class _CartScreenState extends State<CartScreen> {
         ),
 
         // Bottom checkout bar
-        Container(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            border: const Border(
-              top: BorderSide(color: AppColors.divider),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha:0.06),
-                blurRadius: 8,
-                offset: const Offset(0, -2),
-              ),
-            ],
-          ),
-          child: Column(
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Subtotal (${state.itemCount} items)',
-                      style: AppTypography.bodyMedium
-                          .copyWith(color: AppColors.textSecondary)),
-                  Text(
-                    'PKR ${state.subtotal}',
-                    style: AppTypography.pricePrimary.copyWith(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Delivery',
-                      style: AppTypography.bodySmall
-                          .copyWith(color: AppColors.textSecondary)),
-                  if (state.quoteLoading)
-                    const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 1.5),
-                    )
-                  else if (state.freeDelivery)
-                    Text(
-                      'Free',
-                      style: AppTypography.bodySmall.copyWith(
-                        color: AppColors.success,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    )
-                  else
-                    Text(
-                      'PKR ${state.deliveryFee}',
-                      style: AppTypography.bodySmall.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => _showCheckoutSheet(context),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: Text(
-                    'Checkout (${state.itemCount})  —  PKR ${state.total}',
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 16),
-                  ),
+        Builder(
+          builder: (context) {
+            final displayCount = state.selectedItemCount;
+            final displaySubtotal = state.selectedSubtotal;
+            final displayTotal = state.selectedTotal;
+
+            return Container(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                border: const Border(
+                  top: BorderSide(color: AppColors.divider),
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 8,
+                    offset: const Offset(0, -2),
+                  ),
+                ],
               ),
-            ],
-          ),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Selected ($displayCount items)',
+                        style: AppTypography.bodyMedium
+                            .copyWith(color: AppColors.textSecondary),
+                      ),
+                      Text(
+                        'PKR ${displaySubtotal.toStringAsFixed(0)}',
+                        style: AppTypography.pricePrimary.copyWith(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Delivery',
+                          style: AppTypography.bodySmall
+                              .copyWith(color: AppColors.textSecondary)),
+                      if (state.quoteLoading)
+                        const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 1.5),
+                        )
+                      else if (state.freeDelivery)
+                        Text(
+                          'Free',
+                          style: AppTypography.bodySmall.copyWith(
+                            color: AppColors.success,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        )
+                      else
+                        Text(
+                          'PKR ${state.deliveryFee}',
+                          style: AppTypography.bodySmall.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: displayTotal > 0
+                          ? () => _showCheckoutSheet(context)
+                          : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.4),
+                        disabledForegroundColor: Colors.white70,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: Text(
+                        'Checkout ($displayCount)  —  PKR ${displayTotal.toStringAsFixed(0)}',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
         ),
       ],
     );
@@ -830,7 +831,7 @@ class _CartCheckoutSheetState extends State<CartCheckoutSheet> {
       builder: (context, state) {
         final shippingFee = _selectedDeliveryOption?.fee ?? 0;
         final grandTotal =
-            state.totalPrice + shippingFee + _otherFees + _platformFee;
+            state.selectedSubtotal + shippingFee + _otherFees + _platformFee;
 
         return Container(
           height: MediaQuery.of(context).size.height * 0.92,
@@ -1127,7 +1128,7 @@ class _CartCheckoutSheetState extends State<CartCheckoutSheet> {
                             ),
                             const SizedBox(height: 12),
                             _summaryRow('Merchandise Subtotal',
-                                'PKR ${state.totalPrice}'),
+                                'PKR ${state.selectedSubtotal}'),
                             const SizedBox(height: 10),
                             _summaryRow('Discount', 'PKR 0',
                                 valueColor: AppColors.primary),
@@ -2405,7 +2406,7 @@ Future<void> _processOrderPlacement({
   final invoice =
       'INV-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}-$rand5';
 
-  final orderItems = cartState.items.map((i) {
+  final orderItems = cartState.selectedItems.map((i) {
     return OrderItem(
       id: i.id,
       name: i.name,
@@ -2415,7 +2416,7 @@ Future<void> _processOrderPlacement({
     );
   }).toList();
 
-  final repoItems = cartState.items.map((i) {
+  final repoItems = cartState.selectedItems.map((i) {
     final numId = i.productId;
     return cart_models.CartItem(
       uuid: i.id,
@@ -2460,7 +2461,7 @@ Future<void> _processOrderPlacement({
       addressLine: customerAddress,
       city: customerCity,
     ),
-    subtotal: cartState.totalPrice.toDouble(),
+    subtotal: cartState.selectedSubtotal.toDouble(),
     deliveryFee: shippingFee.toDouble(),
     discount: 0,
     storeName: 'SoftStore Official Partner',
@@ -2489,11 +2490,11 @@ Future<void> _processOrderPlacement({
       '/order-confirmation/$finalInvoice',
       extra: {
         'invoiceNumber': finalInvoice,
-        'subtotal': cartState.totalPrice.toInt(),
+        'subtotal': cartState.selectedSubtotal.toInt(),
         'delivery': shippingFee,
         'productName': firstItem?.name ?? 'Marketplace Item',
         'productQty': firstItem?.quantity ?? 1,
-        'productPrice': firstItem?.unitPrice.toInt() ?? cartState.totalPrice.toInt(),
+        'productPrice': firstItem?.unitPrice.toInt() ?? cartState.selectedSubtotal.toInt(),
         'iconCodePoint': Icons.inventory_2_outlined.codePoint,
       },
     );
@@ -2536,7 +2537,7 @@ class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
     return BlocBuilder<CartCubit, CartState>(
       builder: (context, state) {
         final total =
-            state.totalPrice + widget.shippingFee + _otherFees + _platformFee;
+            state.selectedSubtotal + widget.shippingFee + _otherFees + _platformFee;
 
         return Container(
           height: MediaQuery.of(context).size.height * 0.92,
@@ -2917,7 +2918,7 @@ class _CodDetailSheetState extends State<_CodDetailSheet> {
     return BlocBuilder<CartCubit, CartState>(
       builder: (context, state) {
         final subtotal =
-            state.totalPrice + widget.shippingFee + _otherFees + _platformFee;
+            state.selectedSubtotal + widget.shippingFee + _otherFees + _platformFee;
         final codFee = (subtotal * 0.07).round().clamp(0, 100);
         final total = subtotal + codFee;
 
@@ -3194,7 +3195,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> {
     return BlocBuilder<CartCubit, CartState>(
       builder: (context, state) {
         final total =
-            state.totalPrice + widget.shippingFee + _otherFees + _platformFee;
+            state.selectedSubtotal + widget.shippingFee + _otherFees + _platformFee;
 
         return Container(
           height: MediaQuery.of(context).size.height * 0.92,
@@ -3550,22 +3551,16 @@ class _QtyButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(6),
-        child: Container(
-          width: 32,
-          height: 32,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: const Color(0xFFF3F4F6),
-            border: Border.all(color: AppColors.divider),
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: Icon(icon, size: 16, color: AppColors.textPrimary),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 28,
+        height: 28,
+        decoration: BoxDecoration(
+          border: Border.all(color: AppColors.divider),
+          borderRadius: BorderRadius.circular(6),
         ),
+        child: Icon(icon, size: 16, color: AppColors.textPrimary),
       ),
     );
   }

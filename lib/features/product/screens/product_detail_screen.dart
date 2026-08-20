@@ -11,7 +11,6 @@ import '../../auth/screens/login_screen.dart';
 import '../../cart/cubit/cart_cubit.dart';
 import '../../cart/cubit/cart_state.dart';
 import '../../cart/models/cart_models.dart';
-import '../../cart/screens/cart_screen.dart';
 
 class ProductDetailScreen extends StatelessWidget {
   final int? id;
@@ -797,15 +796,7 @@ class _BottomBar extends StatelessWidget {
   });
 
   void _showCheckout(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => BlocProvider.value(
-        value: context.read<CartCubit>(),
-        child: const CartCheckoutSheet(),
-      ),
-    );
+    context.push(AppRoutes.checkout);
   }
 
   Future<void> _handleBuyNow(BuildContext context) async {

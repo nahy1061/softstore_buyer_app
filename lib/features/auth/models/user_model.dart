@@ -7,6 +7,7 @@ class User extends Equatable {
   final String lastName;
   final String email;
   final String? phone;
+  final bool isEmailVerified;
 
   const User({
     this.id,
@@ -14,6 +15,7 @@ class User extends Equatable {
     required this.lastName,
     required this.email,
     this.phone,
+    this.isEmailVerified = false,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -30,9 +32,10 @@ class User extends Equatable {
       lastName: last,
       email: json['email']?.toString() ?? '',
       phone: json['phone']?.toString(),
+      isEmailVerified: json['email_verified'] == true ||
+          json['is_email_verified'] == true,
     );
   }
-
   String get fullName => '$firstName $lastName'.trim();
 
   User copyWith({
@@ -41,6 +44,7 @@ class User extends Equatable {
     String? lastName,
     String? email,
     String? phone,
+    bool? isEmailVerified,
   }) {
     return User(
       id: id ?? this.id,
@@ -48,12 +52,15 @@ class User extends Equatable {
       lastName: lastName ?? this.lastName,
       email: email ?? this.email,
       phone: phone ?? this.phone,
+      isEmailVerified: isEmailVerified ?? this.isEmailVerified,
     );
   }
 
   @override
-  List<Object?> get props => [id, firstName, lastName, email, phone];
+  List<Object?> get props =>
+      [id, firstName, lastName, email, phone, isEmailVerified];
 
   @override
-  String toString() => 'User(email: $email, name: $fullName)';
+  String toString() =>
+      'User(email: $email, name: $fullName, verified: $isEmailVerified)';
 }

@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 
 import 'app/app.dart';
 import 'core/network/dio_client.dart';
@@ -41,4 +42,13 @@ Future<void> main() async {
   }
 
   runApp(const SoftstoreBuyerApp());
+}
+
+/// Ensures Hive boxes are flushed and closed before the app terminates.
+///
+/// Called automatically on [AppLifecycleState.detached] by the root widget.
+Future<void> closeHiveBoxes() async {
+  try {
+    await Hive.close();
+  } catch (_) {}
 }

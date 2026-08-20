@@ -212,7 +212,7 @@ class _UnauthenticatedProfileView extends StatelessWidget {
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: () => LoginScreen.showAsModal(context),
+                  onPressed: () => context.push(AppRoutes.login),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFFF6A00),
                     foregroundColor: Colors.white,

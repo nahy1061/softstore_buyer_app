@@ -2,8 +2,12 @@ import 'package:hive_flutter/hive_flutter.dart';
 import '../../features/cart/models/cart_models.dart';
 
 class HiveService {
-  static const String _cartBoxName = 'cart_items';
-  static final List<CartItem> _memoryFallback = [];
+  static const String _guestCartBoxName = 'cart_items_guest';
+  static const String _cartBoxPrefix = 'cart_items_';
+  static String _currentUserId = 'guest';
+  static String _activeBoxName = _guestCartBoxName;
+  static final Map<String, List<CartItem>> _memoryFallbacks = {};
+  static bool _isHiveInitialized = false;
 
   static Future<void> init() async {
     try {
@@ -11,29 +15,83 @@ class HiveService {
       if (!Hive.isAdapterRegistered(0)) {
         Hive.registerAdapter(CartItemAdapter());
       }
-      try {
-        await Hive.openBox<CartItem>(_cartBoxName);
-      } catch (_) {
-        await Hive.deleteBoxFromDisk(_cartBoxName);
-        await Hive.openBox<CartItem>(_cartBoxName);
-      }
+      _isHiveInitialized = true;
+      await _openBox(_guestCartBoxName);
     } catch (_) {
       // In-memory fallback will take over seamlessly
     }
   }
 
-  static bool get _isOpen {
+  static void setHiveInitializedForTesting([bool initialized = true]) {
+    _isHiveInitialized = initialized;
+  }
+
+  static String sanitizeUserId(String? userId) {
+    if (userId == null || userId.trim().isEmpty) return 'guest';
+    final cleaned = userId.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9_]'), '_');
+    return cleaned.isEmpty ? 'guest' : cleaned;
+  }
+
+  static Future<void> setCartUser(String? userId) async {
+    final sanitized = sanitizeUserId(userId);
+    if (sanitized == _currentUserId) return;
+
+    _currentUserId = sanitized;
+    _activeBoxName = sanitized == 'guest'
+        ? _guestCartBoxName
+        : '$_cartBoxPrefix$sanitized';
+
+    await _openBox(_activeBoxName);
+  }
+
+  static Future<void> ensureBoxOpen([String? boxName]) async {
+    if (!_isHiveInitialized) return;
+    final target = boxName ?? _activeBoxName;
+    if (!_isBoxOpen(target)) {
+      await _openBox(target);
+    }
+  }
+
+  static Future<void> _openBox(String boxName) async {
+    if (!_isHiveInitialized) return;
     try {
-      return Hive.isBoxOpen(_cartBoxName);
+      if (!_isBoxOpen(boxName)) {
+        try {
+          await Hive.openBox<CartItem>(boxName);
+        } catch (_) {
+          try {
+            await Hive.deleteBoxFromDisk(boxName);
+            await Hive.openBox<CartItem>(boxName);
+          } catch (_) {
+            // In-memory fallback will take over
+          }
+        }
+      }
+    } catch (_) {
+      // In-memory fallback will take over
+    }
+  }
+
+  static Future<void> _closeBox(String boxName) async {
+    try {
+      if (_isBoxOpen(boxName)) {
+        await Hive.box<CartItem>(boxName).close();
+      }
+    } catch (_) {}
+  }
+
+  static bool _isBoxOpen(String boxName) {
+    try {
+      return Hive.isBoxOpen(boxName);
     } catch (_) {
       return false;
     }
   }
 
-  static Box<CartItem>? get _cartBox {
-    if (_isOpen) {
+  static Box<CartItem>? _getBox(String boxName) {
+    if (_isBoxOpen(boxName)) {
       try {
-        return Hive.box<CartItem>(_cartBoxName);
+        return Hive.box<CartItem>(boxName);
       } catch (_) {
         return null;
       }
@@ -42,32 +100,46 @@ class HiveService {
   }
 
   static List<CartItem> getItems() {
-    final box = _cartBox;
+    final box = _getBox(_activeBoxName);
     if (box != null) {
       return box.values.toList();
     }
-    return List<CartItem>.from(_memoryFallback);
+    return List<CartItem>.from(
+      _memoryFallbacks[_activeBoxName] ?? [],
+    );
   }
 
   static Future<void> saveItems(List<CartItem> items) async {
-    final box = _cartBox;
+    final box = _getBox(_activeBoxName);
     if (box != null) {
       await box.clear();
       for (final item in items) {
         await box.put(item.uuid, item);
       }
     } else {
-      _memoryFallback.clear();
-      _memoryFallback.addAll(items);
+      _memoryFallbacks[_activeBoxName] = List<CartItem>.from(items);
     }
   }
 
   static Future<void> clearItems() async {
-    final box = _cartBox;
+    final box = _getBox(_activeBoxName);
     if (box != null) {
       await box.clear();
     } else {
-      _memoryFallback.clear();
+      _memoryFallbacks.remove(_activeBoxName);
+    }
+  }
+
+  static Future<void> clearItemsForUser(String userId) async {
+    final sanitized = sanitizeUserId(userId);
+    final boxName =
+        sanitized == 'guest' ? _guestCartBoxName : '$_cartBoxPrefix$sanitized';
+    if (_isBoxOpen(boxName)) {
+      try {
+        await Hive.box<CartItem>(boxName).clear();
+      } catch (_) {}
+    } else {
+      _memoryFallbacks.remove(boxName);
     }
   }
 }
