@@ -26,24 +26,24 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
   final _scrollController = ScrollController();
   List<TicketMessage> _messages = [];
   bool _isSending = false;
+  late Ticket _currentTicket;
 
   @override
   void initState() {
     super.initState();
+    _currentTicket = widget.ticket;
     // Seed initial message with description
     _seedInitialDescription();
 
-    // Fetch messages and start polling
+    // Fetch messages
     final cubit = context.read<SupportCubit>();
     cubit.loadMessages(widget.ticket.id);
 
-    if (widget.ticket.status == TicketStatus.open ||
-        widget.ticket.status == TicketStatus.inProgress) {
-      cubit.startPolling(
-        widget.ticket.id,
-        interval: const Duration(seconds: 5),
-      );
-    }
+    // Start polling for both messages AND status
+    cubit.startPolling(
+      widget.ticket.id,
+      interval: const Duration(seconds: 5),
+    );
   }
 
   void _seedInitialDescription() {
@@ -106,22 +106,38 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
   @override
   Widget build(BuildContext context) {
     final isClosed =
-        widget.ticket.status == TicketStatus.closed ||
-        widget.ticket.status == TicketStatus.resolved;
+        _currentTicket.status == TicketStatus.closed ||
+        _currentTicket.status == TicketStatus.resolved;
 
     return BlocListener<SupportCubit, SupportState>(
       listener: (context, state) {
         if (state is MessagesLoaded) {
           setState(() {
             _isSending = false;
-            // If backend returned messages, use them; ensure initial description is preserved at top
+            // Filter out status change messages — they update the badge, not the chat
             if (state.messages.isNotEmpty) {
-              _messages = state.messages;
+              _messages = state.messages
+                  .where((m) => !SupportCubit.isStatusChangeMessage(m))
+                  .toList();
             } else if (_messages.isEmpty) {
               _seedInitialDescription();
             }
           });
           _scrollToBottom();
+        } else if (state is TicketStatusUpdated) {
+          if (state.ticket.id == _currentTicket.id && state.ticket.status != _currentTicket.status) {
+            setState(() {
+              _currentTicket = state.ticket;
+            });
+          }
+        } else if (state is TicketsLoaded) {
+          // Update current ticket status from the refreshed list
+          final updated = state.tickets.where((t) => t.id == _currentTicket.id).firstOrNull;
+          if (updated != null && updated.status != _currentTicket.status) {
+            setState(() {
+              _currentTicket = updated;
+            });
+          }
         } else if (state is MessageSent) {
           setState(() => _isSending = false);
           context.read<SupportCubit>().loadMessages(widget.ticket.id);
@@ -199,7 +215,7 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
             Padding(
               padding: const EdgeInsets.only(right: AppSpacing.md),
               child: TicketStatusBadge(
-                status: widget.ticket.status,
+                status: _currentTicket.status,
                 compact: true,
               ),
             ),
@@ -376,7 +392,7 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
   }
 
   Widget _buildClosedBanner() {
-    final isResolved = widget.ticket.status == TicketStatus.resolved;
+    final isResolved = _currentTicket.status == TicketStatus.resolved;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.lg),

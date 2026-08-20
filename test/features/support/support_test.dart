@@ -106,5 +106,65 @@ void main() {
       expect(cubit.state, isA<SupportInitial>());
       cubit.close();
     });
+
+    test('isStatusChangeMessage identifies status messages correctly', () {
+      final statusMsg1 = TicketMessage(
+        id: 1,
+        text: 'Status changed to pending',
+        sender: MessageSender.agent,
+        sentAt: DateTime.now(),
+      );
+      final statusMsg2 = TicketMessage(
+        id: 2,
+        text: 'Ticket is now resolved',
+        sender: MessageSender.agent,
+        sentAt: DateTime.now(),
+      );
+      final normalAgentMsg = TicketMessage(
+        id: 3,
+        text: 'Hello, we are investigating your order issue. Please hold on.',
+        sender: MessageSender.agent,
+        sentAt: DateTime.now(),
+      );
+      final buyerMsg = TicketMessage(
+        id: 4,
+        text: 'Status changed to pending',
+        sender: MessageSender.buyer,
+        sentAt: DateTime.now(),
+      );
+
+      expect(SupportCubit.isStatusChangeMessage(statusMsg1), isTrue);
+      expect(SupportCubit.isStatusChangeMessage(statusMsg2), isTrue);
+      expect(SupportCubit.isStatusChangeMessage(normalAgentMsg), isFalse);
+      expect(SupportCubit.isStatusChangeMessage(buyerMsg), isFalse);
+    });
+
+    test('extractStatusFromMessages extracts correct status from latest system message', () {
+      final messages = [
+        TicketMessage(
+          id: 1,
+          text: 'Hello, my order is missing',
+          sender: MessageSender.buyer,
+          sentAt: DateTime.now().subtract(const Duration(minutes: 10)),
+        ),
+        TicketMessage(
+          id: 2,
+          text: 'Status changed to in_progress',
+          sender: MessageSender.agent,
+          sentAt: DateTime.now().subtract(const Duration(minutes: 5)),
+        ),
+        TicketMessage(
+          id: 3,
+          text: 'Status updated to resolved',
+          sender: MessageSender.agent,
+          sentAt: DateTime.now(),
+        ),
+      ];
+
+      expect(
+        SupportCubit.extractStatusFromMessages(messages),
+        TicketStatus.resolved,
+      );
+    });
   });
 }
