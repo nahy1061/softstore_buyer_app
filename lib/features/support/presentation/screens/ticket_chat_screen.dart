@@ -124,6 +124,12 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
             }
           });
           _scrollToBottom();
+        } else if (state is TicketStatusUpdated) {
+          if (state.ticket.id == _currentTicket.id && state.ticket.status != _currentTicket.status) {
+            setState(() {
+              _currentTicket = state.ticket;
+            });
+          }
         } else if (state is TicketsLoaded) {
           // Update current ticket status from the refreshed list
           final updated = state.tickets.where((t) => t.id == _currentTicket.id).firstOrNull;

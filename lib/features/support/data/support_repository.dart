@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
+import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:html/parser.dart' as html_parser;
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/errors/failures.dart';
@@ -385,9 +387,24 @@ class SupportRepository {
           if (body.isEmpty) continue;
 
           developer.log(
-            '[SupportRepository] getTickets $endpoint: ${response.statusCode} (${body.length} chars)',
+            '[SUPPORT] getTickets $endpoint: ${response.statusCode} (${body.length} chars)',
             name: 'support',
           );
+
+          // DEBUG: save raw HTML to inspect structure
+          try {
+            final file = await _getDebugFile();
+            await file.writeAsString(body);
+            developer.log(
+              '[SUPPORT] DEBUG: saved HTML to ${file.path}',
+              name: 'support',
+            );
+          } catch (e) {
+            developer.log(
+              '[SUPPORT] DEBUG: could not save HTML: $e',
+              name: 'support',
+            );
+          }
 
           // Try JSON response first
           try {
@@ -403,7 +420,6 @@ class SupportRepository {
           } catch (_) {
             // Not JSON, parse as HTML
           }
-
           // HTML scraping — try multiple strategies
           final doc = html_parser.parse(body);
 
@@ -418,29 +434,50 @@ class SupportRepository {
             final ticketId = _extractTicketId(href);
             if (ticketId <= 0 || tickets.any((t) => t.id == ticketId)) continue;
 
-            // Walk up to find the container (row, card, list item)
+            // Walk up to find ONLY the direct ticket row or item container.
+            // Stop immediately when reaching a table row (tr), list item (li),
+            // or specific ticket card without bubbling into the outer table/list/page container.
             var container = link.parent;
-            for (int i = 0; i < 6; i++) {
+            for (int i = 0; i < 4; i++) {
               if (container == null) break;
-              if (container.localName == 'tr' ||
-                  container.localName == 'li' ||
-                  (container.localName == 'div' &&
-                      container.classes.any((c) =>
-                          c.contains('card') ||
-                          c.contains('ticket') ||
-                          c.contains('sx-') ||
-                          c.contains('item')))) {
+              final tag = container.localName?.toLowerCase();
+              if (tag == 'tr' || tag == 'li') {
+                break;
+              }
+              if (tag == 'div' &&
+                  container.classes.any((c) =>
+                      c == 'ticket-card' ||
+                      c == 'ticket-row' ||
+                      c == 'ticket-item' ||
+                      c == 'sx-ticket' ||
+                      c == 'sx-ticket-card' ||
+                      c == 'card-body' ||
+                      c == 'card')) {
+                break;
+              }
+              // Prevent walking up into table, tbody, main, body, or ticket list wrapper
+              if (tag == 'table' ||
+                  tag == 'tbody' ||
+                  tag == 'main' ||
+                  tag == 'body' ||
+                  (container.classes.any((c) =>
+                      c.contains('list') ||
+                      c.contains('table') ||
+                      c.contains('container') ||
+                      c.contains('wrapper')))) {
+                container = link.parent; // fallback to immediate parent
                 break;
               }
               container = container.parent;
             }
 
             String subject = link.text.trim();
-            String statusText = 'open';
             DateTime lastUpdated = DateTime.now();
             String lastMessage = '';
 
-            // Try table cells first
+            // Status extraction: NEVER use generic .badge from list page because it leaks from other tickets or global filters.
+            // Only extract if inside explicit table cells or strict ticket-scoped class.
+            String statusText = '';
             final cells = container?.querySelectorAll('td') ?? <dynamic>[];
             if (cells.length >= 3) {
               subject = cells[0].text.trim().isNotEmpty
@@ -450,14 +487,17 @@ class SupportRepository {
               lastMessage =
                   cells.length > 3 ? cells[3].text.trim() : '';
               lastUpdated = _parseRelativeDate(cells[2].text.trim());
-            }
-
-            // Try badge for status
-            final badge = container?.querySelector(
-              '.sx-badge, .badge, [class*="status"], .label, .tag',
-            );
-            if (badge != null && badge.text.trim().isNotEmpty) {
-              statusText = badge.text.trim().toLowerCase();
+            } else {
+              // Only match if class explicitly contains "ticket-status" or "status-badge"
+              final badge = container?.querySelector(
+                '.ticket-status, .status-badge, .badge-status, .sx-ticket-status, .spt-status',
+              );
+              if (badge != null) {
+                final text = badge.text.trim();
+                if (!RegExp(r'\(\d+\)|\b\d+\b').hasMatch(text)) {
+                  statusText = text.toLowerCase();
+                }
+              }
             }
 
             // Try heading for subject
@@ -470,20 +510,26 @@ class SupportRepository {
               }
             }
 
+            // Check if we already have this ticket in cache with a known status
+            final existingCached = _cachedTickets.where((t) => t.id == ticketId).firstOrNull;
+            final resolvedStatus = statusText.isNotEmpty
+                ? _parseStatus(statusText)
+                : (existingCached?.status ?? TicketStatus.open);
+
             tickets.add(
               Ticket(
                 id: ticketId,
-                subject: subject.isNotEmpty ? subject : 'Ticket #$ticketId',
-                category: '',
-                status: _parseStatus(statusText),
+                subject: subject.isNotEmpty ? subject : (existingCached?.subject ?? 'Ticket #$ticketId'),
+                category: existingCached?.category ?? '',
+                status: resolvedStatus,
                 createdAt: lastUpdated,
                 lastUpdatedAt: lastUpdated,
-                lastMessage: lastMessage,
+                lastMessage: lastMessage.isNotEmpty ? lastMessage : (existingCached?.lastMessage ?? ''),
               ),
             );
 
             developer.log(
-              '[SupportRepository] getTickets: #$ticketId status="$statusText" → ${_parseStatus(statusText).name}',
+              '[SUPPORT] #$ticketId status="${resolvedStatus.name}"',
               name: 'support',
             );
           }
@@ -494,13 +540,13 @@ class SupportRepository {
               '[class*="ticket"], [class*="sx-ticket"], [data-ticket-id]',
             );
             for (final el in ticketElements) {
-              // Try to find a link inside
               final link = el.querySelector('a');
               if (link == null) continue;
               final href = link.attributes['href'] ?? '';
               final ticketId = _extractTicketId(href);
               if (ticketId <= 0 || tickets.any((t) => t.id == ticketId)) continue;
 
+              final existing = _cachedTickets.where((t) => t.id == ticketId).firstOrNull;
               String subject = link.text.trim();
               if (subject.isEmpty) {
                 subject = el.text.trim().substring(0, 
@@ -510,12 +556,12 @@ class SupportRepository {
               tickets.add(
                 Ticket(
                   id: ticketId,
-                  subject: subject.isNotEmpty ? subject : 'Ticket #$ticketId',
-                  category: '',
-                  status: TicketStatus.open,
-                  createdAt: DateTime.now(),
-                  lastUpdatedAt: DateTime.now(),
-                  lastMessage: '',
+                  subject: subject.isNotEmpty ? subject : (existing?.subject ?? 'Ticket #$ticketId'),
+                  category: existing?.category ?? '',
+                  status: existing?.status ?? TicketStatus.open,
+                  createdAt: existing?.createdAt ?? DateTime.now(),
+                  lastUpdatedAt: existing?.lastUpdatedAt ?? DateTime.now(),
+                  lastMessage: existing?.lastMessage ?? '',
                 ),
               );
             }
@@ -527,15 +573,16 @@ class SupportRepository {
             for (final match in idPattern.allMatches(body)) {
               final ticketId = int.tryParse(match.group(1) ?? '');
               if (ticketId != null && ticketId > 0 && !tickets.any((t) => t.id == ticketId)) {
+                final existing = _cachedTickets.where((t) => t.id == ticketId).firstOrNull;
                 tickets.add(
                   Ticket(
                     id: ticketId,
-                    subject: 'Ticket #$ticketId',
-                    category: '',
-                    status: TicketStatus.open,
-                    createdAt: DateTime.now(),
-                    lastUpdatedAt: DateTime.now(),
-                    lastMessage: '',
+                    subject: existing?.subject ?? 'Ticket #$ticketId',
+                    category: existing?.category ?? '',
+                    status: existing?.status ?? TicketStatus.open,
+                    createdAt: existing?.createdAt ?? DateTime.now(),
+                    lastUpdatedAt: existing?.lastUpdatedAt ?? DateTime.now(),
+                    lastMessage: existing?.lastMessage ?? '',
                   ),
                 );
               }
@@ -551,23 +598,26 @@ class SupportRepository {
         }
       }
 
-      // If we got tickets from backend, replace cache entirely (not merge)
-      if (tickets.isNotEmpty) {
-        _cachedTickets
-          ..clear()
-          ..addAll(tickets);
-      } else {
-        // Backend returned nothing — keep cached tickets but don't merge stale ones
-        developer.log(
-          '[SupportRepository] getTickets: no tickets from backend, keeping ${_cachedTickets.length} cached',
-          name: 'support',
-        );
+      // Merge newly discovered tickets without overwriting individual statuses:
+      for (final newTicket in tickets) {
+        final existingIndex = _cachedTickets.indexWhere((t) => t.id == newTicket.id);
+        if (existingIndex != -1) {
+          final existing = _cachedTickets[existingIndex];
+          _cachedTickets[existingIndex] = existing.copyWith(
+            subject: newTicket.subject.isNotEmpty ? newTicket.subject : existing.subject,
+            category: newTicket.category.isNotEmpty ? newTicket.category : existing.category,
+            lastUpdatedAt: newTicket.lastUpdatedAt,
+            lastMessage: newTicket.lastMessage.isNotEmpty ? newTicket.lastMessage : existing.lastMessage,
+          );
+        } else {
+          _cachedTickets.add(newTicket);
+        }
       }
 
       await _persistTickets();
 
       developer.log(
-        '[SupportRepository] getTickets result: ${_cachedTickets.length} tickets — ${_cachedTickets.map((t) => '#${t.id}:${t.status.name}').join(', ')}',
+        '[SUPPORT] getTickets result: ${_cachedTickets.length} tickets — ${_cachedTickets.map((t) => '#${t.id}:${t.status.name}').join(', ')}',
         name: 'support',
       );
 
@@ -732,10 +782,14 @@ class SupportRepository {
               }
             }
 
+            // Extract specific text from message bubble if present
+            final bubbleEl = el.querySelector('.spt-msg-bubble, .bubble, .body');
+            final messageBody = bubbleEl != null ? bubbleEl.text.trim() : text;
+
             backendMessages.add(
               TicketMessage(
                 id: msgId++,
-                text: text,
+                text: messageBody.isNotEmpty ? messageBody : text,
                 sender: sender,
                 sentAt: sentAt,
               ),
@@ -749,7 +803,18 @@ class SupportRepository {
         }
       }
 
-      // Merge backend messages with local cached messages for this ticket
+      // Check if any backend message contains a status change and update the ticket status immediately
+      final latestStatus = _extractStatusFromMessageList(backendMessages);
+      if (latestStatus != null) {
+        final idx = _cachedTickets.indexWhere((t) => t.id == ticketId);
+        if (idx != -1 && _cachedTickets[idx].status != latestStatus) {
+          _cachedTickets[idx] = _cachedTickets[idx].copyWith(status: latestStatus);
+          await _persistTickets();
+        }
+      }
+
+      // Merge backend messages with local cached messages for this ticket,
+      // filtering out system status change notices so they never pollute chat storage
       final localList = _cachedMessages[ticketId] ?? [];
       final merged = <TicketMessage>[...localList];
 
@@ -762,11 +827,14 @@ class SupportRepository {
         }
       }
 
-      merged.sort((a, b) => a.sentAt.compareTo(b.sentAt));
-      _cachedMessages[ticketId] = merged;
+      // Clean local list of any status change messages that might have been saved before
+      final cleaned = merged.where((m) => !_isSystemStatusMessage(m.text)).toList();
+
+      cleaned.sort((a, b) => a.sentAt.compareTo(b.sentAt));
+      _cachedMessages[ticketId] = cleaned;
 
       await _persistMessages();
-      return merged;
+      return cleaned;
     } on DioException catch (e) {
       throw _handleDioError(e);
     } catch (e) {
@@ -777,6 +845,111 @@ class SupportRepository {
       );
       throw UnknownFailure('Failed to load messages: $e');
     }
+  }
+
+  /// Get status for a specific ticket directly from the ticket detail page.
+  /// This avoids relying exclusively on the multi-ticket list page scraping.
+  Future<TicketStatus?> getTicketStatus(int ticketId) async {
+    final htmlEndpoints = [
+      '/support/ticket/$ticketId',
+      '/agent/tickets/$ticketId',
+      '/store/support/tickets/$ticketId',
+    ];
+
+    for (final endpoint in htmlEndpoints) {
+      try {
+        final response = await _dio.get(
+          endpoint,
+          options: Options(
+            responseType: ResponseType.plain,
+            sendTimeout: const Duration(seconds: 4),
+            receiveTimeout: const Duration(seconds: 4),
+          ),
+        );
+
+        if (response.statusCode == 200 && response.data != null) {
+          final html = response.data.toString();
+          if (html.isNotEmpty) {
+            final doc = html_parser.parse(html);
+            // Look for ticket status badge in header or status container
+            final statusBadge = doc.querySelector(
+              '.ticket-status, .badge-status, .status-badge, .spt-status, .sx-ticket-status',
+            ) ?? doc.querySelector(
+              'header .badge, .ticket-header .badge, .page-header .badge',
+            );
+
+            if (statusBadge != null) {
+              final text = statusBadge.text.trim().toLowerCase();
+              if (text.isNotEmpty && !RegExp(r'\(\d+\)|\b\d+\b').hasMatch(text)) {
+                final parsed = _parseStatus(text);
+                // Also update local cache for this ticket
+                final idx = _cachedTickets.indexWhere((t) => t.id == ticketId);
+                if (idx != -1 && _cachedTickets[idx].status != parsed) {
+                  _cachedTickets[idx] = _cachedTickets[idx].copyWith(status: parsed);
+                  await _persistTickets();
+                }
+                return parsed;
+              }
+            }
+          }
+        }
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  bool _isSystemStatusMessage(String text) {
+    final lower = text.trim().toLowerCase();
+    if (lower.length > 120) return false;
+
+    if (lower.startsWith('status changed') ||
+        lower.startsWith('status updated') ||
+        lower.startsWith('status has been') ||
+        lower.startsWith('status is now') ||
+        lower.startsWith('ticket status') ||
+        lower.startsWith('ticket is now') ||
+        lower.startsWith('ticket has been') ||
+        lower.startsWith('ticket marked as') ||
+        lower.startsWith('changed status to') ||
+        lower.startsWith('marked as') ||
+        lower.startsWith('status:')) {
+      return true;
+    }
+
+    final statusKeywords = RegExp(
+      r'(?:status\s+(?:is\s+)?(?:changed|updated|set|marked|moved)|(?:changed|updated|marked|set)\s+(?:the\s+)?status)\s+(?:to|as)?\s*(?:open|pending|in[ -_]?progress|waiting|resolved|closed)',
+      caseSensitive: false,
+    );
+    if (statusKeywords.hasMatch(lower)) return true;
+
+    final shortStatusAssertion = RegExp(
+      r'^(?:ticket\s+)?(?:status\s+)?(?:is\s+)?(?:resolved|closed|reopened|pending|in[ -_]?progress)[\.!]?$',
+      caseSensitive: false,
+    );
+    if (shortStatusAssertion.hasMatch(lower)) return true;
+
+    return false;
+  }
+
+  TicketStatus? _extractStatusFromMessageList(List<TicketMessage> messages) {
+    for (final msg in messages.reversed) {
+      final text = msg.text.trim().toLowerCase();
+      if (!_isSystemStatusMessage(text)) continue;
+
+      if (text.contains('resolved') || text.contains('resolv') || text.contains('done')) {
+        return TicketStatus.resolved;
+      }
+      if (text.contains('closed') || text.contains('close')) {
+        return TicketStatus.closed;
+      }
+      if (text.contains('progress') || text.contains('pending') || text.contains('waiting') || text.contains('hold')) {
+        return TicketStatus.inProgress;
+      }
+      if (text.contains('open') || text.contains('reopen') || text.contains('new')) {
+        return TicketStatus.open;
+      }
+    }
+    return null;
   }
 
   MessageSender _parseSender(String authorType) {
@@ -931,6 +1104,11 @@ class SupportRepository {
         name: 'support',
       );
     }
+  }
+
+  Future<File> _getDebugFile() async {
+    final dir = await getApplicationDocumentsDirectory();
+    return File('${dir.path}/support_debug.html');
   }
 
   TicketStatus _parseStatus(String text) {

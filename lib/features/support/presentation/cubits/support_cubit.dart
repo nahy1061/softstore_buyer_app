@@ -72,6 +72,17 @@ class SupportCubit extends Cubit<SupportState> {
       final messages = await _repository.getMessages(ticketId);
       if (!isClosed) {
         emit(MessagesLoaded(messages: messages));
+
+        // Immediately sync ticket status with the latest verified status from backend
+        final statusFromMsg = extractStatusFromMessages(messages);
+        final currentCached = _repository.cachedTickets;
+        final match = currentCached.where((t) => t.id == ticketId).firstOrNull;
+        if (statusFromMsg != null && match != null && match.status != statusFromMsg) {
+          final updated = match.copyWith(status: statusFromMsg);
+          emit(TicketStatusUpdated(ticket: updated));
+        } else if (match != null) {
+          emit(TicketStatusUpdated(ticket: match));
+        }
       }
     } catch (e) {
       if (!isClosed) {
@@ -100,25 +111,34 @@ class SupportCubit extends Cubit<SupportState> {
   /// Start background polling for new replies and status changes.
   void startPolling(
     int ticketId, {
-    Duration interval = const Duration(seconds: 5),
+    Duration interval = const Duration(seconds: 3),
   }) {
     stopPolling();
     _pollTimer = Timer.periodic(interval, (_) async {
       if (isClosed) return;
       try {
-        // Poll messages
+        // Poll messages and sync status immediately
         final messages = await _repository.getMessages(ticketId);
         if (!isClosed) {
           emit(MessagesLoaded(messages: messages));
+
+          final statusFromMsg = extractStatusFromMessages(messages);
+          final currentCached = _repository.cachedTickets;
+          final match = currentCached.where((t) => t.id == ticketId).firstOrNull;
+          if (statusFromMsg != null && match != null && match.status != statusFromMsg) {
+            final updatedTicket = match.copyWith(status: statusFromMsg);
+            emit(TicketStatusUpdated(ticket: updatedTicket));
+          } else if (match != null) {
+            emit(TicketStatusUpdated(ticket: match));
+          }
         }
       } catch (_) {}
+
       try {
-        // Also refresh ticket status from backend
+        // Check ticket detail status directly
         final updated = await loadTicketStatus(ticketId);
-        if (!isClosed && updated != null && state is TicketsLoaded) {
-          final currentTickets = (state as TicketsLoaded).tickets;
-          final refreshed = currentTickets.map((t) => t.id == ticketId ? updated : t).toList();
-          emit(TicketsLoaded(tickets: refreshed));
+        if (!isClosed && updated != null) {
+          emit(TicketStatusUpdated(ticket: updated));
         }
       } catch (_) {}
     });
@@ -130,9 +150,19 @@ class SupportCubit extends Cubit<SupportState> {
   }
 
   /// Fetch updated ticket status from backend.
-  /// Returns the ticket with current status, or null if not found.
+  /// First checks the ticket detail page directly, then falls back to ticket list.
   Future<Ticket?> loadTicketStatus(int ticketId) async {
     try {
+      // 1. Direct ticket status check from ticket detail page
+      final directStatus = await _repository.getTicketStatus(ticketId);
+      if (directStatus != null) {
+        final cached = _repository.cachedTickets.where((t) => t.id == ticketId).firstOrNull;
+        if (cached != null) {
+          return cached.copyWith(status: directStatus);
+        }
+      }
+
+      // 2. Ticket list check
       final tickets = await _repository.getTickets();
       for (final t in tickets) {
         if (t.id == ticketId) return t;
@@ -141,17 +171,68 @@ class SupportCubit extends Cubit<SupportState> {
     return null;
   }
 
-  /// Check if a message is a system status change message (should not be displayed as chat bubble)
+  /// Check if any message in the list indicates a status change.
+  /// Looks through latest messages in reverse order to find the latest valid status.
+  static TicketStatus? extractStatusFromMessages(List<TicketMessage> messages) {
+    for (final msg in messages.reversed) {
+      if (msg.sender != MessageSender.agent) continue;
+      final text = msg.text.trim().toLowerCase();
+      if (!isStatusChangeMessage(msg)) continue;
+
+      if (text.contains('resolved') || text.contains('resolv') || text.contains('done')) {
+        return TicketStatus.resolved;
+      }
+      if (text.contains('closed') || text.contains('close')) {
+        return TicketStatus.closed;
+      }
+      if (text.contains('progress') || text.contains('pending') || text.contains('waiting') || text.contains('hold')) {
+        return TicketStatus.inProgress;
+      }
+      if (text.contains('open') || text.contains('reopen') || text.contains('new')) {
+        return TicketStatus.open;
+      }
+    }
+    return null;
+  }
+
+  /// Check if a message is a system status change message (should not be displayed as regular chat bubble)
   static bool isStatusChangeMessage(TicketMessage msg) {
     if (msg.sender != MessageSender.agent) return false;
     final text = msg.text.trim().toLowerCase();
-    // System status messages are typically short and start with status-related keywords
-    if (text.length > 80) return false; // Real agent replies are usually longer
-    return text.startsWith('status changed') ||
+    
+    // Status change notices are concise system messages
+    if (text.length > 120) return false;
+
+    // Direct startsWith checks
+    if (text.startsWith('status changed') ||
         text.startsWith('status updated') ||
-        text.startsWith('ticket is now') ||
+        text.startsWith('status has been') ||
+        text.startsWith('status is now') ||
         text.startsWith('ticket status') ||
-        (text.contains('status') && text.contains('to') && text.length < 50);
+        text.startsWith('ticket is now') ||
+        text.startsWith('ticket has been') ||
+        text.startsWith('ticket marked as') ||
+        text.startsWith('changed status to') ||
+        text.startsWith('marked as') ||
+        text.startsWith('status:')) {
+      return true;
+    }
+
+    // Keyword & Regex matching for dynamic backend system strings
+    final statusKeywords = RegExp(
+      r'(?:status\s+(?:is\s+)?(?:changed|updated|set|marked|moved)|(?:changed|updated|marked|set)\s+(?:the\s+)?status)\s+(?:to|as)?\s*(?:open|pending|in[ -_]?progress|waiting|resolved|closed)',
+      caseSensitive: false,
+    );
+    if (statusKeywords.hasMatch(text)) return true;
+
+    // Short status assertions like "Ticket resolved" or "Ticket closed"
+    final shortStatusAssertion = RegExp(
+      r'^(?:ticket\s+)?(?:status\s+)?(?:is\s+)?(?:resolved|closed|reopened|pending|in[ -_]?progress)[\.!]?$',
+      caseSensitive: false,
+    );
+    if (shortStatusAssertion.hasMatch(text)) return true;
+
+    return false;
   }
 
   @override
