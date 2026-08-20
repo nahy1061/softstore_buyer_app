@@ -86,7 +86,7 @@ class AuthRepository {
         developer.log('[Auth] Login successful, redirected to: $location', name: 'auth');
         _csrf.clearAll();
         final user = await restoreSession();
-        if (user != null) return user;
+        if (user != null && user.email.isNotEmpty) return user;
         return User(
           firstName: email.split('@').first,
           lastName: '',
@@ -96,8 +96,11 @@ class AuthRepository {
 
       // Case B: Check if session was successfully established
       final userAfterLogin = await restoreSession();
-      if (userAfterLogin != null && userAfterLogin.email.isNotEmpty) {
+      if (userAfterLogin != null) {
         _csrf.clearAll();
+        if (userAfterLogin.email.isEmpty) {
+          return userAfterLogin.copyWith(email: email.trim());
+        }
         return userAfterLogin;
       }
 
@@ -234,6 +237,9 @@ class AuthRepository {
       developer.log('[Auth] Logout request failed: $e', name: 'auth');
     } finally {
       _csrf.clearAll();
+      try {
+        await _client.cookieJar.deleteAll();
+      } catch (_) {}
     }
   }
 
@@ -282,10 +288,20 @@ class AuthRepository {
   /// Sends a 6-digit OTP to [email] for checkout verification.
   Future<void> sendVerificationCode(String email) async {
     try {
+      final csrfToken = await _csrf
+          .fetchToken(ApiEndpoints.checkoutPage)
+          .timeout(const Duration(seconds: 3), onTimeout: () => null);
+
       final response = await _client.post<Map<String, dynamic>>(
         ApiEndpoints.sendVerificationCode,
         data: {'email': email.trim()},
-        options: Options(contentType: 'application/json'),
+        options: Options(
+          contentType: 'application/json',
+          headers: {
+            if (csrfToken != null) 'X-CSRF-TOKEN': csrfToken,
+            'Accept': 'application/json',
+          },
+        ),
       );
 
       final body = response.data;
@@ -306,10 +322,20 @@ class AuthRepository {
   /// Returns true if verification is successful.
   Future<bool> verifyCode(String code) async {
     try {
+      final csrfToken = await _csrf
+          .fetchToken(ApiEndpoints.checkoutPage)
+          .timeout(const Duration(seconds: 3), onTimeout: () => null);
+
       final response = await _client.post<Map<String, dynamic>>(
         ApiEndpoints.verifyCode,
         data: {'code': code.trim()},
-        options: Options(contentType: 'application/json'),
+        options: Options(
+          contentType: 'application/json',
+          headers: {
+            if (csrfToken != null) 'X-CSRF-TOKEN': csrfToken,
+            'Accept': 'application/json',
+          },
+        ),
       );
 
       final body = response.data;
@@ -325,23 +351,81 @@ class AuthRepository {
   /// Extracts [User] data from the profile page HTML.
   ///
   /// The profile page has a form with named inputs for each field.
+  /// Also attempts to detect email verification status from the HTML.
   User _parseUserFromProfileHtml(String html) {
     final doc = HtmlParserUtil.parse(html);
 
     String? inputVal(String name) =>
-        doc.querySelector('input[name="$name"]')?.attributes['value']?.trim();
+        doc.querySelector('input[name="$name"]')?.attributes['value']?.trim() ??
+        doc.querySelector('input[id="$name"]')?.attributes['value']?.trim();
 
-    final firstName = inputVal('first_name') ?? '';
+    final firstName = inputVal('first_name') ?? inputVal('name') ?? '';
     final lastName = inputVal('last_name') ?? '';
-    final email = inputVal('email') ?? '';
+    final email = inputVal('email') ??
+        inputVal('user_email') ??
+        doc.querySelector('input[type="email"]')?.attributes['value']?.trim() ??
+        '';
     final phone = inputVal('phone');
+
+    // Detect email verification status from the profile HTML.
+    // Looks for common patterns: hidden inputs, checkboxes, text indicators.
+    final isEmailVerified = _detectEmailVerified(doc, html);
 
     return User(
       firstName: firstName,
       lastName: lastName,
       email: email,
       phone: phone?.isEmpty == true ? null : phone,
+      isEmailVerified: isEmailVerified,
     );
+  }
+
+  /// Attempts to detect whether the user's email is verified from the
+  /// profile page HTML document or raw HTML string.
+  bool _detectEmailVerified(dynamic doc, String html) {
+    // 1. Check hidden/visible input fields with verification-related names
+    for (final name in [
+      'email_verified',
+      'is_email_verified',
+      'verified',
+      'email_verification_status',
+    ]) {
+      final input = doc.querySelector('input[name="$name"]');
+      if (input != null) {
+        final val = input.attributes['value']?.toLowerCase() ?? '';
+        if (val == '1' || val == 'true' || val == 'yes') return true;
+        if (val == '0' || val == 'false' || val == 'no') return false;
+      }
+    }
+
+    // 2. Check for a checked checkbox
+    for (final name in ['email_verified', 'is_email_verified', 'verified']) {
+      final checkbox = doc.querySelector(
+        'input[name="$name"][type="checkbox"]',
+      );
+      if (checkbox != null && checkbox.attributes.containsKey('checked')) {
+        return true;
+      }
+    }
+
+    // 3. Look for text indicators in the raw HTML
+    final lowerHtml = html.toLowerCase();
+    if (lowerHtml.contains('email verified') ||
+        lowerHtml.contains('email_verified') ||
+        lowerHtml.contains('is-verified') ||
+        lowerHtml.contains('verification-badge')) {
+      return true;
+    }
+    if (lowerHtml.contains('email not verified') ||
+        lowerHtml.contains('email unverified') ||
+        lowerHtml.contains('verify your email') ||
+        lowerHtml.contains('pending verification')) {
+      return false;
+    }
+
+    // Cannot determine from HTML — default to unverified so the
+    // checkout flow will proactively send an OTP.
+    return false;
   }
 
   // ─── Error Handling ───────────────────────────────────────────────────────

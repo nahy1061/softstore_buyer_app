@@ -1,19 +1,26 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/router.dart';
+import '../../../core/errors/failures.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_bottom_nav_bar.dart';
 import '../../auth/cubit/auth_cubit.dart';
 import '../../auth/cubit/auth_state.dart';
 import '../../cart/cubit/cart_cubit.dart';
+import '../../cart/cubit/cart_state.dart';
 import '../../cart/models/cart_models.dart';
 import '../../cart/repository/cart_repository.dart';
 import '../../orders/models/order_model.dart' as order_models;
 import '../../orders/repository/order_repository.dart';
+import '../widgets/coupon_code_section.dart';
+import '../widgets/delivery_address_section.dart';
+import '../widgets/order_notes_section.dart';
+import '../widgets/order_summary_section.dart';
 
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});
@@ -40,6 +47,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   String? _couponMessage;
   bool _couponValid = false;
 
+  /// Whether the user's email has been verified in this checkout session.
+  bool _emailVerifiedInSession = false;
+  Timer? _otpResendTimer;
+
+  List<CartItem> _selectedItems(CartState cartState) {
+    return cartState.selectedItems;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -60,9 +75,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   Future<void> _fetchShippingQuote() async {
     final cartState = context.read<CartCubit>().state;
-    if (cartState.items.isEmpty) return;
+    final items = _selectedItems(cartState);
+    if (items.isEmpty) return;
 
-    final repoItems = cartState.items.map((i) {
+    final repoItems = items.map((i) {
       final numericId = int.tryParse(i.id) ?? i.id.hashCode.abs();
       return CartItem(
         uuid: i.id,
@@ -91,8 +107,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     setState(() => _isValidatingCoupon = true);
 
     final cartState = context.read<CartCubit>().state;
+    final items = _selectedItems(cartState);
     final subtotal =
-        cartState.items.fold(0.0, (sum, i) => sum + (i.price * i.quantity));
+        items.fold(0.0, (sum, i) => sum + (i.price * i.quantity));
     try {
       final res = await _repo.validateCoupon(
         code: code,
@@ -121,11 +138,42 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
   }
 
+  // ─── Order Submission ────────────────────────────────────────────────────
+
   Future<void> _submitOrder() async {
     if (!_formKey.currentState!.validate()) return;
 
+    // ── Guard: ensure email is verified before placing order ──────────
+    final authState = context.read<AuthCubit>().state;
+    final user =
+        authState is AuthAuthenticated ? authState.user : null;
+    final userEmail = user?.email.trim() ?? '';
+    final isPersistedVerified = userEmail.isNotEmpty
+        ? await _repo.isEmailVerified(userEmail)
+        : false;
+
+    final emailVerified = _emailVerifiedInSession ||
+        (user?.isEmailVerified ?? false) ||
+        isPersistedVerified;
+
+    developer.log(
+      '[Checkout] _submitOrder: emailVerified=$emailVerified '
+      '_emailVerifiedInSession=$_emailVerifiedInSession '
+      'isPersistedVerified=$isPersistedVerified '
+      'user.isEmailVerified=${user?.isEmailVerified}',
+      name: 'checkout',
+    );
+
+    if (!emailVerified) {
+      if (!mounted) return;
+      _showOtpVerificationDialog();
+      return;
+    }
+
     final cartState = context.read<CartCubit>().state;
-    if (cartState.items.isEmpty) {
+    final items = _selectedItems(cartState);
+    if (items.isEmpty) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Your cart is empty. Please add items first.'),
@@ -137,7 +185,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     setState(() => _isSubmitting = true);
 
-    final repoItems = cartState.items.map((i) {
+    final repoItems = items.map((i) {
       final numericId = i.productId;
       return CartItem(
         uuid: i.id,
@@ -148,18 +196,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       );
     }).toList();
 
-    final authState = context.read<AuthCubit>().state;
-    String userEmail = 'buyer@softstore.pk';
-    if (authState is AuthAuthenticated && authState.user.email.isNotEmpty) {
-      userEmail = authState.user.email.trim();
-    }
+    final orderEmail =
+        userEmail.isNotEmpty ? userEmail : 'buyer@softstore.pk';
 
     final request = OrderRequest(
       items: repoItems,
       customerName: _nameCtrl.text.trim(),
       customerAddress: _addressCtrl.text.trim(),
       customerPhone: _phoneCtrl.text.trim(),
-      customerEmail: userEmail,
+      customerEmail: orderEmail,
       notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
       couponCode:
           _couponCtrl.text.trim().isEmpty ? null : _couponCtrl.text.trim(),
@@ -170,6 +215,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final fallbackInvoice =
         'INV-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}-$rand5';
     String invoice = fallbackInvoice;
+    bool serverSuccess = false;
 
     try {
       final result = await _repo.placeOrder(request);
@@ -177,24 +223,54 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           result.invoiceNumber != null &&
           result.invoiceNumber!.isNotEmpty) {
         invoice = result.invoiceNumber!;
+        serverSuccess = true;
       }
-    } catch (_) {
-      // Graceful local fallback
+    } on AuthFailure catch (e) {
+      if (e.message == 'email_unverified') {
+        if (!mounted) return;
+        setState(() {
+          _isSubmitting = false;
+        });
+        _showOtpVerificationDialog();
+        return;
+      }
+      // Other auth errors — show but continue with local fallback
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Order note: ${e.message}'),
+            backgroundColor: AppColors.warning,
+          ),
+        );
+      }
+    } catch (e) {
+      // Network or server error — continue with local fallback
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Server unavailable. Order saved locally. Error: ${e.toString().length > 80 ? e.toString().substring(0, 80) : e.toString()}',
+            ),
+            backgroundColor: AppColors.warning,
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
 
-    final firstItem =
-        cartState.items.isNotEmpty ? cartState.items.first : null;
+    final firstItem = items.isNotEmpty ? items.first : null;
     final subtotal =
-        cartState.items.fold(0.0, (sum, i) => sum + (i.price * i.quantity));
+        items.fold(0.0, (sum, i) => sum + (i.price * i.quantity));
 
     final placedOrder = order_models.Order(
       id: invoice,
       referenceNumber: invoice,
       placedAt: now,
-      status: order_models.OrderStatus.pending,
-      items: cartState.items
+      status: serverSuccess
+          ? order_models.OrderStatus.confirmed
+          : order_models.OrderStatus.pending,
+      items: items
           .map((i) => order_models.OrderItem(
                 id: i.id,
                 name: i.name,
@@ -216,9 +292,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       estimatedDelivery: 'Expected in 2-3 business days',
       statusHistory: [
         order_models.OrderStatusEvent(
-          status: order_models.OrderStatus.pending,
+          status: serverSuccess
+              ? order_models.OrderStatus.confirmed
+              : order_models.OrderStatus.pending,
           timestamp: now,
-          note: 'Order placed by customer',
+          note: serverSuccess
+              ? 'Order confirmed by server'
+              : 'Order placed by customer (pending server confirmation)',
         ),
       ],
     );
@@ -226,17 +306,28 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     await _orderRepo.saveLocalOrder(placedOrder);
 
     if (mounted) {
-      context.read<CartCubit>().clearCart();
+      final cubit = context.read<CartCubit>();
+      if (cubit.state.hasSelection) {
+        cubit.removeSelected();
+      } else {
+        cubit.clearCart();
+      }
       context.go(
         '/order-confirmation/$invoice',
         extra: {
           'invoiceNumber': invoice,
           'subtotal': subtotal.toInt(),
           'delivery': _deliveryFee.toInt(),
-          'productName': firstItem?.name,
-          'productQty': firstItem?.quantity,
-          'productPrice': firstItem?.price.toInt(),
-          'iconCodePoint': firstItem?.iconCodePoint,
+          'productName': firstItem?.name ?? 'SoftStore Item',
+          'productQty': firstItem?.quantity ?? 1,
+          'productPrice':
+              firstItem?.price.toInt() ?? cartState.totalPrice.toInt(),
+          'iconCodePoint':
+              firstItem?.iconCodePoint ?? Icons.inventory_2_outlined.codePoint,
+          'customerName': _nameCtrl.text.trim(),
+          'customerPhone': _phoneCtrl.text.trim(),
+          'customerAddress': _addressCtrl.text.trim(),
+          'customerCity': 'Lahore',
         },
       );
     }
@@ -244,6 +335,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   @override
   void dispose() {
+    _otpResendTimer?.cancel();
     _nameCtrl.dispose();
     _phoneCtrl.dispose();
     _addressCtrl.dispose();
@@ -255,8 +347,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   @override
   Widget build(BuildContext context) {
     final cartState = context.watch<CartCubit>().state;
+    final items = _selectedItems(cartState);
     final subtotal =
-        cartState.items.fold(0.0, (sum, i) => sum + (i.price * i.quantity));
+        items.fold(0.0, (sum, i) => sum + (i.price * i.quantity));
     final total = (subtotal + _deliveryFee - _discountAmount)
         .clamp(0.0, double.infinity);
 
@@ -292,7 +385,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: const Color(0xFFF3F4F6),
-                border: Border.all(color: const Color(0xFFE5E7EB), width: 0.8),
+                border:
+                    Border.all(color: const Color(0xFFE5E7EB), width: 0.8),
               ),
               child: const Icon(
                 Icons.chevron_left_rounded,
@@ -310,439 +404,36 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── 1. Delivery Address Card ──────────────────────────────────
-              _buildCardContainer(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          width: 22,
-                          height: 22,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFFF5722),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Center(
-                            child: Icon(
-                              Icons.priority_high_rounded,
-                              color: Colors.white,
-                              size: 14,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        const Text(
-                          'Delivery Address',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF111827),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-
-                    // Full Name Field
-                    _buildInputWrapper(
-                      child: TextFormField(
-                        controller: _nameCtrl,
-                        textInputAction: TextInputAction.next,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          color: Color(0xFF111827),
-                          fontWeight: FontWeight.w500,
-                        ),
-                        decoration: _buildInputDecoration(
-                          hintText: 'Full Name',
-                          prefixIcon: Icons.person_outline,
-                        ),
-                        validator: (v) => v == null || v.trim().isEmpty
-                            ? 'Full Name is required'
-                            : null,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Phone Field
-                    _buildInputWrapper(
-                      child: TextFormField(
-                        controller: _phoneCtrl,
-                        keyboardType: TextInputType.phone,
-                        textInputAction: TextInputAction.next,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          color: Color(0xFF111827),
-                          fontWeight: FontWeight.w500,
-                        ),
-                        decoration: _buildInputDecoration(
-                          hintText: 'Phone (03XXXXXXXXX)',
-                          prefixIcon: Icons.phone_outlined,
-                        ),
-                        validator: (v) {
-                          if (v == null || v.trim().isEmpty) {
-                            return 'Phone number is required';
-                          }
-                          final digits = v.replaceAll(RegExp(r'\D'), '');
-                          if (digits.length < 10) {
-                            return 'Phone number must have at least 10 digits';
-                          }
-                          return null;
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Full Address Field
-                    _buildInputWrapper(
-                      child: TextFormField(
-                        controller: _addressCtrl,
-                        maxLines: 2,
-                        textInputAction: TextInputAction.done,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          color: Color(0xFF111827),
-                          fontWeight: FontWeight.w500,
-                        ),
-                        decoration: _buildInputDecoration(
-                          hintText: 'Full delivery address',
-                          prefixIcon: Icons.near_me_outlined,
-                        ),
-                        validator: (v) => v == null || v.trim().isEmpty
-                            ? 'Delivery address is required'
-                            : null,
-                      ),
-                    ),
-                  ],
-                ),
+              // ── 1. Delivery Address Card ─────────────────────────────────
+              DeliveryAddressSection(
+                nameController: _nameCtrl,
+                phoneController: _phoneCtrl,
+                addressController: _addressCtrl,
               ),
               const SizedBox(height: 16),
 
-              // ── 2. Order Notes Card ───────────────────────────────────────
-              _buildCardContainer(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          width: 22,
-                          height: 22,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFF5722),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: const Center(
-                            child: Icon(
-                              Icons.receipt_long_outlined,
-                              color: Colors.white,
-                              size: 14,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        const Text(
-                          'Order Notes',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF111827),
-                          ),
-                        ),
-                        const Spacer(),
-                        const Text(
-                          'Optional',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Color(0xFF9CA3AF),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-
-                    // Order notes multiline input
-                    _buildInputWrapper(
-                      child: TextFormField(
-                        controller: _notesCtrl,
-                        maxLines: 3,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          color: Color(0xFF111827),
-                          fontWeight: FontWeight.w500,
-                        ),
-                        decoration: _buildInputDecoration(
-                          hintText:
-                              'e.g. leave at gate, call before delivery...',
-                          prefixIcon: Icons.chat_bubble_outline_rounded,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              // ── 2. Order Notes Card ──────────────────────────────────────
+              OrderNotesSection(notesController: _notesCtrl),
               const SizedBox(height: 16),
 
-              // ── 3. Coupon Code Card ───────────────────────────────────────
-              _buildCardContainer(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Transform.rotate(
-                          angle: -0.2,
-                          child: const Icon(
-                            Icons.local_offer,
-                            color: Color(0xFFFF5722),
-                            size: 20,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        const Text(
-                          'Coupon Code',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF111827),
-                          ),
-                        ),
-                        const Spacer(),
-                        const Text(
-                          'Optional',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Color(0xFF9CA3AF),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-
-                    // Coupon input field with Apply action
-                    _buildInputWrapper(
-                      child: TextFormField(
-                        controller: _couponCtrl,
-                        textInputAction: TextInputAction.done,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          color: Color(0xFF111827),
-                          fontWeight: FontWeight.w500,
-                        ),
-                        decoration: _buildInputDecoration(
-                          hintText: 'Enter coupon code',
-                          prefixIcon: Icons.confirmation_number_outlined,
-                          suffix: InkWell(
-                            onTap:
-                                _isValidatingCoupon ? null : _applyCoupon,
-                            borderRadius: BorderRadius.circular(8),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
-                              child: _isValidatingCoupon
-                                  ? const SizedBox(
-                                      width: 16,
-                                      height: 16,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Color(0xFFFF5722),
-                                      ),
-                                    )
-                                  : const Text(
-                                      'Apply',
-                                      style: TextStyle(
-                                        color: Color(0xFFFF5722),
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    if (_couponMessage != null) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        _couponMessage!,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: _couponValid
-                              ? const Color(0xFF16A34A)
-                              : const Color(0xFFDC2626),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
+              // ── 3. Coupon Code Card ──────────────────────────────────────
+              CouponCodeSection(
+                couponController: _couponCtrl,
+                isValidating: _isValidatingCoupon,
+                message: _couponMessage,
+                isValid: _couponValid,
+                onApply: _applyCoupon,
               ),
               const SizedBox(height: 20),
 
-              // ── 4. Order Summary Card ─────────────────────────────────────
-              _buildCardContainer(
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Subtotal',
-                          style: TextStyle(
-                            fontSize: 15,
-                            color: Color(0xFF4B5563),
-                          ),
-                        ),
-                        Text(
-                          'Rs ${subtotal.toStringAsFixed(0)}',
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF111827),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Delivery',
-                          style: TextStyle(
-                            fontSize: 15,
-                            color: Color(0xFF4B5563),
-                          ),
-                        ),
-                        Text(
-                          'Rs ${_deliveryFee.toStringAsFixed(0)}',
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF111827),
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (_discountAmount > 0) ...[
-                      const SizedBox(height: 10),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Discount',
-                            style: TextStyle(
-                              fontSize: 15,
-                              color: Color(0xFF16A34A),
-                            ),
-                          ),
-                          Text(
-                            '- Rs ${_discountAmount.toStringAsFixed(0)}',
-                            style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF16A34A),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                    const SizedBox(height: 14),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
-                      children: [
-                        const Text(
-                          'Total',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF111827),
-                          ),
-                        ),
-                        Text(
-                          'Rs ${total.toStringAsFixed(0)}',
-                          style: const TextStyle(
-                            fontSize: 26,
-                            fontWeight: FontWeight.w900,
-                            color: Color(0xFFFF5722),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Green Cash on Delivery banner
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE8F5E9),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.payments_outlined,
-                            color: Color(0xFF15803D),
-                            size: 18,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Pay Rs ${total.toStringAsFixed(0)} in cash on delivery',
-                              style: const TextStyle(
-                                color: Color(0xFF15803D),
-                                fontWeight: FontWeight.w600,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Submit Order Button
-                    SizedBox(
-                      width: double.infinity,
-                      height: 52,
-                      child: ElevatedButton(
-                        onPressed: _isSubmitting ? null : _submitOrder,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFFF5722),
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                        child: _isSubmitting
-                            ? const SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2.5,
-                                ),
-                              )
-                            : const Text(
-                                'Place Order',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                      ),
-                    ),
-                  ],
-                ),
+              // ── 4. Order Summary Card ────────────────────────────────────
+              OrderSummarySection(
+                subtotal: subtotal,
+                deliveryFee: _deliveryFee,
+                discountAmount: _discountAmount,
+                total: total,
+                isSubmitting: _isSubmitting,
+                onSubmit: _submitOrder,
               ),
             ],
           ),
@@ -752,66 +443,282 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
-  Widget _buildCardContainer({required Widget child}) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFEFEFEF), width: 1.2),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: child,
-    );
-  }
+  // ─── OTP Verification Dialog ────────────────────────────────────────
 
-  Widget _buildInputWrapper({required Widget child}) {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFFF3F4F6),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE5E7EB), width: 0.8),
-      ),
-      child: child,
-    );
-  }
+  void _showOtpVerificationDialog() {
+    final otpCtrl = TextEditingController();
+    bool sending = false;
+    bool verifying = false;
+    String? error;
+    String? success;
+    int resendSeconds = 0;
 
-  InputDecoration _buildInputDecoration({
-    required String hintText,
-    required IconData prefixIcon,
-    Widget? suffix,
-  }) {
-    return InputDecoration(
-      hintText: hintText,
-      hintStyle: const TextStyle(
-        color: Color(0xFF9CA3AF),
-        fontSize: 14,
-        fontWeight: FontWeight.normal,
-      ),
-      prefixIcon: Icon(
-        prefixIcon,
-        color: const Color(0xFF6B7280),
-        size: 20,
-      ),
-      suffixIcon: suffix != null
-          ? Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: suffix,
-            )
-          : null,
-      border: InputBorder.none,
-      focusedBorder: InputBorder.none,
-      enabledBorder: InputBorder.none,
-      errorBorder: InputBorder.none,
-      disabledBorder: InputBorder.none,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-    );
+    final authState = context.read<AuthCubit>().state;
+    final user = authState is AuthAuthenticated ? authState.user : null;
+    final email = user?.email.trim() ?? '';
+    final userName = user?.fullName ?? '';
+    final userPhone = user?.phone ?? '';
+
+    void sendOtp(StateSetter setDialogState) async {
+      setDialogState(() {
+        sending = true;
+        error = null;
+        success = null;
+      });
+      try {
+        await _repo.sendVerificationOtp(
+          email,
+          name: userName,
+          phone: userPhone,
+        );
+        setDialogState(() {
+          sending = false;
+          success = email.isNotEmpty
+              ? 'Verification code sent to $email'
+              : 'Verification code sent to your email';
+          resendSeconds = 60;
+        });
+        _otpResendTimer?.cancel();
+        _otpResendTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+          if (resendSeconds <= 0) {
+            t.cancel();
+          } else {
+            setDialogState(() => resendSeconds--);
+          }
+        });
+      } catch (e) {
+        setDialogState(() {
+          sending = false;
+          error = e is Failure
+              ? e.message
+              : (e is AuthFailure
+                  ? e.message
+                  : 'Failed to send code. Please try again.');
+        });
+      }
+    }
+
+    bool dialogBuilt = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            if (!dialogBuilt) {
+              dialogBuilt = true;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                sendOtp(setDialogState);
+              });
+            }
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+              content: SizedBox(
+                width: 340,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 52,
+                      height: 52,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFFFF3E0),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.mark_email_unread_outlined,
+                        color: Color(0xFFFF6F00),
+                        size: 26,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Email Verification',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF111827),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      email.isNotEmpty
+                          ? 'Enter the 6-digit code sent to $email to place your order.'
+                          : 'Enter the 6-digit code sent to your registered email to place your order.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF3F4F6),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                            color: const Color(0xFFE5E7EB), width: 0.8),
+                      ),
+                      child: TextFormField(
+                        controller: otpCtrl,
+                        keyboardType: TextInputType.number,
+                        maxLength: 6,
+                        style: const TextStyle(
+                          fontSize: 20,
+                          letterSpacing: 10,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF111827),
+                        ),
+                        textAlign: TextAlign.center,
+                        decoration: const InputDecoration(
+                          hintText: '• • • • • •',
+                          hintStyle: TextStyle(
+                            color: Color(0xFF9CA3AF),
+                            fontSize: 16,
+                            letterSpacing: 4,
+                          ),
+                          counterText: '',
+                          border: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          contentPadding: EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 14),
+                        ),
+                      ),
+                    ),
+                    if (error != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        error!,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFFDC2626),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                    if (success != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        success!,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF16A34A),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 46,
+                      child: ElevatedButton(
+                        onPressed: (verifying || otpCtrl.text.trim().length != 6)
+                            ? null
+                            : () async {
+                                setDialogState(() => verifying = true);
+                                try {
+                                  await _repo
+                                      .verifyCheckoutOtp(otpCtrl.text.trim());
+                                  if (!mounted) return;
+                                  if (email.isNotEmpty) {
+                                    await _repo.markEmailVerified(email);
+                                  }
+                                  _emailVerifiedInSession = true;
+                                  _otpResendTimer?.cancel();
+                                  if (dialogContext.mounted) {
+                                    Navigator.of(dialogContext).pop();
+                                  }
+                                  _submitOrder();
+                                } catch (e) {
+                                  setDialogState(() {
+                                    verifying = false;
+                                    error = e is AuthFailure
+                                        ? e.message
+                                        : 'Invalid or expired code.';
+                                  });
+                                }
+                              },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFFF6F00),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: verifying
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text(
+                                'Verify & Place Order',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Center(
+                      child: resendSeconds > 0
+                          ? Text(
+                              'Resend code in ${resendSeconds}s',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: Color(0xFF9CA3AF),
+                              ),
+                            )
+                          : GestureDetector(
+                              onTap: sending
+                                  ? null
+                                  : () => sendOtp(setDialogState),
+                              child: Text(
+                                sending ? 'Sending...' : 'Resend Code',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: Color(0xFFFF6F00),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                    ),
+                    const SizedBox(height: 8),
+                    Center(
+                      child: GestureDetector(
+                        onTap: () {
+                          _otpResendTimer?.cancel();
+                          Navigator.of(dialogContext).pop();
+                        },
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Color(0xFF9CA3AF),
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    ).then((_) {
+      _otpResendTimer?.cancel();
+    });
   }
 }

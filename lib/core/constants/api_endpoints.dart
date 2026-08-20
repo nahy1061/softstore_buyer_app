@@ -1,5 +1,5 @@
 /// API endpoint paths for all backend requests.
-/// Base URL: https://beta.softstore.pk (set in env_config.dart)
+/// Base URL: https://softstore.pk (set in env_config.dart)
 ///
 /// IMPORTANT: Most endpoints return HTML, not JSON.
 /// JSON endpoints are only under /api/store/* and specific POST actions.
@@ -21,7 +21,7 @@ class ApiEndpoints {
   static const String googleAuth = '/auth/google/callback';
 
   // ─── Email Verification (Checkout OTP) ──────────────────────────────────────
-  /// POST JSON {email} — sends 6-digit OTP
+  /// POST JSON {email, name, phone} — sends 6-digit OTP
   static const String sendVerificationCode = '/store/checkout/send-code';
   static const String sendCheckoutOtp = '/store/checkout/send-code';
 

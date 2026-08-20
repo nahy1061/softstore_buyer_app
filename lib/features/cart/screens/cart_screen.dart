@@ -27,7 +27,6 @@ class CartScreen extends StatefulWidget {
 }
 
 class _CartScreenState extends State<CartScreen> {
-  final Set<String> _selectedIds = {};
   final CatalogRepository _catalogRepo = CatalogRepository.instance;
 
   List<Product> _liveRecommendations = [];
@@ -126,9 +125,12 @@ class _CartScreenState extends State<CartScreen> {
         return Scaffold(
           backgroundColor: AppColors.background,
           appBar: AppBar(
-            title: const Text('My Cart'),
+            title: const Text(
+              'My Cart',
+              style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
+            ),
             backgroundColor: Colors.white,
-            foregroundColor: AppColors.textPrimary,
+            foregroundColor: AppColors.primary,
             elevation: 0,
             centerTitle: false,
             bottom: const PreferredSize(
@@ -136,21 +138,18 @@ class _CartScreenState extends State<CartScreen> {
               child: Divider(
                   height: 1, thickness: 1, color: Color(0xFFE8E8E8)),
             ),
-            actions: _selectedIds.isEmpty
-                ? null
-                : [
+            actions: state.hasSelection
+                ? [
                     IconButton(
                       icon: const Icon(Icons.delete_outline),
                       tooltip: 'Delete selected',
                       onPressed: () {
-                        final toDelete = Set<String>.from(_selectedIds);
-                        setState(() => _selectedIds.clear());
-                        for (final id in toDelete) {
-                          context.read<CartCubit>().removeItem(id);
-                        }
+                        final toDelete = Set<String>.from(state.selectedIds);
+                        context.read<CartCubit>().removeItems(toDelete);
                       },
                     ),
-                  ],
+                  ]
+                : null,
           ),
           // Shared bottom nav — index 3 = Cart (this screen)
           bottomNavigationBar: const AppBottomNavBar(currentIndex: 3),
@@ -288,12 +287,109 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Widget _buildCartView(BuildContext context, CartState state) {
+    final isAllSelected = state.allSelected;
+    final isPartiallySelected = state.isPartiallySelected;
+
     return Column(
       children: [
         Expanded(
           child: SingleChildScrollView(
             child: Column(
               children: [
+                // ── Select All header bar ──────────────────────────────────
+                Container(
+                  margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFE5E7EB)),
+                  ),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: Checkbox(
+                          value: isAllSelected
+                              ? true
+                              : (isPartiallySelected ? null : false),
+                          tristate: true,
+                          activeColor: AppColors.primary,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          onChanged: (_) {
+                            if (isAllSelected) {
+                              context.read<CartCubit>().clearSelection();
+                            } else {
+                              context.read<CartCubit>().selectAll();
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () {
+                          if (isAllSelected) {
+                            context.read<CartCubit>().clearSelection();
+                          } else {
+                            context.read<CartCubit>().selectAll();
+                          }
+                        },
+                        child: Text(
+                          isAllSelected
+                              ? 'Deselect All (${state.items.length})'
+                              : (state.hasSelection
+                                  ? '${state.selectedIds.length} of ${state.items.length} selected'
+                                  : 'Select All (${state.items.length} items)'),
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF111827),
+                          ),
+                        ),
+                      ),
+                      const Spacer(),
+                      if (state.hasSelection)
+                        TextButton.icon(
+                          onPressed: () {
+                            final toDelete = Set<String>.from(state.selectedIds);
+                            context.read<CartCubit>().removeItems(toDelete);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  toDelete.length == state.items.length
+                                      ? 'All items removed from cart'
+                                      : '${toDelete.length} item${toDelete.length > 1 ? 's' : ''} removed from cart',
+                                ),
+                                behavior: SnackBarBehavior.floating,
+                                duration: const Duration(seconds: 2),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.delete_outline,
+                              color: AppColors.error, size: 18),
+                          label: Text(
+                            'Delete (${state.selectedIds.length})',
+                            style: const TextStyle(
+                              color: AppColors.error,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
                 ListView.separated(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
@@ -305,16 +401,10 @@ class _CartScreenState extends State<CartScreen> {
                     final item = state.items[index];
                     return _CartItemTile(
                       item: item,
-                      isSelected: _selectedIds.contains(item.id),
-                      onToggle: () => setState(() {
-                        if (_selectedIds.contains(item.id)) {
-                          _selectedIds.remove(item.id);
-                        } else {
-                          _selectedIds.add(item.id);
-                        }
-                      }),
+                      isSelected: state.selectedIds.contains(item.id),
+                      onToggle: () =>
+                          context.read<CartCubit>().toggleSelection(item.id),
                       onDelete: () {
-                        setState(() => _selectedIds.remove(item.id));
                         context.read<CartCubit>().removeItem(item.id);
                       },
                     );
@@ -405,91 +495,105 @@ class _CartScreenState extends State<CartScreen> {
         ),
 
         // Bottom checkout bar
-        Container(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            border: const Border(
-              top: BorderSide(color: AppColors.divider),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha:0.06),
-                blurRadius: 8,
-                offset: const Offset(0, -2),
-              ),
-            ],
-          ),
-          child: Column(
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Subtotal (${state.itemCount} items)',
-                      style: AppTypography.bodyMedium
-                          .copyWith(color: AppColors.textSecondary)),
-                  Text(
-                    'PKR ${state.subtotal}',
-                    style: AppTypography.pricePrimary.copyWith(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Delivery',
-                      style: AppTypography.bodySmall
-                          .copyWith(color: AppColors.textSecondary)),
-                  if (state.quoteLoading)
-                    const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 1.5),
-                    )
-                  else if (state.freeDelivery)
-                    Text(
-                      'Free',
-                      style: AppTypography.bodySmall.copyWith(
-                        color: AppColors.success,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    )
-                  else
-                    Text(
-                      'PKR ${state.deliveryFee}',
-                      style: AppTypography.bodySmall.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => _showCheckoutSheet(context),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: Text(
-                    'Checkout (${state.itemCount})  —  PKR ${state.total}',
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 16),
-                  ),
+        Builder(
+          builder: (context) {
+            final displayCount = state.selectedItemCount;
+            final displaySubtotal = state.selectedSubtotal;
+            final displayTotal = state.selectedTotal;
+
+            return Container(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                border: const Border(
+                  top: BorderSide(color: AppColors.divider),
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 8,
+                    offset: const Offset(0, -2),
+                  ),
+                ],
               ),
-            ],
-          ),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Selected ($displayCount items)',
+                        style: AppTypography.bodyMedium
+                            .copyWith(color: AppColors.textSecondary),
+                      ),
+                      Text(
+                        'PKR ${displaySubtotal.toStringAsFixed(0)}',
+                        style: AppTypography.pricePrimary.copyWith(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Delivery',
+                          style: AppTypography.bodySmall
+                              .copyWith(color: AppColors.textSecondary)),
+                      if (state.quoteLoading)
+                        const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 1.5),
+                        )
+                      else if (state.freeDelivery)
+                        Text(
+                          'Free',
+                          style: AppTypography.bodySmall.copyWith(
+                            color: AppColors.success,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        )
+                      else
+                        Text(
+                          'PKR ${state.deliveryFee}',
+                          style: AppTypography.bodySmall.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: displayTotal > 0
+                          ? () => _showCheckoutSheet(context)
+                          : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.4),
+                        disabledForegroundColor: Colors.white70,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: Text(
+                        'Checkout ($displayCount)  —  PKR ${displayTotal.toStringAsFixed(0)}',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
         ),
       ],
     );
@@ -727,7 +831,7 @@ class _CartCheckoutSheetState extends State<CartCheckoutSheet> {
       builder: (context, state) {
         final shippingFee = _selectedDeliveryOption?.fee ?? 0;
         final grandTotal =
-            state.totalPrice + shippingFee + _otherFees + _platformFee;
+            state.selectedSubtotal + shippingFee + _otherFees + _platformFee;
 
         return Container(
           height: MediaQuery.of(context).size.height * 0.92,
@@ -1024,7 +1128,7 @@ class _CartCheckoutSheetState extends State<CartCheckoutSheet> {
                             ),
                             const SizedBox(height: 12),
                             _summaryRow('Merchandise Subtotal',
-                                'PKR ${state.totalPrice}'),
+                                'PKR ${state.selectedSubtotal}'),
                             const SizedBox(height: 10),
                             _summaryRow('Discount', 'PKR 0',
                                 valueColor: AppColors.primary),
@@ -2302,7 +2406,7 @@ Future<void> _processOrderPlacement({
   final invoice =
       'INV-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}-$rand5';
 
-  final orderItems = cartState.items.map((i) {
+  final orderItems = cartState.selectedItems.map((i) {
     return OrderItem(
       id: i.id,
       name: i.name,
@@ -2312,7 +2416,7 @@ Future<void> _processOrderPlacement({
     );
   }).toList();
 
-  final repoItems = cartState.items.map((i) {
+  final repoItems = cartState.selectedItems.map((i) {
     final numId = i.productId;
     return cart_models.CartItem(
       uuid: i.id,
@@ -2357,7 +2461,7 @@ Future<void> _processOrderPlacement({
       addressLine: customerAddress,
       city: customerCity,
     ),
-    subtotal: cartState.totalPrice.toDouble(),
+    subtotal: cartState.selectedSubtotal.toDouble(),
     deliveryFee: shippingFee.toDouble(),
     discount: 0,
     storeName: 'SoftStore Official Partner',
@@ -2386,11 +2490,11 @@ Future<void> _processOrderPlacement({
       '/order-confirmation/$finalInvoice',
       extra: {
         'invoiceNumber': finalInvoice,
-        'subtotal': cartState.totalPrice,
+        'subtotal': cartState.selectedSubtotal.toInt(),
         'delivery': shippingFee,
         'productName': firstItem?.name ?? 'Marketplace Item',
         'productQty': firstItem?.quantity ?? 1,
-        'productPrice': firstItem?.unitPrice.toInt() ?? cartState.totalPrice,
+        'productPrice': firstItem?.unitPrice.toInt() ?? cartState.selectedSubtotal.toInt(),
         'iconCodePoint': Icons.inventory_2_outlined.codePoint,
       },
     );
@@ -2433,7 +2537,7 @@ class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
     return BlocBuilder<CartCubit, CartState>(
       builder: (context, state) {
         final total =
-            state.totalPrice + widget.shippingFee + _otherFees + _platformFee;
+            state.selectedSubtotal + widget.shippingFee + _otherFees + _platformFee;
 
         return Container(
           height: MediaQuery.of(context).size.height * 0.92,
@@ -2814,7 +2918,7 @@ class _CodDetailSheetState extends State<_CodDetailSheet> {
     return BlocBuilder<CartCubit, CartState>(
       builder: (context, state) {
         final subtotal =
-            state.totalPrice + widget.shippingFee + _otherFees + _platformFee;
+            state.selectedSubtotal + widget.shippingFee + _otherFees + _platformFee;
         final codFee = (subtotal * 0.07).round().clamp(0, 100);
         final total = subtotal + codFee;
 
@@ -3091,7 +3195,7 @@ class _CardDetailSheetState extends State<_CardDetailSheet> {
     return BlocBuilder<CartCubit, CartState>(
       builder: (context, state) {
         final total =
-            state.totalPrice + widget.shippingFee + _otherFees + _platformFee;
+            state.selectedSubtotal + widget.shippingFee + _otherFees + _platformFee;
 
         return Container(
           height: MediaQuery.of(context).size.height * 0.92,

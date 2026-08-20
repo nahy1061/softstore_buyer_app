@@ -137,7 +137,17 @@ class CartItem extends Equatable {
       );
 
   @override
-  List<Object?> get props => [uuid];
+  List<Object?> get props => [
+        uuid,
+        productId,
+        productName,
+        productSlug,
+        variantId,
+        variantLabel,
+        quantity,
+        unitPriceSnapshot,
+        imageUrl,
+      ];
 }
 
 // ─── ShippingQuote ────────────────────────────────────────────────────────────
