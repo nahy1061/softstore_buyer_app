@@ -27,14 +27,14 @@ class SupportRepository {
   SupportRepository._internal() : _dio = DioClient();
 
   /// Set the current user ID to namespace storage per account.
-  /// Call this on login. Pass null for guest/unknown users.
-  void setUserId(String? userId) {
+  /// Call this on login. Clears all cached data for the previous user.
+  Future<void> setUserId(String? userId) async {
     if (_currentUserId != userId) {
       _currentUserId = userId;
       _isStorageInitialized = false;
       _cachedTickets.clear();
       _cachedMessages.clear();
-      _initStorage();
+      await _initStorage();
     }
   }
 
@@ -353,14 +353,21 @@ class SupportRepository {
   }
 
   /// Fetch all support tickets for the current user.
+  /// Tries multiple endpoints and HTML scraping strategies.
   Future<List<Ticket>> getTickets() async {
     await _initStorage();
 
     try {
       final tickets = <Ticket>[];
 
-      // Try JSON API first, then fall back to HTML scraping
-      final endpointsToTry = ['/support/ticket', '/agent/tickets', '/store/support/tickets', '/support'];
+      // Endpoints to try — buyer support page first
+      final endpointsToTry = [
+        '/support',
+        '/store/support',
+        '/support/ticket',
+        '/store/support/tickets',
+      ];
+
       for (final endpoint in endpointsToTry) {
         try {
           final response = await _dio.get(
@@ -368,118 +375,169 @@ class SupportRepository {
             options: Options(
               responseType: ResponseType.plain,
               headers: {'Accept': 'text/html,application/json'},
-              sendTimeout: const Duration(seconds: 3),
-              receiveTimeout: const Duration(seconds: 3),
+              sendTimeout: const Duration(seconds: 5),
+              receiveTimeout: const Duration(seconds: 5),
             ),
           );
 
-          if (response.statusCode == 200 && response.data != null) {
-            final body = response.data.toString();
-            if (body.isEmpty) continue;
+          if (response.statusCode != 200 || response.data == null) continue;
+          final body = response.data.toString();
+          if (body.isEmpty) continue;
 
-            // Try JSON response first
-            try {
-              final jsonData = jsonDecode(body);
-              if (jsonData is Map && jsonData['tickets'] is List) {
-                for (final item in jsonData['tickets'] as List) {
-                  if (item is Map<String, dynamic>) {
-                    tickets.add(Ticket.fromJson(item));
-                  }
+          developer.log(
+            '[SupportRepository] getTickets $endpoint: ${response.statusCode} (${body.length} chars)',
+            name: 'support',
+          );
+
+          // Try JSON response first
+          try {
+            final jsonData = jsonDecode(body);
+            if (jsonData is Map && jsonData['tickets'] is List) {
+              for (final item in jsonData['tickets'] as List) {
+                if (item is Map<String, dynamic>) {
+                  tickets.add(Ticket.fromJson(item));
                 }
-                if (tickets.isNotEmpty) break;
               }
-            } catch (_) {
-              // Not JSON, parse as HTML
+              if (tickets.isNotEmpty) break;
+            }
+          } catch (_) {
+            // Not JSON, parse as HTML
+          }
+
+          // HTML scraping — try multiple strategies
+          final doc = html_parser.parse(body);
+
+          // Strategy 1: Find links to individual tickets (various URL patterns)
+          final ticketLinks = doc.querySelectorAll(
+            'a[href*="/support/ticket/"], a[href*="/support/tickets/"], '
+            'a[href*="/store/support/ticket/"], a[href*="/store/support/tickets/"]',
+          );
+
+          for (final link in ticketLinks) {
+            final href = link.attributes['href'] ?? '';
+            final ticketId = _extractTicketId(href);
+            if (ticketId <= 0 || tickets.any((t) => t.id == ticketId)) continue;
+
+            // Walk up to find the container (row, card, list item)
+            var container = link.parent;
+            for (int i = 0; i < 6; i++) {
+              if (container == null) break;
+              if (container.localName == 'tr' ||
+                  container.localName == 'li' ||
+                  (container.localName == 'div' &&
+                      container.classes.any((c) =>
+                          c.contains('card') ||
+                          c.contains('ticket') ||
+                          c.contains('sx-') ||
+                          c.contains('item')))) {
+                break;
+              }
+              container = container.parent;
             }
 
-            // HTML scraping with actual SoftStore CSS classes
-            final doc = html_parser.parse(body);
+            String subject = link.text.trim();
+            String statusText = 'open';
+            DateTime lastUpdated = DateTime.now();
+            String lastMessage = '';
 
-            // The actual ticket list uses table rows or card-based layout
-            // Try to find ticket links with the pattern /store/support/tickets/{id}
-            final ticketLinks = doc.querySelectorAll(
-              'a[href*="/store/support/tickets/"], a[href*="/support/tickets/"]',
+            // Try table cells first
+            final cells = container?.querySelectorAll('td') ?? <dynamic>[];
+            if (cells.length >= 3) {
+              subject = cells[0].text.trim().isNotEmpty
+                  ? cells[0].text.trim()
+                  : subject;
+              statusText = cells[1].text.trim().toLowerCase();
+              lastMessage =
+                  cells.length > 3 ? cells[3].text.trim() : '';
+              lastUpdated = _parseRelativeDate(cells[2].text.trim());
+            }
+
+            // Try badge for status
+            final badge = container?.querySelector(
+              '.sx-badge, .badge, [class*="status"], .label, .tag',
             );
+            if (badge != null && badge.text.trim().isNotEmpty) {
+              statusText = badge.text.trim().toLowerCase();
+            }
 
-            for (final link in ticketLinks) {
+            // Try heading for subject
+            if (subject.isEmpty || subject == 'Ticket #$ticketId') {
+              final heading = container?.querySelector(
+                'h1, h2, h3, h4, h5, h6, strong, .sx-head, .title, .subject',
+              );
+              if (heading != null && heading.text.trim().isNotEmpty) {
+                subject = heading.text.trim();
+              }
+            }
+
+            tickets.add(
+              Ticket(
+                id: ticketId,
+                subject: subject.isNotEmpty ? subject : 'Ticket #$ticketId',
+                category: '',
+                status: _parseStatus(statusText),
+                createdAt: lastUpdated,
+                lastUpdatedAt: lastUpdated,
+                lastMessage: lastMessage,
+              ),
+            );
+          }
+
+          // Strategy 2: Look for any elements with "ticket" in classes/attributes
+          if (tickets.isEmpty) {
+            final ticketElements = doc.querySelectorAll(
+              '[class*="ticket"], [class*="sx-ticket"], [data-ticket-id]',
+            );
+            for (final el in ticketElements) {
+              // Try to find a link inside
+              final link = el.querySelector('a');
+              if (link == null) continue;
               final href = link.attributes['href'] ?? '';
               final ticketId = _extractTicketId(href);
-              if (ticketId <= 0 || tickets.any((t) => t.id == ticketId)) {
-                continue;
-              }
-
-              // Walk up to find the container with all ticket info
-              var container = link.parent;
-              for (int i = 0; i < 5; i++) {
-                if (container == null) break;
-                // Check for table rows or card containers
-                if (container.localName == 'tr' ||
-                    container.localName == 'div' &&
-                        container.classes.any(
-                          (c) =>
-                              c.contains('card') ||
-                              c.contains('ticket') ||
-                              c.contains('sx-'),
-                        )) {
-                  break;
-                }
-                container = container.parent;
-              }
+              if (ticketId <= 0 || tickets.any((t) => t.id == ticketId)) continue;
 
               String subject = link.text.trim();
-              String statusText = 'open';
-              DateTime lastUpdated = DateTime.now();
-              String lastMessage = '';
-
-              // Extract from table cells
-              final cells =
-                  container?.querySelectorAll('td') ?? <dynamic>[];
-              if (cells.length >= 3) {
-                subject =
-                    cells[0].text.trim().isNotEmpty
-                        ? cells[0].text.trim()
-                        : subject;
-                statusText = cells[1].text.trim().toLowerCase();
-                final dateText = cells[2].text.trim();
-                lastMessage =
-                    cells.length > 3 ? cells[3].text.trim() : '';
-                lastUpdated = _parseRelativeDate(dateText);
-              }
-
-              // Try badge for status
-              final badge = container?.querySelector(
-                '.sx-badge, .badge, [class*="status"]',
-              );
-              if (badge != null && badge.text.trim().isNotEmpty) {
-                statusText = badge.text.trim().toLowerCase();
-              }
-
-              // Also try to find subject in heading elements
-              if (subject.isEmpty || subject == 'Ticket #$ticketId') {
-                final heading = container?.querySelector(
-                  'h1, h2, h3, h4, strong, .sx-head',
-                );
-                if (heading != null && heading.text.trim().isNotEmpty) {
-                  subject = heading.text.trim();
-                }
+              if (subject.isEmpty) {
+                subject = el.text.trim().substring(0, 
+                    el.text.trim().length > 50 ? 50 : el.text.trim().length);
               }
 
               tickets.add(
                 Ticket(
                   id: ticketId,
-                  subject:
-                      subject.isNotEmpty ? subject : 'Ticket #$ticketId',
+                  subject: subject.isNotEmpty ? subject : 'Ticket #$ticketId',
                   category: '',
-                  status: _parseStatus(statusText),
-                  createdAt: lastUpdated,
-                  lastUpdatedAt: lastUpdated,
-                  lastMessage: lastMessage,
+                  status: TicketStatus.open,
+                  createdAt: DateTime.now(),
+                  lastUpdatedAt: DateTime.now(),
+                  lastMessage: '',
                 ),
               );
             }
-
-            if (tickets.isNotEmpty) break;
           }
+
+          // Strategy 3: Search for any numeric IDs that look like ticket IDs
+          if (tickets.isEmpty) {
+            final idPattern = RegExp(r'(?:ticket|support)[/\?](?:tickets?/)?(\d{3,})', caseSensitive: false);
+            for (final match in idPattern.allMatches(body)) {
+              final ticketId = int.tryParse(match.group(1) ?? '');
+              if (ticketId != null && ticketId > 0 && !tickets.any((t) => t.id == ticketId)) {
+                tickets.add(
+                  Ticket(
+                    id: ticketId,
+                    subject: 'Ticket #$ticketId',
+                    category: '',
+                    status: TicketStatus.open,
+                    createdAt: DateTime.now(),
+                    lastUpdatedAt: DateTime.now(),
+                    lastMessage: '',
+                  ),
+                );
+              }
+            }
+          }
+
+          if (tickets.isNotEmpty) break;
         } catch (e) {
           developer.log(
             '[SupportRepository] getTickets $endpoint: $e',
@@ -488,21 +546,21 @@ class SupportRepository {
         }
       }
 
-      // Merge with cached tickets
-      final allIds = <int>{};
-      final merged = <Ticket>[];
-      for (final t in _cachedTickets) {
-        if (allIds.add(t.id)) merged.add(t);
+      // If we got tickets from backend, replace cache entirely (not merge)
+      if (tickets.isNotEmpty) {
+        _cachedTickets
+          ..clear()
+          ..addAll(tickets);
+      } else {
+        // Backend returned nothing — keep cached tickets but don't merge stale ones
+        developer.log(
+          '[SupportRepository] getTickets: no tickets from backend, keeping ${_cachedTickets.length} cached',
+          name: 'support',
+        );
       }
-      for (final t in tickets) {
-        if (allIds.add(t.id)) merged.add(t);
-      }
-      _cachedTickets
-        ..clear()
-        ..addAll(merged);
 
       await _persistTickets();
-      return merged;
+      return List.unmodifiable(_cachedTickets);
     } on DioException catch (e) {
       throw _handleDioError(e);
     } catch (e) {

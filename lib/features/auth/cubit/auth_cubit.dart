@@ -33,7 +33,7 @@ class AuthCubit extends Cubit<AuthState> {
           phone: user.phone,
           firstName: user.firstName,
         );
-        SupportRepository().setUserId(user.email);
+        await SupportRepository().setUserId(user.email);
         emit(AuthAuthenticated(user));
       } else {
         emit(const AuthUnauthenticated());
@@ -64,7 +64,7 @@ class AuthCubit extends Cubit<AuthState> {
         phone: user.phone,
         firstName: user.firstName,
       );
-      SupportRepository().setUserId(user.id);
+      SupportRepository().setUserId(user.email);
       emit(AuthAuthenticated(user));
     } on AuthFailure catch (e) {
       emit(AuthError(e.message));
@@ -101,7 +101,7 @@ class AuthCubit extends Cubit<AuthState> {
         phone: user.phone,
         firstName: user.firstName,
       );
-      SupportRepository().setUserId(user.id);
+      SupportRepository().setUserId(user.email);
       emit(AuthAuthenticated(user));
     } on AuthFailure catch (e) {
       emit(AuthError(e.message));
