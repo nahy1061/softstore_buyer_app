@@ -32,6 +32,21 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <!-- OneSignal: SoftStore notification bar icon (white "S" on transparent) -->
+        <meta-data
+            android:name="com.onesignal.NotificationIcon"
+            android:resource="@drawable/ic_stat_notify" />
+
+        <!-- OneSignal: SoftStore brand color for notification accent -->
+        <meta-data
+            android:name="com.onesignal.NotificationIconColor"
+            android:value="FF00A86B" />
+
+        <!-- App name shown in notification drawer -->
+        <meta-data
+            android:name="com.onesignal.NotificationChannelName"
+            android:value="SoftStore" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
