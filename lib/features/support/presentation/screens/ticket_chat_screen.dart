@@ -118,9 +118,12 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
             _isSending = false;
             // If backend returned messages, use them; ensure initial description is preserved at top
             if (state.messages.isNotEmpty) {
-              _messages = state.messages;
+              // Filter out status change messages — they update the badge, not the chat
+              _messages = state.messages
+                  .where((m) => !SupportCubit.isStatusChangeMessage(m))
+                  .toList();
 
-              // Detect status changes from messages
+              // Detect status changes from the full message list (before filtering)
               final cubit = context.read<SupportCubit>();
               final updated = cubit.detectStatusChange(state.messages, _currentTicket);
               if (updated != null) {

@@ -122,29 +122,31 @@ class SupportCubit extends Cubit<SupportState> {
   /// Detect status change messages and update the ticket accordingly.
   /// Returns the updated ticket if a status change was detected, null otherwise.
   Ticket? detectStatusChange(List<TicketMessage> messages, Ticket currentTicket) {
+    // Look for the LAST status change message from agent
     TicketStatus? detectedStatus;
 
     for (final msg in messages) {
-      final lower = msg.text.toLowerCase();
+      if (msg.sender != MessageSender.agent) continue;
 
-      // Check for status change patterns in agent messages
-      if (msg.sender == MessageSender.agent) {
-        if (lower.contains('status changed to') ||
-            lower.contains('status updated to') ||
-            lower.contains('marked as') ||
-            lower.contains('ticket is now')) {
-          if (lower.contains('resolved') || lower.contains('done') || lower.contains('completed')) {
-            detectedStatus = TicketStatus.resolved;
-          } else if (lower.contains('closed')) {
-            detectedStatus = TicketStatus.closed;
-          } else if (lower.contains('pending') ||
-              lower.contains('waiting') ||
-              lower.contains('in progress') ||
-              lower.contains('in-progress')) {
-            detectedStatus = TicketStatus.inProgress;
-          } else if (lower.contains('open') || lower.contains('reopened')) {
-            detectedStatus = TicketStatus.open;
-          }
+      final text = msg.text.trim();
+
+      // Exact patterns the backend uses for status changes
+      // These are system-generated messages, not human-written
+      if (text.toLowerCase().startsWith('status changed to ') ||
+          text.toLowerCase().startsWith('status updated to ') ||
+          text.toLowerCase() == 'ticket is now pending' ||
+          text.toLowerCase() == 'ticket is now resolved' ||
+          text.toLowerCase() == 'ticket is now closed' ||
+          text.toLowerCase() == 'ticket is now open') {
+        if (text.toLowerCase().contains('resolved')) {
+          detectedStatus = TicketStatus.resolved;
+        } else if (text.toLowerCase().contains('closed')) {
+          detectedStatus = TicketStatus.closed;
+        } else if (text.toLowerCase().contains('pending') ||
+            text.toLowerCase().contains('in progress')) {
+          detectedStatus = TicketStatus.inProgress;
+        } else if (text.toLowerCase().contains('open')) {
+          detectedStatus = TicketStatus.open;
         }
       }
     }
@@ -158,6 +160,18 @@ class SupportCubit extends Cubit<SupportState> {
     }
 
     return null;
+  }
+
+  /// Check if a message is a system status change message (should not be displayed as chat bubble)
+  static bool isStatusChangeMessage(TicketMessage msg) {
+    if (msg.sender != MessageSender.agent) return false;
+    final text = msg.text.trim().toLowerCase();
+    return text.startsWith('status changed to ') ||
+        text.startsWith('status updated to ') ||
+        text == 'ticket is now pending' ||
+        text == 'ticket is now resolved' ||
+        text == 'ticket is now closed' ||
+        text == 'ticket is now open';
   }
 
   @override
