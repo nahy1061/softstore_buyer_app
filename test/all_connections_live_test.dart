@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/services.dart';
+import 'package:softstore_buyer_app/core/constants/api_endpoints.dart';
 import 'package:softstore_buyer_app/core/network/dio_client.dart';
 import 'package:softstore_buyer_app/core/network/http_overrides.dart';
 import 'package:softstore_buyer_app/core/utils/csrf_service.dart';
@@ -128,20 +129,20 @@ void main() {
       }
     });
 
-    test('11. Profile: getDashboardStats() connects to /store/account/dashboard', () async {
+    test('11. Profile: getDashboardStats() connects to /marketplace/account', () async {
       final client = DioClient();
       try {
-        final response = await client.get<String>('/store/account/dashboard');
+        final response = await client.get<String>(ApiEndpoints.dashboard);
         print('✓ Dashboard endpoint response status: ${response.statusCode}');
       } catch (e) {
         print('✓ Dashboard endpoint verified: $e');
       }
     });
 
-    test('12. Profile: getProfile() connects to /store/account/profile', () async {
+    test('12. Profile: getProfile() connects to /marketplace/account/profile', () async {
       final client = DioClient();
       try {
-        final response = await client.get<String>('/store/account/profile');
+        final response = await client.get<String>(ApiEndpoints.profilePage);
         print('✓ Profile endpoint response status: ${response.statusCode}');
       } catch (e) {
         print('✓ Profile endpoint verified: $e');

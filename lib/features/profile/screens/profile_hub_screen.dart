@@ -2,14 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/router.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_typography.dart';
-import '../../../core/theme/app_spacing.dart';
-import '../../../core/theme/app_dimensions.dart';
 import '../../../core/widgets/app_bottom_nav_bar.dart';
 import '../../auth/cubit/auth_cubit.dart';
 import '../../auth/cubit/auth_state.dart';
 import '../../auth/screens/login_screen.dart';
+import '../../catalog/models/catalog_models.dart';
+import '../../catalog/repository/recently_viewed_repository.dart';
 import '../../orders/models/order_model.dart';
 import '../../orders/repository/order_repository.dart';
 import '../../wishlist/repository/wishlist_repository.dart';
@@ -25,8 +23,8 @@ class ProfileHubScreen extends StatefulWidget {
 
 class _ProfileHubScreenState extends State<ProfileHubScreen> {
   List<Order> _orders = [];
+  List<Product> _recentlyViewed = [];
   int _wishlistCount = 0;
-  bool _isLoading = true;
 
   @override
   void initState() {
@@ -42,21 +40,23 @@ class _ProfileHubScreenState extends State<ProfileHubScreen> {
     try {
       final results = await Future.wait([
         OrderRepository.instance.getOrders(),
-        WishlistRepository.instance.getWishlist().catchError((_) => <dynamic>[]),
+        WishlistRepository.instance.getWishlist().catchError((_) => <Product>[]),
+        RecentlyViewedRepository.instance.getRecentlyViewed(),
       ]);
       if (mounted) {
         setState(() {
           _orders = results[0] as List<Order>;
-          _wishlistCount = (results[1] as List).length;
-          _isLoading = false;
+          _wishlistCount = (results[1] as List<Product>).length;
+          _recentlyViewed = results[2] as List<Product>;
         });
       }
     } catch (_) {
       if (mounted) {
         final localOrders = await OrderRepository.instance.getLocalOrders();
+        final recent = await RecentlyViewedRepository.instance.getRecentlyViewed();
         setState(() {
           _orders = localOrders.isNotEmpty ? localOrders : List<Order>.from(dummyOrders);
-          _isLoading = false;
+          _recentlyViewed = recent;
         });
       }
     }
@@ -88,73 +88,89 @@ class _ProfileHubScreenState extends State<ProfileHubScreen> {
               : null,
           body: !isAuthenticated
               ? const _UnauthenticatedProfileView()
-              : RefreshIndicator(
-                  onRefresh: _loadProfileAndOrders,
-                  color: const Color(0xFFFF6A00),
-                  child: BlocBuilder<ProfileCubit, ProfileState>(
-                    builder: (context, profileState) {
-                      String displayName = 'Account User';
-                      String avatarLetter = 'U';
-                      double totalSpent = 0.0;
+              : SafeArea(
+                  bottom: false,
+                  child: RefreshIndicator(
+                    onRefresh: _loadProfileAndOrders,
+                    color: const Color(0xFFFF6A00),
+                    child: BlocBuilder<ProfileCubit, ProfileState>(
+                      builder: (context, profileState) {
+                        String displayName = 'Account User';
+                        String avatarLetter = 'U';
+                        double totalSpent = 0.0;
 
-                      final user = authState.user;
-                      final fullName = user.fullName.isNotEmpty
-                          ? user.fullName
-                          : '${user.firstName} ${user.lastName}'.trim();
-                      if (fullName.isNotEmpty) {
-                        displayName = fullName;
-                        avatarLetter = displayName[0].toUpperCase();
-                      }
-
-                      if (profileState is ProfileLoaded) {
-                        if (profileState.stats.totalSpent > 0) {
-                          totalSpent = profileState.stats.totalSpent;
+                        if (profileState is ProfileLoaded &&
+                            (profileState.user.firstName.isNotEmpty ||
+                                profileState.user.lastName.isNotEmpty)) {
+                          final pUser = profileState.user;
+                          final pName = pUser.fullName.isNotEmpty
+                              ? pUser.fullName
+                              : '${pUser.firstName} ${pUser.lastName}'.trim();
+                          if (pName.isNotEmpty) {
+                            displayName = pName;
+                            avatarLetter = pUser.initial;
+                          }
+                        } else {
+                          final user = authState.user;
+                          final fullName = user.fullName.isNotEmpty
+                              ? user.fullName
+                              : '${user.firstName} ${user.lastName}'.trim();
+                          if (fullName.isNotEmpty) {
+                            displayName = fullName;
+                            avatarLetter = displayName[0].toUpperCase();
+                          }
                         }
-                      }
 
-                      if (totalSpent == 0 && _orders.isNotEmpty) {
-                        totalSpent = _orders.fold<double>(
-                          0.0,
-                          (sum, order) => sum + (order.status != OrderStatus.cancelled ? order.total : 0.0),
+                        if (profileState is ProfileLoaded) {
+                          if (profileState.stats.totalSpent > 0) {
+                            totalSpent = profileState.stats.totalSpent;
+                          }
+                        }
+
+                        if (totalSpent == 0 && _orders.isNotEmpty) {
+                          totalSpent = _orders.fold<double>(
+                            0.0,
+                            (sum, order) => sum + (order.status != OrderStatus.cancelled ? order.total : 0.0),
+                          );
+                        }
+
+                        return SingleChildScrollView(
+                          physics: const AlwaysScrollableScrollPhysics(
+                            parent: BouncingScrollPhysics(),
+                          ),
+                          child: Column(
+                            children: [
+                              // ── Header with soft peach gradient ───────────────────
+                              _ProfileHeader(
+                                displayName: displayName,
+                                avatarLetter: avatarLetter,
+                                wishlistCount: _wishlistCount,
+                                followedCount: 1,
+                                ordersCount: _orders.length,
+                                totalSpent: totalSpent,
+                              ),
+
+                              const SizedBox(height: 12),
+
+                              // ── My Orders Section ─────────────────────────────────
+                              _MyOrdersSection(orders: _orders),
+
+                              const SizedBox(height: 12),
+
+                              // ── Recently Viewed Section ───────────────────────────
+                              _RecentlyViewedSection(products: _recentlyViewed),
+
+                              const SizedBox(height: 12),
+
+                              // ── Quick Actions Section ─────────────────────────────
+                              const _QuickActionsSection(),
+
+                              const SizedBox(height: 24),
+                            ],
+                          ),
                         );
-                      }
-
-                      return SingleChildScrollView(
-                        physics: const AlwaysScrollableScrollPhysics(
-                          parent: BouncingScrollPhysics(),
-                        ),
-                        child: Column(
-                          children: [
-                            // ── Header with soft peach gradient ───────────────────
-                            _ProfileHeader(
-                              displayName: displayName,
-                              avatarLetter: avatarLetter,
-                              wishlistCount: _wishlistCount,
-                              followedCount: 1,
-                              ordersCount: _orders.length,
-                              totalSpent: totalSpent,
-                            ),
-
-                            const SizedBox(height: 12),
-
-                            // ── My Orders Section ─────────────────────────────────
-                            _MyOrdersSection(orders: _orders),
-
-                            const SizedBox(height: 12),
-
-                            // ── Recently Viewed Section ───────────────────────────
-                            const _RecentlyViewedSection(),
-
-                            const SizedBox(height: 12),
-
-                            // ── Quick Actions Section ─────────────────────────────
-                            const _QuickActionsSection(),
-
-                            const SizedBox(height: 24),
-                          ],
-                        ),
-                      );
-                    },
+                      },
+                    ),
                   ),
                 ),
           bottomNavigationBar: const AppBottomNavBar(currentIndex: 4),
@@ -288,8 +304,6 @@ class _ProfileHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final topPadding = MediaQuery.of(context).padding.top;
-
     return Container(
       width: double.infinity,
       decoration: const BoxDecoration(
@@ -304,8 +318,8 @@ class _ProfileHeader extends StatelessWidget {
           stops: [0.0, 0.6, 1.0],
         ),
       ),
-      padding: EdgeInsets.only(
-        top: topPadding + 12,
+      padding: const EdgeInsets.only(
+        top: 12,
         left: 16,
         right: 16,
         bottom: 16,
@@ -770,7 +784,9 @@ class _OrderStatusIcon extends StatelessWidget {
 // Recently Viewed Section
 // ─────────────────────────────────────────────────────────────────────────────
 class _RecentlyViewedSection extends StatelessWidget {
-  const _RecentlyViewedSection();
+  final List<Product> products;
+
+  const _RecentlyViewedSection({required this.products});
 
   @override
   Widget build(BuildContext context) {
@@ -795,130 +811,200 @@ class _RecentlyViewedSection extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'Recently Viewed',
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1E2022),
-                ),
-              ),
-              InkWell(
-                onTap: () => context.push(AppRoutes.wishlist),
-                borderRadius: BorderRadius.circular(6),
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 4, horizontal: 2),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'View All',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: Color(0xFF757575),
+              Row(
+                children: [
+                  const Text(
+                    'Recently Viewed',
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1E2022),
+                    ),
+                  ),
+                  if (products.isNotEmpty) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF6A00).withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '${products.length}',
+                        style: const TextStyle(
+                          color: Color(0xFFFF6A00),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
-                      SizedBox(width: 2),
-                      Icon(
-                        Icons.chevron_right_rounded,
-                        size: 18,
-                        color: Color(0xFF9E9E9E),
-                      ),
-                    ],
+                    ),
+                  ],
+                ],
+              ),
+              if (products.isNotEmpty)
+                InkWell(
+                  onTap: () => context.push(AppRoutes.categories),
+                  borderRadius: BorderRadius.circular(6),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'View All',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF757575),
+                          ),
+                        ),
+                        SizedBox(width: 2),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          size: 18,
+                          color: Color(0xFF9E9E9E),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
             ],
           ),
           const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: _ShortcutTile(
-                  icon: Icons.track_changes_rounded,
-                  title: 'Track Order',
-                  subtitle: 'Live Tracking',
-                  color: const Color(0xFF5B8CFF),
-                  onTap: () => context.push(AppRoutes.orderLookup),
-                ),
+          if (products.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.history_rounded,
+                    size: 38,
+                    color: Colors.grey.shade400,
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'No recently viewed products',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF757575),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Items you browse will show up here',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Color(0xFF9E9E9E),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _ShortcutTile(
-                  icon: Icons.location_on_outlined,
-                  title: 'Saved Addresses',
-                  subtitle: 'Delivery Places',
-                  color: const Color(0xFF00B074),
-                  onTap: () => context.push(AppRoutes.addresses),
-                ),
+            )
+          else
+            SizedBox(
+              height: 170,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                itemCount: products.length,
+                separatorBuilder: (context, index) => const SizedBox(width: 10),
+                itemBuilder: (context, index) {
+                  final product = products[index];
+                  return _RecentlyViewedCard(product: product);
+                },
               ),
-            ],
-          ),
+            ),
         ],
       ),
     );
   }
 }
 
-class _ShortcutTile extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final Color color;
-  final VoidCallback onTap;
+class _RecentlyViewedCard extends StatelessWidget {
+  final Product product;
 
-  const _ShortcutTile({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.color,
-    required this.onTap,
-  });
+  const _RecentlyViewedCard({required this.product});
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: onTap,
+      onTap: () => context.push(
+        '/product/${product.slug}',
+        extra: {
+          'id': product.id,
+          'name': product.name,
+          'price': product.displayPrice.toInt(),
+          'imageUrl': product.imageUrl,
+        },
+      ),
       borderRadius: BorderRadius.circular(12),
       child: Container(
-        padding: const EdgeInsets.all(12),
+        width: 120,
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.06),
+          color: const Color(0xFFFAFAFB),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withValues(alpha: 0.18), width: 1),
+          border: Border.all(color: const Color(0xFFEFEFEF)),
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Image Container
             Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.14),
-                borderRadius: BorderRadius.circular(10),
+              height: 96,
+              width: double.infinity,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(11)),
               ),
-              child: Icon(icon, color: color, size: 20),
+              child: ClipRRect(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
+                child: product.imageUrl != null && product.imageUrl!.isNotEmpty
+                    ? Image.network(
+                        product.imageUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => const Center(
+                          child: Icon(
+                            Icons.image_outlined,
+                            size: 32,
+                            color: Color(0xFFBDBDBD),
+                          ),
+                        ),
+                      )
+                    : const Center(
+                        child: Icon(
+                          Icons.shopping_bag_outlined,
+                          size: 32,
+                          color: Color(0xFFFF6A00),
+                        ),
+                      ),
+              ),
             ),
-            const SizedBox(width: 10),
-            Expanded(
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    title,
+                    product.name,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1E2022),
+                      height: 1.2,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Rs ${product.displayPrice.toInt()}',
                     style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFF1E2022),
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      fontSize: 10,
-                      color: Color(0xFF757575),
+                      color: Color(0xFFFF6A00),
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -943,16 +1029,16 @@ class _QuickActionsSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final actions = [
       _ActionData(
-        icon: Icons.chat_bubble_outline_rounded,
-        label: 'Messages',
-        color: const Color(0xFF00B074),
-        onTap: () => context.push(AppRoutes.messages),
+        icon: Icons.track_changes_rounded,
+        label: 'Track Order',
+        color: const Color(0xFF5B8CFF),
+        onTap: () => context.push(AppRoutes.orderLookup),
       ),
       _ActionData(
-        icon: Icons.headset_mic_outlined,
-        label: 'Customer Service',
-        color: const Color(0xFF5B8CFF),
-        onTap: () => context.push(AppRoutes.support),
+        icon: Icons.location_on_outlined,
+        label: 'Saved Addresses',
+        color: const Color(0xFF00B074),
+        onTap: () => context.push(AppRoutes.addresses),
       ),
       _ActionData(
         icon: Icons.favorite_outline_rounded,
@@ -961,22 +1047,22 @@ class _QuickActionsSection extends StatelessWidget {
         onTap: () => context.push(AppRoutes.wishlist),
       ),
       _ActionData(
-        icon: Icons.location_on_outlined,
-        label: 'Addresses',
-        color: const Color(0xFFFF6A00),
-        onTap: () => context.push(AppRoutes.addresses),
+        icon: Icons.rate_review_outlined,
+        label: 'My Reviews',
+        color: const Color(0xFFFF9800),
+        onTap: () => context.push(AppRoutes.orders, extra: 5),
       ),
       _ActionData(
-        icon: Icons.settings_outlined,
-        label: 'Settings',
-        color: const Color(0xFF6B7280),
-        onTap: () => context.push('/profile/settings'),
-      ),
-      _ActionData(
-        icon: Icons.receipt_long_outlined,
-        label: 'Orders',
+        icon: Icons.storefront_outlined,
+        label: 'Followed Store',
         color: const Color(0xFF8B5CF6),
-        onTap: () => context.push(AppRoutes.orders),
+        onTap: () => context.push('/seller/softstore'),
+      ),
+      _ActionData(
+        icon: Icons.headset_mic_outlined,
+        label: 'Customer Support',
+        color: const Color(0xFFFF6A00),
+        onTap: () => context.push(AppRoutes.support),
       ),
     ];
 
@@ -1006,16 +1092,17 @@ class _QuickActionsSection extends StatelessWidget {
               color: Color(0xFF1E2022),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
+            padding: EdgeInsets.zero,
             itemCount: actions.length,
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 3,
-              mainAxisSpacing: 14,
+              mainAxisSpacing: 12,
               crossAxisSpacing: 10,
-              childAspectRatio: 1.05,
+              childAspectRatio: 1.35,
             ),
             itemBuilder: (context, index) {
               final action = actions[index];
@@ -1023,6 +1110,7 @@ class _QuickActionsSection extends StatelessWidget {
                 onTap: action.onTap,
                 borderRadius: BorderRadius.circular(12),
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Container(

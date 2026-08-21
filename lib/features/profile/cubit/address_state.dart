@@ -47,6 +47,28 @@ class AddressAddSuccess extends AddressState {
   List<Object?> get props => [addresses, message];
 }
 
+class AddressUpdating extends AddressState {
+  final List<Address> addresses;
+
+  const AddressUpdating({required this.addresses});
+
+  @override
+  List<Object?> get props => [addresses];
+}
+
+class AddressUpdateSuccess extends AddressState {
+  final List<Address> addresses;
+  final String message;
+
+  const AddressUpdateSuccess({
+    required this.addresses,
+    required this.message,
+  });
+
+  @override
+  List<Object?> get props => [addresses, message];
+}
+
 class AddressDeleting extends AddressState {
   final List<Address> addresses;
 

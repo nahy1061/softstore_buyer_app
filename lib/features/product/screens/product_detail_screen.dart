@@ -12,9 +12,9 @@ import '../../auth/screens/login_screen.dart';
 import '../../cart/cubit/cart_cubit.dart';
 import '../../cart/cubit/cart_state.dart';
 import '../../cart/models/cart_models.dart';
-import '../../cart/screens/cart_screen.dart';
 import '../../catalog/models/catalog_models.dart';
 import '../../catalog/repository/catalog_repository.dart';
+import '../../catalog/repository/recently_viewed_repository.dart';
 import '../../wishlist/repository/wishlist_repository.dart';
 
 class ProductDetailScreen extends StatefulWidget {
@@ -55,6 +55,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   @override
   void initState() {
     super.initState();
+    _recordView();
     _isWishlisted = WishlistRepository.instance.isProductWishlisted(widget.slug);
     _allImages = [
       if (widget.imageUrl != null && widget.imageUrl!.isNotEmpty) widget.imageUrl!,
@@ -68,6 +69,18 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       displayPrice: widget.price.toDouble(),
     );
     _fetchFullProductDetails();
+  }
+
+  void _recordView() {
+    RecentlyViewedRepository.instance.recordProductView(
+      Product(
+        id: widget.id ?? 0,
+        name: widget.name,
+        slug: widget.slug,
+        imageUrl: widget.imageUrl,
+        displayPrice: widget.price.toDouble(),
+      ),
+    );
   }
 
   Future<void> _fetchFullProductDetails() async {
@@ -108,7 +121,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   IconData get _icon =>
       // ignore: non_const_argument_for_const_parameter
       IconData(widget.iconCodePoint, fontFamily: 'MaterialIcons');
-
   Future<void> _handleWishlistToggle() async {
     final authState = context.read<AuthCubit>().state;
     if (authState is! AuthAuthenticated) {

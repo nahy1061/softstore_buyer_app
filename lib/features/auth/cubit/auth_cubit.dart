@@ -155,6 +155,25 @@ class AuthCubit extends Cubit<AuthState> {
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
 
+  /// Updates current user profile details in state.
+  void updateUser({
+    String? firstName,
+    String? lastName,
+    String? phone,
+    String? email,
+  }) {
+    if (state is AuthAuthenticated) {
+      final current = (state as AuthAuthenticated).user;
+      final updated = current.copyWith(
+        firstName: firstName ?? current.firstName,
+        lastName: lastName ?? current.lastName,
+        phone: phone ?? current.phone,
+        email: email ?? current.email,
+      );
+      emit(AuthAuthenticated(updated));
+    }
+  }
+
   /// Returns the currently authenticated user, or null.
   dynamic get currentUser =>
       state is AuthAuthenticated ? (state as AuthAuthenticated).user : null;
