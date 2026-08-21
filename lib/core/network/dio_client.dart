@@ -57,11 +57,11 @@ class DioClient {
       validateCertificate: (cert, host, port) => true,
     );
 
-    // Add interceptors in order: logging → auth → retry → cookie manager
+    // Add interceptors in order: cookie manager → logging → auth → retry
+    _dio.interceptors.add(CookieManager(_cookieJar));
     _dio.interceptors.add(LoggingInterceptor());
     _dio.interceptors.add(AuthInterceptor());
     _dio.interceptors.add(RetryInterceptor());
-    _dio.interceptors.add(CookieManager(_cookieJar));
   }
 
   Future<void> _setupCookieJar() async {

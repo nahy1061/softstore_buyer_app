@@ -143,6 +143,7 @@ class ProfileCubit extends Cubit<ProfileState> {
       await _profileService.changePassword(
         currentPassword: currentPassword,
         newPassword: newPassword,
+        user: currentUser,
       );
       emit(PasswordChangeSuccess(
         user: currentUser,
