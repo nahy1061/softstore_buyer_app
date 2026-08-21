@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -8,6 +7,9 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/validators.dart';
 import '../cubit/auth_cubit.dart';
 import '../cubit/auth_state.dart';
+import '../models/user_model.dart';
+import '../widgets/email_verification_prompt_dialog.dart';
+import '../widgets/otp_verification_dialog.dart';
 import 'auth_screen.dart';
 import 'login_screen.dart';
 
@@ -49,8 +51,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   RecaptchaController? _recaptchaController;
-  String _recaptchaToken = '';
-  bool _isMintingToken = false;
+
+  bool _isRegistering = false;
 
   @override
   void initState() {
@@ -112,6 +114,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     if (!mounted) return;
 
+    _isRegistering = true;
     debugPrint('[RegisterScreen] Calling AuthCubit.register...');
     context.read<AuthCubit>().register(
           firstName: _firstNameCtrl.text.trim(),
@@ -151,6 +154,66 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
+  bool _isHandlingPostRegistration = false;
+
+  Future<void> _handlePostRegistrationVerification(User user) async {
+    _isHandlingPostRegistration = true;
+
+    // Show email verification popup: "Verify Your Email" (Verify Now vs Later)
+    // The "Verify Now" button calls Send OTP API before closing!
+    final choice = await EmailVerificationPromptDialog.show(
+      context,
+      email: user.email,
+      name: user.fullName,
+      phone: user.phone,
+    );
+
+    if (!mounted) return;
+
+    if (choice == 'verify_success' || choice == 'verify') {
+      // Option 1: User tapped "Verify Now" and OTP was successfully sent!
+      // Open 6-digit OTP verification dialog (autoSendOtp: false because it was already sent)
+      final verified = await OtpVerificationDialog.show(
+        context,
+        email: user.email,
+        name: user.fullName,
+        phone: user.phone,
+        title: 'Verify Your Email',
+        subtitle: 'Enter the 6-digit code sent to ${user.email}.',
+        primaryButtonText: 'Verify & Continue',
+        autoSendOtp: false,
+      );
+
+      if (verified && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Email verified successfully!'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      _completeRegistration();
+    } else {
+      // Option 2: User tapped "Later"
+      // Do NOT send OTP. Complete signup. Allow user to enter app normally.
+      _completeRegistration();
+    }
+  }
+
+  void _completeRegistration() {
+    if (!mounted) return;
+    if (widget.isModal) {
+      Navigator.of(context).pop(true);
+    } else {
+      if (context.canPop()) {
+        context.pop(true);
+      } else {
+        context.go(AppRoutes.home);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Stack(
@@ -159,17 +222,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
           listener: (context, state) {
             debugPrint('[RegisterScreen] BlocListener fired: ${state.runtimeType}');
             if (state is AuthAuthenticated) {
-              debugPrint('[RegisterScreen] Authenticated! Navigating...');
-              if (widget.isModal) {
-                Navigator.of(context).pop(true);
-              } else {
-                if (context.canPop()) {
-                  context.pop();
-                } else {
-                  context.go(AppRoutes.home);
-                }
+              debugPrint('[RegisterScreen] Authenticated! Checking post-registration flow...');
+              if (_isRegistering && !_isHandlingPostRegistration) {
+                _isRegistering = false;
+                _handlePostRegistrationVerification(state.user);
               }
             } else if (state is AuthError) {
+              _isRegistering = false;
+              _isHandlingPostRegistration = false;
               debugPrint('[RegisterScreen] AuthError: ${state.message}');
               showDialog(
                 context: context,

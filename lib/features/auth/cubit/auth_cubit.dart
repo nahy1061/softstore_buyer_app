@@ -5,6 +5,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/errors/failures.dart';
 import '../../../core/services/notification_service.dart';
 import '../../support/data/support_repository.dart';
+import '../../cart/repository/cart_repository.dart';
+import '../models/user_model.dart';
 import '../repository/auth_repository.dart';
 import 'auth_state.dart';
 
@@ -41,6 +43,49 @@ class AuthCubit extends Cubit<AuthState> {
     } catch (e) {
       developer.log('[AuthCubit] Session restore failed: $e', name: 'auth');
       emit(const AuthUnauthenticated());
+    }
+  }
+
+  /// Refreshes user data from the backend Session API without full loading state.
+  /// Used after OTP verification or profile updates.
+  Future<User?> refreshUser() async {
+    try {
+      final user = await _repo.restoreSession();
+      if (user != null) {
+        developer.log('[AuthCubit] User refreshed: ${user.email}, isEmailVerified: ${user.isEmailVerified}', name: 'auth');
+        NotificationService.instance.setBuyerUser(
+          email: user.email,
+          userId: user.id,
+          phone: user.phone,
+          firstName: user.firstName,
+        );
+        await SupportRepository().setUserId(user.email);
+        emit(AuthAuthenticated(user));
+        return user;
+      }
+    } catch (e) {
+      developer.log('[AuthCubit] Session refresh error: $e', name: 'auth');
+    }
+
+    if (state is AuthAuthenticated) {
+      final current = (state as AuthAuthenticated).user;
+      final isVerified = await CartRepository.instance.isEmailVerified(current.email);
+      if (isVerified && !current.isEmailVerified) {
+        final updated = current.copyWith(isEmailVerified: true);
+        emit(AuthAuthenticated(updated));
+        return updated;
+      }
+      return current;
+    }
+
+    return null;
+  }
+
+  /// Updates the verification status of the current user in state.
+  void updateEmailVerificationStatus(bool isVerified) {
+    if (state is AuthAuthenticated) {
+      final current = (state as AuthAuthenticated).user;
+      emit(AuthAuthenticated(current.copyWith(isEmailVerified: isVerified)));
     }
   }
 
@@ -123,33 +168,50 @@ class AuthCubit extends Cubit<AuthState> {
 
   // ─── Email Verification ───────────────────────────────────────────────────
 
-  Future<void> sendVerificationCode(String email) async {
-    emit(const AuthLoading());
+  /// Sends a 6-digit OTP to [email] using the existing Send OTP endpoint.
+  Future<void> sendVerificationCode(
+    String email, {
+    String? name,
+    String? phone,
+    bool isResend = false,
+  }) async {
     try {
-      await _repo.sendVerificationCode(email);
-      emit(AuthOtpSent(email));
-    } on AuthFailure catch (e) {
-      emit(AuthError(e.message));
-    } on NetworkFailure catch (e) {
-      emit(AuthError(e.message));
+      await _repo.sendVerificationCode(
+        email,
+        name: name,
+        phone: phone,
+        isResend: isResend,
+      );
+    } on AuthFailure {
+      rethrow;
+    } on NetworkFailure {
+      rethrow;
     } catch (e) {
-      emit(AuthError(e.toString()));
+      throw AuthFailure(e.toString());
     }
   }
 
-  Future<void> verifyCode(String code) async {
-    emit(const AuthLoading());
+  /// Verifies the OTP [code] with the existing Verify OTP endpoint.
+  /// On success, marks email verified in local cache and refreshes user session.
+  Future<bool> verifyCode(String code, {String? email}) async {
     try {
       final success = await _repo.verifyCode(code);
       if (success) {
-        emit(const AuthOtpVerified());
-      } else {
-        emit(const AuthError('Invalid or expired verification code.'));
+        final targetEmail = email ?? (currentUser is User ? (currentUser as User).email : '');
+        if (targetEmail.isNotEmpty) {
+          await CartRepository.instance.markEmailVerified(targetEmail);
+        }
+        await refreshUser();
+        updateEmailVerificationStatus(true);
+        return true;
       }
-    } on AuthFailure catch (e) {
-      emit(AuthError(e.message));
+      return false;
+    } on AuthFailure {
+      rethrow;
+    } on NetworkFailure {
+      rethrow;
     } catch (e) {
-      emit(AuthError(e.toString()));
+      throw AuthFailure(e.toString());
     }
   }
 
@@ -175,6 +237,6 @@ class AuthCubit extends Cubit<AuthState> {
   }
 
   /// Returns the currently authenticated user, or null.
-  dynamic get currentUser =>
+  User? get currentUser =>
       state is AuthAuthenticated ? (state as AuthAuthenticated).user : null;
 }

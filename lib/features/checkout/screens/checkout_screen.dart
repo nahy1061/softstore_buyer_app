@@ -11,6 +11,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_bottom_nav_bar.dart';
 import '../../auth/cubit/auth_cubit.dart';
 import '../../auth/cubit/auth_state.dart';
+import '../../auth/widgets/otp_verification_dialog.dart';
 import '../../cart/cubit/cart_cubit.dart';
 import '../../cart/cubit/cart_state.dart';
 import '../../cart/models/cart_models.dart';
@@ -49,7 +50,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   /// Whether the user's email has been verified in this checkout session.
   bool _emailVerifiedInSession = false;
-  Timer? _otpResendTimer;
 
   List<CartItem> _selectedItems(CartState cartState) {
     if (cartState.hasSelection && cartState.selectedItems.isNotEmpty) {
@@ -169,7 +169,25 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     if (!emailVerified) {
       if (!mounted) return;
-      _showOtpVerificationDialog();
+      final targetEmail =
+          userEmail.isNotEmpty ? userEmail : _phoneCtrl.text.trim();
+      final verified = await OtpVerificationDialog.show(
+        context,
+        email: targetEmail,
+        name: _nameCtrl.text.trim(),
+        phone: _phoneCtrl.text.trim(),
+        title: 'Email Verification',
+        subtitle: targetEmail.isNotEmpty
+            ? 'Enter the 6-digit code sent to $targetEmail to place your order.'
+            : 'Enter the 6-digit code sent to your registered email to place your order.',
+        primaryButtonText: 'Verify & Place Order',
+        autoSendOtp: true,
+      );
+
+      if (verified && mounted) {
+        _emailVerifiedInSession = true;
+        _submitOrder();
+      }
       return;
     }
 
@@ -237,7 +255,24 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         setState(() {
           _isSubmitting = false;
         });
-        _showOtpVerificationDialog();
+        final targetEmail =
+            userEmail.isNotEmpty ? userEmail : _phoneCtrl.text.trim();
+        final verified = await OtpVerificationDialog.show(
+          context,
+          email: targetEmail,
+          name: _nameCtrl.text.trim(),
+          phone: _phoneCtrl.text.trim(),
+          title: 'Email Verification',
+          subtitle: targetEmail.isNotEmpty
+              ? 'Enter the 6-digit code sent to $targetEmail to place your order.'
+              : 'Enter the 6-digit code sent to your registered email to place your order.',
+          primaryButtonText: 'Verify & Place Order',
+          autoSendOtp: true,
+        );
+        if (verified && mounted) {
+          _emailVerifiedInSession = true;
+          _submitOrder();
+        }
         return;
       }
       errorMsg = e.message;
@@ -355,7 +390,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   @override
   void dispose() {
-    _otpResendTimer?.cancel();
     _nameCtrl.dispose();
     _phoneCtrl.dispose();
     _addressCtrl.dispose();
@@ -461,284 +495,5 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       ),
       bottomNavigationBar: const AppBottomNavBar(currentIndex: 3),
     );
-  }
-
-  // ─── OTP Verification Dialog ────────────────────────────────────────
-
-  void _showOtpVerificationDialog() {
-    final otpCtrl = TextEditingController();
-    bool sending = false;
-    bool verifying = false;
-    String? error;
-    String? success;
-    int resendSeconds = 0;
-
-    final authState = context.read<AuthCubit>().state;
-    final user = authState is AuthAuthenticated ? authState.user : null;
-    final email = user?.email.trim() ?? '';
-    final userName = user?.fullName ?? '';
-    final userPhone = user?.phone ?? '';
-
-    void sendOtp(StateSetter setDialogState) async {
-      setDialogState(() {
-        sending = true;
-        error = null;
-        success = null;
-      });
-      try {
-        await _repo.sendVerificationOtp(
-          email,
-          name: userName,
-          phone: userPhone,
-        );
-        setDialogState(() {
-          sending = false;
-          success = email.isNotEmpty
-              ? 'Verification code sent to $email'
-              : 'Verification code sent to your email';
-          resendSeconds = 60;
-        });
-        _otpResendTimer?.cancel();
-        _otpResendTimer = Timer.periodic(const Duration(seconds: 1), (t) {
-          if (resendSeconds <= 0) {
-            t.cancel();
-          } else {
-            setDialogState(() => resendSeconds--);
-          }
-        });
-      } catch (e) {
-        setDialogState(() {
-          sending = false;
-          error = e is Failure
-              ? e.message
-              : (e is AuthFailure
-                  ? e.message
-                  : 'Failed to send code. Please try again.');
-        });
-      }
-    }
-
-    bool dialogBuilt = false;
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            if (!dialogBuilt) {
-              dialogBuilt = true;
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                sendOtp(setDialogState);
-              });
-            }
-            return AlertDialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
-              content: SizedBox(
-                width: 340,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 52,
-                      height: 52,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFFFF3E0),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.mark_email_unread_outlined,
-                        color: Color(0xFFFF6F00),
-                        size: 26,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Email Verification',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF111827),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      email.isNotEmpty
-                          ? 'Enter the 6-digit code sent to $email to place your order.'
-                          : 'Enter the 6-digit code sent to your registered email to place your order.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF3F4F6),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                            color: const Color(0xFFE5E7EB), width: 0.8),
-                      ),
-                      child: TextFormField(
-                        controller: otpCtrl,
-                        keyboardType: TextInputType.number,
-                        maxLength: 6,
-                        style: const TextStyle(
-                          fontSize: 20,
-                          letterSpacing: 10,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF111827),
-                        ),
-                        textAlign: TextAlign.center,
-                        decoration: const InputDecoration(
-                          hintText: '• • • • • •',
-                          hintStyle: TextStyle(
-                            color: Color(0xFF9CA3AF),
-                            fontSize: 16,
-                            letterSpacing: 4,
-                          ),
-                          counterText: '',
-                          border: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          contentPadding: EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 14),
-                        ),
-                      ),
-                    ),
-                    if (error != null) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        error!,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFFDC2626),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                    if (success != null) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        success!,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFF16A34A),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 46,
-                      child: ElevatedButton(
-                        onPressed: (verifying || otpCtrl.text.trim().length != 6)
-                            ? null
-                            : () async {
-                                setDialogState(() => verifying = true);
-                                try {
-                                  await _repo
-                                      .verifyCheckoutOtp(otpCtrl.text.trim());
-                                  if (!mounted) return;
-                                  if (email.isNotEmpty) {
-                                    await _repo.markEmailVerified(email);
-                                  }
-                                  _emailVerifiedInSession = true;
-                                  _otpResendTimer?.cancel();
-                                  if (dialogContext.mounted) {
-                                    Navigator.of(dialogContext).pop();
-                                  }
-                                  _submitOrder();
-                                } catch (e) {
-                                  setDialogState(() {
-                                    verifying = false;
-                                    error = e is AuthFailure
-                                        ? e.message
-                                        : 'Invalid or expired code.';
-                                  });
-                                }
-                              },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFFF6F00),
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: verifying
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Text(
-                                'Verify & Place Order',
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Center(
-                      child: resendSeconds > 0
-                          ? Text(
-                              'Resend code in ${resendSeconds}s',
-                              style: const TextStyle(
-                                fontSize: 13,
-                                color: Color(0xFF9CA3AF),
-                              ),
-                            )
-                          : GestureDetector(
-                              onTap: sending
-                                  ? null
-                                  : () => sendOtp(setDialogState),
-                              child: Text(
-                                sending ? 'Sending...' : 'Resend Code',
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  color: Color(0xFFFF6F00),
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                    ),
-                    const SizedBox(height: 8),
-                    Center(
-                      child: GestureDetector(
-                        onTap: () {
-                          _otpResendTimer?.cancel();
-                          Navigator.of(dialogContext).pop();
-                        },
-                        child: const Text(
-                          'Cancel',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Color(0xFF9CA3AF),
-                            decoration: TextDecoration.underline,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    ).then((_) {
-      _otpResendTimer?.cancel();
-    });
   }
 }

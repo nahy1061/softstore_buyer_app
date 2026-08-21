@@ -9,6 +9,7 @@ import '../core/theme/app_typography.dart';
 
 // Feature screen imports
 import '../features/auth/screens/login_screen.dart';
+import '../features/auth/screens/otp_verification_screen.dart';
 import '../features/auth/screens/register_screen.dart';
 import '../features/auth/screens/splash_screen.dart';
 
@@ -108,6 +109,7 @@ abstract final class AppRoutes {
   static const String checkout = '/checkout';
   static const String checkoutDelivery = '/checkout/delivery';
   static const String checkoutOtp = '/checkout/otp';
+  static const String verifyEmail = '/verify-email';
   static const String checkoutReview = '/checkout/review';
   static const String orderConfirmation = '/order-confirmation/:ref';
   static const String orders = '/orders';
@@ -215,6 +217,30 @@ final GoRouter goRouter = GoRouter(
     GoRoute(
       path: AppRoutes.checkout,
       builder: (context, state) => const CheckoutScreen(),
+    ),
+    GoRoute(
+      path: AppRoutes.checkoutOtp,
+      builder: (context, state) {
+        final extra = state.extra is Map<String, dynamic>
+            ? (state.extra as Map<String, dynamic>)
+            : <String, dynamic>{};
+        return OtpVerificationScreen(
+          email: extra['email'] as String?,
+          redirectRoute: extra['redirect'] as String?,
+        );
+      },
+    ),
+    GoRoute(
+      path: AppRoutes.verifyEmail,
+      builder: (context, state) {
+        final extra = state.extra is Map<String, dynamic>
+            ? (state.extra as Map<String, dynamic>)
+            : <String, dynamic>{};
+        return OtpVerificationScreen(
+          email: extra['email'] as String?,
+          redirectRoute: extra['redirect'] as String?,
+        );
+      },
     ),
     GoRoute(
       path: AppRoutes.orderConfirmation,

@@ -330,10 +330,11 @@ class CartRepository {
           (response.statusCode == 200 && data?['error'] == null);
 
       if (!success) {
-        final msg = data?['message']?.toString() ??
-            data?['error']?.toString() ??
-            'Invalid or expired verification code.';
-        throw AuthFailure(msg);
+        final msg = (data?['message'] ?? data?['error'] ?? '').toString();
+        if (msg.toLowerCase().contains('expire')) {
+          throw const AuthFailure('OTP has expired. Please request a new OTP.');
+        }
+        throw const AuthFailure('Invalid OTP. Please enter the correct OTP.');
       }
     } on AuthFailure {
       rethrow;
@@ -341,9 +342,12 @@ class CartRepository {
       if (e.response?.data != null) {
         final respData = _parseJsonMap(e.response?.data);
         final err =
-            respData?['error']?.toString() ?? respData?['message']?.toString();
-        if (err != null && err.isNotEmpty) {
-          throw AuthFailure(err);
+            (respData?['error'] ?? respData?['message'] ?? '').toString();
+        if (err.isNotEmpty) {
+          if (err.toLowerCase().contains('expire')) {
+            throw const AuthFailure('OTP has expired. Please request a new OTP.');
+          }
+          throw const AuthFailure('Invalid OTP. Please enter the correct OTP.');
         }
       }
       if (e.response?.statusCode == 419) {
@@ -368,7 +372,11 @@ class CartRepository {
               retryData?['verified'] == true ||
               (retryResponse.statusCode == 200 && retryData?['error'] == null);
           if (!retrySuccess) {
-            throw const AuthFailure('Invalid or expired verification code.');
+            final err = (retryData?['message'] ?? retryData?['error'] ?? '').toString();
+            if (err.toLowerCase().contains('expire')) {
+              throw const AuthFailure('OTP has expired. Please request a new OTP.');
+            }
+            throw const AuthFailure('Invalid OTP. Please enter the correct OTP.');
           }
           return;
         }
@@ -380,9 +388,7 @@ class CartRepository {
           e.type == DioExceptionType.receiveTimeout) {
         throw const TimeoutFailure('Request timed out. Please try again.');
       }
-      throw AuthFailure(
-        e.message ?? 'Verification failed',
-      );
+      throw const AuthFailure('Invalid OTP. Please enter the correct OTP.');
     }
   }
 

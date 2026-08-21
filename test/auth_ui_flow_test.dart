@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:softstore_buyer_app/features/auth/cubit/auth_cubit.dart';
 import 'package:softstore_buyer_app/features/auth/screens/login_screen.dart';
 import 'package:softstore_buyer_app/features/auth/screens/register_screen.dart';
@@ -83,15 +84,29 @@ void main() {
     testWidgets(
         'ProfileHubScreen displays unauthenticated view from Screenshot 2 when logged out',
         (tester) async {
+      final router = GoRouter(
+        initialLocation: '/profile',
+        routes: [
+          GoRoute(
+            path: '/profile',
+            builder: (context, state) => const ProfileHubScreen(),
+          ),
+          GoRoute(
+            path: '/login',
+            builder: (context, state) => const LoginScreen(),
+          ),
+        ],
+      );
+
       await tester.pumpWidget(
-        MaterialApp(
-          home: MultiBlocProvider(
-            providers: [
-              BlocProvider<AuthCubit>(create: (_) => AuthCubit()),
-              BlocProvider<ProfileCubit>(create: (_) => ProfileCubit()),
-              BlocProvider<CartCubit>(create: (_) => CartCubit()),
-            ],
-            child: const ProfileHubScreen(),
+        MultiBlocProvider(
+          providers: [
+            BlocProvider<AuthCubit>(create: (_) => AuthCubit()),
+            BlocProvider<ProfileCubit>(create: (_) => ProfileCubit()),
+            BlocProvider<CartCubit>(create: (_) => CartCubit()),
+          ],
+          child: MaterialApp.router(
+            routerConfig: router,
           ),
         ),
       );

@@ -8,6 +8,7 @@ import '../../../core/errors/failures.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/utils/csrf_service.dart';
 import '../../../core/utils/html_parser_util.dart';
+import '../../cart/repository/cart_repository.dart';
 import '../models/user_model.dart';
 
 /// Handles all authentication operations against the SoftStore backend.
@@ -366,7 +367,15 @@ class AuthRepository {
 
       if (status == 200) {
         final html = response.data as String? ?? '';
-        return _parseUserFromProfileHtml(html);
+        final user = _parseUserFromProfileHtml(html);
+        if (user.email.isNotEmpty) {
+          final isVerifiedLocally =
+              await CartRepository.instance.isEmailVerified(user.email);
+          if (isVerifiedLocally && !user.isEmailVerified) {
+            return user.copyWith(isEmailVerified: true);
+          }
+        }
+        return user;
       }
 
       return null;
@@ -376,54 +385,188 @@ class AuthRepository {
     }
   }
 
-  // ─── Email Verification (Checkout) ───────────────────────────────────────
+  // ─── Email Verification ───────────────────────────────────────────────────
 
-  /// Sends a 6-digit OTP to [email] for checkout verification.
-  Future<void> sendVerificationCode(String email) async {
+  /// Sends a 6-digit OTP to [email] using the existing Send OTP endpoint.
+  /// When [isResend] is true, refreshes the CSRF token to ensure a fresh request.
+  Future<void> sendVerificationCode(
+    String email, {
+    String? name,
+    String? phone,
+    bool isResend = false,
+  }) async {
+    final targetEmail = email.trim();
+    if (targetEmail.isEmpty) {
+      throw const AuthFailure(
+          'Email address is required to receive verification code.');
+    }
+
     try {
-      final csrfToken = await _csrf
-          .fetchToken(ApiEndpoints.checkoutPage)
-          .timeout(const Duration(seconds: 3), onTimeout: () => null);
+      final csrfToken = isResend
+          ? await _csrf
+              .refreshToken(ApiEndpoints.checkoutPage)
+              .timeout(const Duration(seconds: 4), onTimeout: () => null)
+          : await _csrf
+              .fetchToken(ApiEndpoints.checkoutPage)
+              .timeout(const Duration(seconds: 4), onTimeout: () => null);
 
-      final response = await _client.post<Map<String, dynamic>>(
+      final response = await _client.post<dynamic>(
         ApiEndpoints.sendVerificationCode,
-        data: {'email': email.trim()},
+        data: {
+          'email': targetEmail,
+          if (name != null && name.trim().isNotEmpty) 'name': name.trim(),
+          if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),
+          if (csrfToken != null && csrfToken.isNotEmpty) '_csrf_token': csrfToken,
+          if (csrfToken != null && csrfToken.isNotEmpty) 'csrf_token': csrfToken,
+        },
         options: Options(
           contentType: 'application/json',
+          sendTimeout: const Duration(seconds: 5),
+          receiveTimeout: const Duration(seconds: 5),
           headers: {
             if (csrfToken != null) 'X-CSRF-TOKEN': csrfToken,
+            if (csrfToken != null) 'X-CSRF-Token': csrfToken,
             'Accept': 'application/json',
           },
         ),
       );
 
-      final body = response.data;
-      if (body != null && body['success'] == false) {
-        throw AuthFailure(
-          body['message']?.toString() ?? 'Failed to send verification code.',
-        );
+      final dynamic data = response.data;
+      final Map? body = data is Map ? data : null;
+      if (body != null &&
+          (body['success'] == false || body['error'] != null)) {
+        final msg = body['message']?.toString() ??
+            body['error']?.toString() ??
+            'Failed to send verification code.';
+        final lowerMsg = msg.toLowerCase();
+
+        // If rate limited on initial send, an active OTP was already generated for this email.
+        // Proceed smoothly to the OTP verification screen so user can enter the active code.
+        if (!isResend &&
+            (lowerMsg.contains('too many requests') ||
+                lowerMsg.contains('already sent') ||
+                lowerMsg.contains('wait a few minutes') ||
+                lowerMsg.contains('please wait'))) {
+          developer.log(
+            '[Auth] Rate limited on initial send ($msg), active OTP code is already in inbox.',
+            name: 'auth',
+          );
+          return;
+        }
+
+        throw AuthFailure(msg);
       }
     } on AuthFailure {
       rethrow;
     } on DioException catch (e) {
+      if (e.response?.statusCode == 419) {
+        // Token expired or invalid on resend — refresh token and retry
+        final freshCsrf =
+            await _csrf.refreshToken(ApiEndpoints.checkoutPage);
+        if (freshCsrf != null) {
+          final retryResponse = await _client.post<dynamic>(
+            ApiEndpoints.sendVerificationCode,
+            data: {
+              'email': targetEmail,
+              if (name != null && name.trim().isNotEmpty) 'name': name.trim(),
+              if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),
+              '_csrf_token': freshCsrf,
+              'csrf_token': freshCsrf,
+            },
+            options: Options(
+              contentType: 'application/json',
+              sendTimeout: const Duration(seconds: 5),
+              receiveTimeout: const Duration(seconds: 5),
+              headers: {
+                'X-CSRF-TOKEN': freshCsrf,
+                'X-CSRF-Token': freshCsrf,
+                'Accept': 'application/json',
+              },
+            ),
+          );
+          final dynamic retryData = retryResponse.data;
+          final Map? retryBody = retryData is Map ? retryData : null;
+          if (retryBody != null &&
+              (retryBody['success'] == false || retryBody['error'] != null)) {
+            final msg = retryBody['message']?.toString() ??
+                retryBody['error']?.toString() ??
+                'Failed to send verification code.';
+            final lowerMsg = msg.toLowerCase();
+            if (!isResend &&
+                (lowerMsg.contains('too many requests') ||
+                    lowerMsg.contains('already sent') ||
+                    lowerMsg.contains('wait a few minutes') ||
+                    lowerMsg.contains('please wait'))) {
+              developer.log(
+                '[Auth] Rate limited on retry ($msg), proceeding with active code.',
+                name: 'auth',
+              );
+              return;
+            }
+            throw AuthFailure(msg);
+          }
+          return;
+        }
+      }
+
+      if (e.response?.statusCode == 429) {
+        if (!isResend) {
+          developer.log(
+            '[Auth] 429 Too Many Requests on initial send, active OTP already present.',
+            name: 'auth',
+          );
+          return;
+        }
+        throw const AuthFailure(
+            'Too many requests. Please wait a minute before requesting another OTP.');
+      }
+
+      if (e.response?.data is Map) {
+        final err = (e.response!.data['message'] ??
+                e.response!.data['error'])
+            ?.toString();
+        if (err != null && err.isNotEmpty) {
+          final lowerErr = err.toLowerCase();
+          if (!isResend &&
+              (lowerErr.contains('too many requests') ||
+                  lowerErr.contains('already sent') ||
+                  lowerErr.contains('wait a few minutes') ||
+                  lowerErr.contains('please wait'))) {
+            developer.log(
+              '[Auth] Rate limited ($err), proceeding to OTP input with active code.',
+              name: 'auth',
+            );
+            return;
+          }
+          throw AuthFailure(err);
+        }
+      }
       _handleDioError(e);
     }
   }
 
-  /// Verifies the OTP entered by the user.
+  /// Verifies the OTP entered by the user using the existing Verify OTP endpoint.
   ///
   /// Returns true if verification is successful.
   Future<bool> verifyCode(String code) async {
+    final trimmed = code.trim();
+    if (trimmed.isEmpty) {
+      throw const AuthFailure(
+          'Please enter the 6-digit code received on your email.');
+    }
+
     try {
       final csrfToken = await _csrf
           .fetchToken(ApiEndpoints.checkoutPage)
           .timeout(const Duration(seconds: 3), onTimeout: () => null);
 
-      final response = await _client.post<Map<String, dynamic>>(
+      final response = await _client.post<dynamic>(
         ApiEndpoints.verifyCode,
-        data: {'code': code.trim()},
+        data: {'code': trimmed},
         options: Options(
           contentType: 'application/json',
+          sendTimeout: const Duration(seconds: 5),
+          receiveTimeout: const Duration(seconds: 5),
           headers: {
             if (csrfToken != null) 'X-CSRF-TOKEN': csrfToken,
             'Accept': 'application/json',
@@ -431,9 +574,39 @@ class AuthRepository {
         ),
       );
 
-      final body = response.data;
-      return body != null && body['success'] == true;
+      final dynamic data = response.data;
+      final Map? body = data is Map ? data : null;
+      if (body != null) {
+        final bool isSuccess =
+            body['success'] == true || body['verified'] == true;
+        if (isSuccess) return true;
+
+        final msg =
+            (body['message'] ?? body['error'] ?? '').toString();
+        if (msg.toLowerCase().contains('expire')) {
+          throw const AuthFailure(
+              'OTP has expired. Please request a new OTP.');
+        }
+        throw const AuthFailure(
+            'Invalid OTP. Please enter the correct OTP.');
+      }
+
+      return response.statusCode == 200;
+    } on AuthFailure {
+      rethrow;
     } on DioException catch (e) {
+      if (e.response?.data is Map) {
+        final err = (e.response!.data['message'] ??
+                e.response!.data['error'] ??
+                '')
+            .toString();
+        if (err.toLowerCase().contains('expire')) {
+          throw const AuthFailure(
+              'OTP has expired. Please request a new OTP.');
+        }
+        throw const AuthFailure(
+            'Invalid OTP. Please enter the correct OTP.');
+      }
       _handleDioError(e);
     }
     return false;
