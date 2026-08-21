@@ -227,7 +227,6 @@ class OrderCubit extends Cubit<OrderState> {
         '[OrderCubit] Repository returned order: ${order.referenceNumber} | ${order.status.name}',
         name: 'orders',
       );
-      );
       emit(OrderLookupResult(order: order));
     } on NotFoundFailure {
       developer.log(

@@ -23,6 +23,7 @@ import '../features/checkout/screens/checkout_screen.dart';
 import '../features/deals/screens/deals_screen.dart';
 
 import '../features/home/screens/home_screen.dart';
+import '../features/messages/models/conversation_model.dart';
 import '../features/messages/presentation/screens/seller_chat_screen.dart';
 import '../features/messages/screens/messages_screen.dart';
 

@@ -8,7 +8,6 @@ import '../../../../core/theme/app_dimensions.dart';
 import '../../../../core/theme/app_durations.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
-import '../../../../core/widgets/app_loading_spinner.dart';
 import '../../models/chat_message_model.dart';
 import '../../models/conversation_model.dart';
 import '../cubits/seller_chat_cubit.dart';
@@ -269,7 +268,9 @@ class _SellerChatScreenContentState extends State<_SellerChatScreenContent> {
 
   Widget _buildMessagesArea(BuildContext context, SellerChatState state) {
     if (state is SellerChatLoading) {
-      return const Center(child: AppLoadingSpinner());
+      return const Center(
+        child: CircularProgressIndicator(color: AppColors.primary),
+      );
     }
 
     if (state is SellerChatError) {

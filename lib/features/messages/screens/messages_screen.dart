@@ -8,7 +8,6 @@ import '../../../core/theme/app_dimensions.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/app_bottom_nav_bar.dart';
-import '../../../core/widgets/app_loading_spinner.dart';
 import '../../auth/cubit/auth_cubit.dart';
 import '../../auth/cubit/auth_state.dart';
 import '../../auth/screens/login_screen.dart';
@@ -110,7 +109,9 @@ class _MessagesScreenViewState extends State<_MessagesScreenView> {
             }
 
             if (state is MessagesListLoading || state is MessagesListInitial) {
-              return const Center(child: AppLoadingSpinner());
+              return const Center(
+                child: CircularProgressIndicator(color: AppColors.primary),
+              );
             }
 
             if (state is MessagesListError) {
