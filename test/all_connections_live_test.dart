@@ -129,7 +129,7 @@ void main() {
       }
     });
 
-    test('11. Profile: getDashboardStats() connects to /marketplace/account', () async {
+    test('11. Profile: getDashboardStats() connects to /marketplace/account/dashboard', () async {
       final client = DioClient();
       try {
         final response = await client.get<String>(ApiEndpoints.dashboard);

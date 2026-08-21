@@ -42,88 +42,167 @@ class AuthRepository {
     required String recaptchaToken,
   }) async {
     try {
-      // Step 1: Fetch CSRF token from login page
+      final cleanEmail = email.trim();
+      final cleanPassword = password;
+
+      developer.log('[Auth] Login attempt — email: $cleanEmail', name: 'auth');
+
+      // Clear any old session cookies that may conflict with new login
+      try {
+        final cookieJar = _client.cookieJar;
+        final uri = Uri.parse(EnvConfig.baseUrl);
+        await cookieJar.delete(uri);
+        developer.log('[Auth] Cleared old cookies for ${uri.host}', name: 'auth');
+      } catch (e) {
+        developer.log('[Auth] Cookie clear note: $e', name: 'auth');
+      }
+
+      // ── Strategy 1: Standard Web Form Login (/login) ────────────────────────
+      _csrf.clearAll();
       final csrfToken = await _csrf.fetchToken(ApiEndpoints.loginPage);
-      if (csrfToken == null) {
-        throw const AuthFailure('Unable to load login page. Please check your internet connection.');
-      }
+      developer.log('[Auth] CSRF token fetched: ${csrfToken != null}', name: 'auth');
 
-      // Step 2: Build compatibility form-encoded payload
-      final formData = <String, dynamic>{
-        '_csrf_token': csrfToken,
-        'csrf_token': csrfToken,
-        '_token': csrfToken,
-        'email': email.trim(),
-        'username': email.trim(),
-        'login': email.trim(),
-        'user_login': email.trim(),
-        'password': password,
-        '_password': password,
-      };
+      if (csrfToken != null) {
+        final formData = <String, String>{
+          '_csrf_token': csrfToken,
+          'csrf_token': csrfToken,
+          '_token': csrfToken,
+          'email': cleanEmail,
+          'username': cleanEmail,
+          'login': cleanEmail,
+          'user_login': cleanEmail,
+          'password': cleanPassword,
+          '_password': cleanPassword,
+        };
 
-      if (recaptchaToken.isNotEmpty && recaptchaToken != 'app-token') {
-        formData['recaptcha_token'] = recaptchaToken;
-        formData['g-recaptcha-response'] = recaptchaToken;
-      }
+        if (recaptchaToken.isNotEmpty && recaptchaToken != 'app-token') {
+          formData['recaptcha_token'] = recaptchaToken;
+          formData['g-recaptcha-response'] = recaptchaToken;
+        }
 
-      // Step 3: POST login form
-      final response = await _client.post<dynamic>(
-        ApiEndpoints.loginPage,
-        data: formData,
-        options: Options(
-          contentType: 'application/x-www-form-urlencoded',
-          responseType: ResponseType.plain,
-          headers: {
-            'Referer': '${EnvConfig.apiBaseUrl}${ApiEndpoints.loginPage}',
-            'Origin': EnvConfig.apiBaseUrl,
-            if (csrfToken.isNotEmpty) 'X-CSRF-TOKEN': csrfToken,
-            if (csrfToken.isNotEmpty) 'X-CSRF-Token': csrfToken,
-          },
-          // Allow 200, 302, 400, 403, 422 to parse server form validation errors
-          validateStatus: (s) => s != null && s < 500,
-          followRedirects: false,
-        ),
-      );
+        developer.log('[Auth] Strategy 1: POST /login — fields: ${formData.keys.toList()}', name: 'auth');
 
-      final status = response.statusCode ?? 0;
-      final location = response.headers.value('location') ?? '';
-      final rawData = response.data;
-
-      // 302 without /login in location = success redirect (e.g. to /store or /)
-      if (status == 302 && !location.contains('/login')) {
-        developer.log('[Auth] Login successful, redirected to: $location', name: 'auth');
-        _csrf.clearAll();
-        final user = await restoreSession();
-        if (user != null && user.email.isNotEmpty) return user;
-        return User(
-          firstName: email.split('@').first,
-          lastName: '',
-          email: email.trim(),
+        final response = await _client.post<dynamic>(
+          ApiEndpoints.loginPage,
+          data: formData,
+          options: Options(
+            contentType: 'application/x-www-form-urlencoded',
+            responseType: ResponseType.plain,
+            validateStatus: (s) => s != null && s < 500,
+            followRedirects: false,
+            headers: {
+              'Referer': '${EnvConfig.baseUrl}/login',
+              'Origin': EnvConfig.baseUrl,
+              'X-CSRF-TOKEN': csrfToken,
+              'X-CSRF-Token': csrfToken,
+              'Accept': 'text/html,application/xhtml+xml,*/*;q=0.9',
+            },
+          ),
         );
+
+        final status = response.statusCode ?? 0;
+        final location = response.headers.value('location') ?? '';
+        final rawData = response.data?.toString() ?? '';
+        developer.log('[Auth] Form login: status=$status, location=$location', name: 'auth');
+
+        // Case A: 302 redirect away from /login (success)
+        if (status == 302 && !location.contains('/login')) {
+          developer.log('[Auth] Form login SUCCESS — redirected to: $location', name: 'auth');
+          _csrf.clearAll();
+          final user = await restoreSession();
+          if (user != null) return user;
+          return User(
+            firstName: cleanEmail.split('@').first,
+            lastName: '',
+            email: cleanEmail,
+          );
+        }
+
+        // Case B: Check if session was established (some servers use 200 + JS redirect)
+        final userAfterLogin = await restoreSession();
+        if (userAfterLogin != null && userAfterLogin.email.isNotEmpty) {
+          developer.log('[Auth] Session established after form login', name: 'auth');
+          _csrf.clearAll();
+          return userAfterLogin;
+        }
+
+        // Case C: Surface server form error from HTML
+        if (rawData.isNotEmpty) {
+          final error = HtmlParserUtil.extractFormError(rawData);
+          if (error != null) {
+            developer.log('[Auth] Server error: $error', name: 'auth');
+            throw AuthFailure(error);
+          }
+          developer.log('[Auth] No form error extracted. Body (500 chars): ${rawData.substring(0, rawData.length > 500 ? 500 : rawData.length)}', name: 'auth');
+        }
       }
 
-      // Check if session was successfully established
+      // ── Strategy 2: Direct JSON API Login (/api/auth/login) ───────────────
+      try {
+        developer.log('[Auth] Strategy 2: POST /api/auth/login', name: 'auth');
+        final apiResponse = await _client.post<dynamic>(
+          ApiEndpoints.apiAuthLogin,
+          data: {
+            'email': cleanEmail,
+            'password': cleanPassword,
+          },
+          options: Options(
+            contentType: 'application/json',
+            responseType: ResponseType.json,
+            validateStatus: (s) => s != null && s < 500,
+          ),
+        );
+
+        final apiStatus = apiResponse.statusCode ?? 0;
+        final data = apiResponse.data;
+        developer.log('[Auth] API login: status=$apiStatus', name: 'auth');
+
+        if (apiStatus == 200 && data is Map<String, dynamic>) {
+          if (data['success'] == true) {
+            developer.log('[Auth] API login SUCCESS for: $cleanEmail', name: 'auth');
+            _csrf.clearAll();
+
+            if (data['user'] is Map<String, dynamic>) {
+              try {
+                return User.fromJson(data['user'] as Map<String, dynamic>);
+              } catch (_) {}
+            }
+
+            final user = await restoreSession();
+            if (user != null) return user;
+
+            return User(
+              firstName: cleanEmail.split('@').first,
+              lastName: '',
+              email: cleanEmail,
+            );
+          }
+        }
+
+        if (apiStatus == 401 || (data is Map<String, dynamic> && data['success'] == false)) {
+          final errorMsg = (data is Map<String, dynamic>)
+              ? (data['message'] ?? data['error'] ?? 'Those credentials do not match our records.')
+              : 'Invalid email or password. Please verify your credentials.';
+          developer.log('[Auth] API login REJECTED: $errorMsg', name: 'auth');
+          throw AuthFailure(errorMsg.toString());
+        }
+      } on AuthFailure {
+        rethrow;
+      } catch (e) {
+        developer.log('[Auth] API fallback error: $e', name: 'auth');
+      }
+
+      // Final fallback: check if any session was established
       final userAfterLogin = await restoreSession();
       if (userAfterLogin != null) {
         _csrf.clearAll();
         if (userAfterLogin.email.isEmpty) {
-          return userAfterLogin.copyWith(email: email.trim());
+          return userAfterLogin.copyWith(email: cleanEmail);
         }
         return userAfterLogin;
       }
 
-      // Check for form errors in HTML or JSON body
-      final html = rawData is String ? rawData : (rawData?.toString() ?? '');
-      final error = HtmlParserUtil.extractFormError(html);
-      if (error != null && error.isNotEmpty) {
-        throw AuthFailure(error);
-      }
-
-      if (status == 200 || status == 403 || status == 401) {
-        throw const AuthFailure('Invalid email or password. Please verify your credentials.');
-      }
-
-      throw const AuthFailure('Login failed. Please try again.');
+      throw const AuthFailure('Invalid email or password. Please verify your credentials.');
     } on AuthFailure {
       rethrow;
     } on DioException catch (e) {
@@ -369,9 +448,15 @@ class AuthRepository {
   User _parseUserFromProfileHtml(String html) {
     final doc = HtmlParserUtil.parse(html);
 
-    String? inputVal(String name) =>
-        doc.querySelector('input[name="$name"]')?.attributes['value']?.trim() ??
-        doc.querySelector('input[id="$name"]')?.attributes['value']?.trim();
+    String? inputVal(String name) {
+      try {
+        return doc.querySelector('input[name="$name"]')?.attributes['value']?.trim() ??
+            doc.querySelector('input[id="$name"]')?.attributes['value']?.trim();
+      } catch (e) {
+        developer.log('[Auth] Selector failed for $name: $e', name: 'auth');
+        return null;
+      }
+    }
 
     final firstName = inputVal('first_name') ?? inputVal('name') ?? '';
     final lastName = inputVal('last_name') ?? '';

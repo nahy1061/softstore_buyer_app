@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/errors/failures.dart';
 import '../../../core/services/notification_service.dart';
@@ -15,69 +17,96 @@ class OrderCubit extends Cubit<OrderState> {
         _repo = repository ?? OrderRepository.instance,
         super(const OrderInitial());
 
+  // ─── Load Orders ──────────────────────────────────────────────────────────
+
   Future<void> loadOrders() async {
-    // 1. Instantly load local orders so the screen renders immediately without lag
-    final localOrders = await _repo.getLocalOrders();
-    if (localOrders.isNotEmpty) {
-      emit(OrderLoaded(orders: localOrders));
-    } else {
-      emit(const OrderLoading());
+    developer.log('[OrderCubit] loadOrders() called', name: 'orders');
+
+    // 1. Clean stale dummy/fake orders from local storage
+    // 2. Show loading state
+    emit(const OrderLoading());
+
+    // 3. Capture pending status overrides BEFORE clearing
+    final currentLocal = await _repo.getLocalOrders();
+    final statusOverrides = <String, OrderStatus>{};
+    for (final o in currentLocal) {
+      if (o.status == OrderStatus.cancelled ||
+          o.status == OrderStatus.refunded) {
+        statusOverrides[o.referenceNumber.toLowerCase()] = o.status;
+      }
     }
 
-    // 2. Fetch remote merged orders with quick timeout
-    try {
-      List<Order> orders = [];
-      try {
-        orders = await _orderService.fetchOrders();
-      } catch (_) {}
+    // 4. Clear ALL local orders
+    await _repo.clearAllLocalOrders();
 
-      if (orders.isNotEmpty) {
-        final currentLocal = await _repo.getLocalOrders();
+    // 5. Fetch remote orders from server
+    try {
+      final remoteOrders = await _orderService.fetchOrders();
+
+      developer.log(
+        '[OrderCubit] Remote fetch returned ${remoteOrders.length} orders',
+        name: 'orders',
+      );
+
+      if (remoteOrders.isNotEmpty) {
+        // Start with server orders, apply any pending status overrides.
+        // Only override if the server order is NOT already in a terminal state
+        // (delivered, cancelled, refunded) — server is the source of truth.
         final map = <String, Order>{};
-        for (final o in orders) {
-          map[o.referenceNumber.toLowerCase()] = o;
-        }
-        for (final o in currentLocal) {
+        for (final o in remoteOrders) {
           final key = o.referenceNumber.toLowerCase();
-          if (map.containsKey(key)) {
-            if (o.status == OrderStatus.cancelled ||
-                o.status == OrderStatus.refunded) {
-              map[key] = map[key]!.copyWith(
-                status: o.status,
-                statusHistory: o.statusHistory.isNotEmpty
-                    ? o.statusHistory
-                    : map[key]!.statusHistory,
-              );
+          final overrideStatus = statusOverrides[key];
+          if (overrideStatus != null) {
+            final isRemoteTerminal = o.status == OrderStatus.delivered ||
+                o.status == OrderStatus.cancelled ||
+                o.status == OrderStatus.refunded;
+            if (!isRemoteTerminal) {
+              map[key] = o.copyWith(status: overrideStatus);
+            } else {
+              map[key] = o;
             }
           } else {
             map[key] = o;
           }
         }
-        orders = map.values.toList()
-          ..sort((a, b) => b.placedAt.compareTo(a.placedAt));
-      } else {
-        orders = await _repo.getOrders();
-      }
 
-      if (orders.isEmpty) {
-        orders = List<Order>.from(dummyOrders);
-      }
-      emit(OrderLoaded(orders: orders));
-    } on AuthFailure {
-      final currentLocal = await _repo.getLocalOrders();
-      emit(OrderLoaded(orders: currentLocal.isNotEmpty ? currentLocal : List<Order>.from(dummyOrders)));
-    } on Failure catch (e) {
-      final currentLocal = await _repo.getLocalOrders();
-      if (currentLocal.isNotEmpty) {
-        emit(OrderLoaded(orders: currentLocal));
+        final merged = map.values.toList()
+          ..sort((a, b) => b.placedAt.compareTo(a.placedAt));
+        developer.log(
+          '[OrderCubit] Emitting ${merged.length} server orders',
+          name: 'orders',
+        );
+        emit(OrderLoaded(orders: merged));
       } else {
-        emit(OrderLoaded(orders: List<Order>.from(dummyOrders)));
+        // Server returned empty — user genuinely has no orders
+        developer.log(
+          '[OrderCubit] Server returned 0 orders — emitting empty list',
+          name: 'orders',
+        );
+        emit(const OrderLoaded(orders: []));
       }
+    } on AuthFailure {
+      developer.log(
+        '[OrderCubit] AuthFailure — session expired',
+        name: 'orders',
+      );
+      emit(const OrderError(message: 'Session expired. Please login again.'));
+    } on Failure catch (e) {
+      developer.log(
+        '[OrderCubit] Failure: ${e.runtimeType} — ${e.message}',
+        name: 'orders',
+      );
+      emit(OrderError(message: e.message));
     } catch (e) {
-      final currentLocal = await _repo.getLocalOrders();
-      emit(OrderLoaded(orders: currentLocal.isNotEmpty ? currentLocal : List<Order>.from(dummyOrders)));
+      developer.log(
+        '[OrderCubit] Unexpected error: $e',
+        name: 'orders',
+      );
+      emit(const OrderError(message: 'Failed to load orders. Please try again.'));
     }
   }
+
+  // ─── Search / Filter ──────────────────────────────────────────────────────
 
   void updateSearchQuery(String query) {
     final current = state;
@@ -130,21 +159,15 @@ class OrderCubit extends Cubit<OrderState> {
     }
   }
 
+  // ─── Order Detail ─────────────────────────────────────────────────────────
+
   Future<void> loadOrderDetail(String invoiceNumber) async {
     final cleanInvoice = invoiceNumber.trim();
-    // 1. Check local orders first for instantaneous rendering
-    final localOrders = await _repo.getLocalOrders();
-    final localMatch = localOrders.where(
-      (o) =>
-          o.referenceNumber.toLowerCase() == cleanInvoice.toLowerCase() ||
-          o.id.toLowerCase() == cleanInvoice.toLowerCase(),
-    );
-    if (localMatch.isNotEmpty) {
-      emit(OrderDetailLoaded(order: localMatch.first));
-    } else {
-      emit(const OrderLoading());
-    }
 
+    // Always show loading while we fetch from server
+    emit(const OrderLoading());
+
+    // 1. Try server for real data
     try {
       final order = await _repo.getOrderDetail(cleanInvoice);
       NotificationService.instance.tagOrderTracking(
@@ -153,32 +176,42 @@ class OrderCubit extends Cubit<OrderState> {
         status: order.status.name,
       );
       emit(OrderDetailLoaded(order: order));
-    } on Failure catch (e) {
-      if (localMatch.isEmpty) {
-        try {
-          final order = await _orderService.fetchOrderDetail(cleanInvoice);
-          NotificationService.instance.tagOrderTracking(
-            orderId: order.id,
-            referenceNumber: order.referenceNumber,
-            status: order.status.name,
-          );
-          emit(OrderDetailLoaded(order: order));
-        } catch (_) {
-          emit(OrderError(message: e.message));
-        }
-      }
+      NotificationService.instance.tagOrderTracking(
+        orderId: order.id,
+        referenceNumber: order.referenceNumber,
+        status: order.status.name,
+      );
+      emit(OrderDetailLoaded(order: order));
+      return;
+    } on AuthFailure {
+      emit(const OrderError(message: 'Session expired. Please login again.'));
+      return;
+    } catch (_) {}
+
+    // 2. Fallback: try OrderService
+    try {
+      final order = await _orderService.fetchOrderDetail(cleanInvoice);
+      NotificationService.instance.tagOrderTracking(
+        orderId: order.id,
+        referenceNumber: order.referenceNumber,
+        status: order.status.name,
+      );
+      emit(OrderDetailLoaded(order: order));
     } catch (e) {
-      if (localMatch.isEmpty) {
-        emit(OrderError(message: 'Failed to load order detail: $e'));
-      }
+      emit(OrderError(message: 'Order not found. Please try again.'));
     }
   }
 
-  /// Guest lookup by invoice/reference + phone number via POST /store/track-order
+  // ─── Guest Order Tracking ─────────────────────────────────────────────────
+
   Future<void> lookupOrder({
     required String referenceNumber,
     required String phone,
   }) async {
+    developer.log(
+      '[OrderCubit] lookupOrder($referenceNumber, $phone)',
+      name: 'orders',
+    );
     emit(const OrderLoading());
     try {
       final order = await _repo.trackOrderGuest(
@@ -190,12 +223,53 @@ class OrderCubit extends Cubit<OrderState> {
         referenceNumber: order.referenceNumber,
         status: order.status.name,
       );
+      developer.log(
+        '[OrderCubit] Repository returned order: ${order.referenceNumber} | ${order.status.name}',
+        name: 'orders',
+      );
+      );
       emit(OrderLookupResult(order: order));
     } on NotFoundFailure {
-      emit(const OrderLookupNotFound());
+      developer.log(
+        '[OrderCubit] Not found via repository — trying OrderService fallback',
+        name: 'orders',
+      );
+      try {
+        final order = await _orderService.trackGuestOrder(
+          referenceNumber: referenceNumber.trim(),
+          phone: phone.trim(),
+        );
+        developer.log(
+          '[OrderCubit] Service fallback returned order: ${order.referenceNumber}',
+          name: 'orders',
+        );
+        emit(OrderLookupResult(order: order));
+      } catch (e) {
+        developer.log(
+          '[OrderCubit] Service fallback also failed: $e',
+          name: 'orders',
+        );
+        emit(const OrderLookupNotFound());
+      }
     } on Failure catch (e) {
-      emit(OrderError(message: e.message));
-    } catch (_) {
+      developer.log(
+        '[OrderCubit] Failure: ${e.runtimeType} — ${e.message}',
+        name: 'orders',
+      );
+      try {
+        final order = await _orderService.trackGuestOrder(
+          referenceNumber: referenceNumber.trim(),
+          phone: phone.trim(),
+        );
+        emit(OrderLookupResult(order: order));
+      } catch (_) {
+        emit(OrderError(message: e.message));
+      }
+    } catch (e) {
+      developer.log(
+        '[OrderCubit] Unexpected error: $e',
+        name: 'orders',
+      );
       try {
         final order = await _orderService.trackGuestOrder(
           referenceNumber: referenceNumber.trim(),
@@ -208,23 +282,45 @@ class OrderCubit extends Cubit<OrderState> {
     }
   }
 
+  // ─── Cancel Order ─────────────────────────────────────────────────────────
+
   Future<void> cancelOrder(String orderId, {String? reason}) async {
     emit(const OrderCancelling());
     bool success = false;
+
+    // 1. Try repository (handles server + local status update)
     try {
       success = await _repo.cancelOrder(orderId: orderId, reason: reason);
-    } catch (_) {
+    } catch (_) {}
+
+    // 2. If repo didn't succeed, try service directly
+    if (!success) {
       try {
         success = await _orderService.cancelOrder(orderId: orderId, reason: reason);
       } catch (_) {}
     }
+
+    // 3. If server failed, still mark locally preserving real order data
     if (!success) {
-      emit(const OrderError(message: 'Failed to cancel order on server. Local status updated.'));
-      return;
+      final existing = await _findExistingOrder(orderId);
+      await _repo.saveLocalOrder(existing.copyWith(
+        status: OrderStatus.cancelled,
+        statusHistory: [
+          ...existing.statusHistory,
+          OrderStatusEvent(
+            status: OrderStatus.cancelled,
+            timestamp: DateTime.now(),
+            note: reason ?? 'Cancelled by customer',
+          ),
+        ],
+      ));
     }
+
     emit(OrderCancelled(orderId: orderId));
     await loadOrders();
   }
+
+  // ─── Request Return ───────────────────────────────────────────────────────
 
   Future<void> requestReturn(
     String orderId, {
@@ -236,6 +332,8 @@ class OrderCubit extends Cubit<OrderState> {
   }) async {
     emit(const OrderReturning());
     bool success = false;
+
+    // 1. Try repository
     try {
       success = await _repo.requestReturn(
         orderId: orderId,
@@ -245,7 +343,10 @@ class OrderCubit extends Cubit<OrderState> {
         items: items,
         photoPaths: photoPaths,
       );
-    } catch (_) {
+    } catch (_) {}
+
+    // 2. If repo didn't succeed, try service directly
+    if (!success) {
       try {
         success = await _orderService.requestReturn(
           orderId: orderId,
@@ -256,6 +357,23 @@ class OrderCubit extends Cubit<OrderState> {
         );
       } catch (_) {}
     }
+
+    // 3. If server failed, still mark locally preserving real order data
+    if (!success) {
+      final existing = await _findExistingOrder(orderId);
+      await _repo.saveLocalOrder(existing.copyWith(
+        status: OrderStatus.refunded,
+        statusHistory: [
+          ...existing.statusHistory,
+          OrderStatusEvent(
+            status: OrderStatus.refunded,
+            timestamp: DateTime.now(),
+            note: 'Return requested: $reason',
+          ),
+        ],
+      ));
+    }
+
     emit(OrderReturnRequested(
       orderId: orderId,
       message: success
@@ -264,6 +382,8 @@ class OrderCubit extends Cubit<OrderState> {
     ));
     await loadOrders();
   }
+
+  // ─── Returns ──────────────────────────────────────────────────────────────
 
   Future<void> loadReturns() async {
     emit(const OrderReturnsLoading());
@@ -276,4 +396,43 @@ class OrderCubit extends Cubit<OrderState> {
   }
 
   void reset() => emit(const OrderInitial());
+
+  // ─── Helpers ──────────────────────────────────────────────────────────────
+
+  /// Finds an existing order by ID, checking current state first, then local storage.
+  /// Returns a minimal stub only if the order truly doesn't exist anywhere.
+  Future<Order> _findExistingOrder(String orderId) async {
+    // 1. Check current loaded state (has full server data)
+    final currentState = state;
+    if (currentState is OrderLoaded) {
+      final match = currentState.orders.where(
+        (o) =>
+            o.referenceNumber.toLowerCase() == orderId.toLowerCase() ||
+            o.id.toLowerCase() == orderId.toLowerCase(),
+      );
+      if (match.isNotEmpty) return match.first;
+    }
+
+    // 2. Check local SharedPreferences storage
+    final localOrders = await _repo.getLocalOrders();
+    final localMatch = localOrders.where(
+      (o) =>
+          o.referenceNumber.toLowerCase() == orderId.toLowerCase() ||
+          o.id.toLowerCase() == orderId.toLowerCase(),
+    );
+    if (localMatch.isNotEmpty) return localMatch.first;
+
+    // 3. Last resort — minimal stub (order not found anywhere)
+    return Order(
+      id: orderId,
+      referenceNumber: orderId,
+      placedAt: DateTime.now(),
+      status: OrderStatus.pending,
+      items: const [],
+      deliveryAddress: const OrderAddress(name: '', phone: '', addressLine: '', city: ''),
+      subtotal: 0,
+      deliveryFee: 0,
+      storeName: '',
+    );
+  }
 }

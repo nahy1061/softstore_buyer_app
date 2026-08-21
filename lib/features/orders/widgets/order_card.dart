@@ -42,7 +42,7 @@ class OrderCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  '${order.totalItems} Item${order.totalItems > 1 ? '(s)' : '(s)'}',
+                  '${order.totalItems} Item${order.totalItems > 1 ? 's' : ''}',
                   style: AppTypography.sectionHeading.copyWith(
                     color: AppColors.textPrimary,
                     fontWeight: FontWeight.w700,

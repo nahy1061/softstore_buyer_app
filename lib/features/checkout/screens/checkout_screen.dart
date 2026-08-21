@@ -218,6 +218,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final fallbackInvoice =
         'INV-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}-$rand5';
     String invoice = fallbackInvoice;
+    String? errorMsg;
     bool serverSuccess = false;
 
     try {
@@ -227,6 +228,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           result.invoiceNumber!.isNotEmpty) {
         invoice = result.invoiceNumber!;
         serverSuccess = true;
+      } else {
+        errorMsg = result.message ?? 'Order failed. Please try again.';
       }
     } on AuthFailure catch (e) {
       if (e.message == 'email_unverified') {
@@ -237,7 +240,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         _showOtpVerificationDialog();
         return;
       }
-      // Other auth errors — show but continue with local fallback
+      errorMsg = e.message;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -247,7 +250,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         );
       }
     } catch (e) {
-      // Network or server error — continue with local fallback
+      errorMsg = 'Failed to place order. Please check your connection and try again.';
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -260,6 +263,20 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
+    }
+
+    // If no invoice received, show error and stop
+    if (invoice == fallbackInvoice && errorMsg != null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMsg),
+            backgroundColor: AppColors.error,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+      return;
     }
 
     final firstItem = items.isNotEmpty ? items.first : null;

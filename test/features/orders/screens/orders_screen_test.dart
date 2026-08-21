@@ -7,7 +7,7 @@ import 'package:softstore_buyer_app/features/orders/data/order_service.dart';
 final kTestOrders = [
   Order(
     id: '1',
-    referenceNumber: 'SS-20240801-0042',
+    referenceNumber: 'INV-17225058001234',
     placedAt: DateTime(2024, 8, 1, 14, 30),
     status: OrderStatus.confirmed,
     storeName: 'TechZone Mobile Accessories',
@@ -26,7 +26,7 @@ final kTestOrders = [
   ),
   Order(
     id: '2',
-    referenceNumber: 'SS-20240805-0088',
+    referenceNumber: 'INV-17228505001234',
     placedAt: DateTime(2024, 8, 5, 9, 15),
     status: OrderStatus.cancelled,
     storeName: 'Fashion Hub',
@@ -45,7 +45,7 @@ final kTestOrders = [
   ),
   Order(
     id: '3',
-    referenceNumber: 'SS-20240810-0203',
+    referenceNumber: 'INV-17232885001234',
     placedAt: DateTime(2024, 8, 10, 16, 45),
     status: OrderStatus.delivered,
     storeName: 'Fresh Dairy Direct',
@@ -64,7 +64,7 @@ final kTestOrders = [
   ),
   Order(
     id: '4',
-    referenceNumber: 'SS-20240809-0117',
+    referenceNumber: 'INV-17231808001234',
     placedAt: DateTime(2024, 8, 9, 11, 0),
     status: OrderStatus.processing,
     storeName: 'Grocery Express',
@@ -129,10 +129,10 @@ void main() {
 
     test('search by reference number', () async {
       await cubit.loadOrders();
-      cubit.updateSearchQuery('0042');
+      cubit.updateSearchQuery('1722505800');
       final state = cubit.state as OrderLoaded;
       expect(state.filtered.length, 1);
-      expect(state.filtered.first.referenceNumber, 'SS-20240801-0042');
+      expect(state.filtered.first.referenceNumber, 'INV-17225058001234');
     });
 
     test('search by store name', () async {

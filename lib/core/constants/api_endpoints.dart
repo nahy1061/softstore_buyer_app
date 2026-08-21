@@ -85,7 +85,7 @@ class ApiEndpoints {
   static const String placeOrder = '/store/checkout';
 
   // ─── Orders ─────────────────────────────────────────────────────────────────
-  /// GET — orders list HTML
+  /// GET — orders list HTML (login page redirects here: /marketplace/account/orders)
   static const String ordersList = '/marketplace/account/orders';
   static const String getOrders = '/marketplace/account/orders';
 
@@ -93,8 +93,8 @@ class ApiEndpoints {
   static const String orderDetail = '/marketplace/account/orders/';
   static const String getOrderDetail = '/marketplace/account/orders';
 
-  /// POST (with CSRF) {invoice_number, phone} — guest order tracking HTML
-  static const String trackOrder = '/store/track-order';
+  /// GET ?invoice=...&phone=... — guest order tracking HTML (no CSRF needed, GET request)
+  static const String trackOrder = '/track-order';
 
   /// POST multipart /marketplace/account/orders/{invoice}/return
   static const String requestReturnSuffix = '/return';
@@ -116,12 +116,12 @@ class ApiEndpoints {
   static const String getProfile = '/marketplace/account/profile';
 
   /// POST form {current_password, new_password}
-  static const String changePassword = '/marketplace/account/profile';
+  static const String changePassword = '/marketplace/account/password';
 
   /// GET — dashboard stats HTML
-  static const String dashboard = '/marketplace/account';
-  static const String dashboardStats = '/marketplace/account';
-  static const String getDashboard = '/marketplace/account';
+  static const String dashboard = '/marketplace/account/dashboard';
+  static const String dashboardStats = '/marketplace/account/dashboard';
+  static const String getDashboard = '/marketplace/account/dashboard';
 
   // ─── Addresses ──────────────────────────────────────────────────────────────
   /// GET — addresses list HTML; POST form to add

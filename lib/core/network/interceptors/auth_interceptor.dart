@@ -26,6 +26,11 @@ class AuthInterceptor extends Interceptor {
       return handler.next(response);
     }
 
+    // Do NOT reject 419 on checkout/place-order — let placeOrder() handle retry with fresh CSRF
+    if (status == 419 && (path.contains('checkout') || path.contains('order'))) {
+      return handler.next(response);
+    }
+
     // 302 → /login means the session cookie has expired
     if (status == 302 && location.contains('/login')) {
       developer.log(

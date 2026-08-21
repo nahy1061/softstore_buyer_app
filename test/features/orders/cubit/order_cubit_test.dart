@@ -9,7 +9,7 @@ import 'package:softstore_buyer_app/features/orders/data/order_service.dart';
 final kTestOrders = [
   Order(
     id: '1',
-    referenceNumber: 'SS-20240801-0042',
+    referenceNumber: 'INV-17225058001234',
     placedAt: DateTime(2024, 8, 1, 14, 30),
     status: OrderStatus.confirmed,
     storeName: 'TechZone Mobile Accessories',
@@ -28,7 +28,7 @@ final kTestOrders = [
   ),
   Order(
     id: '2',
-    referenceNumber: 'SS-20240805-0088',
+    referenceNumber: 'INV-17228505001234',
     placedAt: DateTime(2024, 8, 5, 9, 15),
     status: OrderStatus.cancelled,
     storeName: 'Fashion Hub',
@@ -47,7 +47,7 @@ final kTestOrders = [
   ),
   Order(
     id: '3',
-    referenceNumber: 'SS-20240810-0203',
+    referenceNumber: 'INV-17232885001234',
     placedAt: DateTime(2024, 8, 10, 16, 45),
     status: OrderStatus.delivered,
     storeName: 'Fresh Dairy Direct',
@@ -66,7 +66,7 @@ final kTestOrders = [
   ),
   Order(
     id: '4',
-    referenceNumber: 'SS-20240809-0117',
+    referenceNumber: 'INV-17231808001234',
     placedAt: DateTime(2024, 8, 9, 11, 0),
     status: OrderStatus.processing,
     storeName: 'Grocery Express',
@@ -122,7 +122,7 @@ void main() {
             isA<OrderLoaded>().having(
               (s) => s.orders.length,
               'orders count',
-              dummyOrders.length,
+              kTestOrders.length,
             ),
           ]),
         );
@@ -146,21 +146,21 @@ void main() {
     group('updateSearchQuery', () {
       test('updates search query in state', () async {
         await cubit.loadOrders();
-        cubit.updateSearchQuery('SS-20240801');
+        cubit.updateSearchQuery('INV-1722505800');
 
         final state = cubit.state as OrderLoaded;
-        expect(state.searchQuery, 'SS-20240801');
+        expect(state.searchQuery, 'INV-1722505800');
       });
 
       test('filtered returns orders matching reference number', () async {
         await cubit.loadOrders();
-        cubit.updateSearchQuery('SS-20240801');
+        cubit.updateSearchQuery('INV-1722505800');
 
         final state = cubit.state as OrderLoaded;
         final filtered = state.filtered;
 
         expect(filtered.length, 1);
-        expect(filtered.first.referenceNumber, 'SS-20240801-0042');
+        expect(filtered.first.referenceNumber, 'INV-17225058001234');
       });
 
       test('filtered returns orders matching store name', () async {
@@ -222,7 +222,7 @@ void main() {
         cubit.updateSearchQuery('');
 
         final state = cubit.state as OrderLoaded;
-        expect(state.filtered.length, dummyOrders.length);
+        expect(state.filtered.length, kTestOrders.length);
       });
 
       test('no matching search returns empty list', () async {
@@ -273,7 +273,7 @@ void main() {
         cubit.updateStatusFilters([]);
 
         final state = cubit.state as OrderLoaded;
-        expect(state.filtered.length, dummyOrders.length);
+        expect(state.filtered.length, kTestOrders.length);
       });
 
       test('cancelled and refunded grouped together', () async {
@@ -508,15 +508,15 @@ void main() {
         await cubit.loadOrders();
 
         final initialOrder = (cubit.state as OrderLoaded).orders.firstWhere(
-          (o) => o.referenceNumber == 'SS-20240801-0042',
+          (o) => o.referenceNumber == 'INV-17225058001234',
         );
         expect(initialOrder.status, OrderStatus.confirmed);
 
-        await cubit.cancelOrder('SS-20240801-0042', reason: 'Decided for alternative product');
+        await cubit.cancelOrder('INV-17225058001234', reason: 'Decided for alternative product');
 
         final state = cubit.state as OrderLoaded;
         final cancelledOrder = state.orders.firstWhere(
-          (o) => o.referenceNumber == 'SS-20240801-0042' || o.id == '1',
+          (o) => o.referenceNumber == 'INV-17225058001234' || o.id == '1',
         );
         expect(cancelledOrder.status, OrderStatus.cancelled);
       });
@@ -527,14 +527,14 @@ void main() {
         await cubit.loadOrders();
 
         await cubit.requestReturn(
-          'SS-20240801-0042',
+          'INV-17225058001234',
           reason: 'Defective product received',
           returnType: 'refund',
         );
 
         final state = cubit.state as OrderLoaded;
         final returnedOrder = state.orders.firstWhere(
-          (o) => o.referenceNumber == 'SS-20240801-0042' || o.id == '1',
+          (o) => o.referenceNumber == 'INV-17225058001234' || o.id == '1',
         );
         expect(returnedOrder.status, OrderStatus.refunded);
       });

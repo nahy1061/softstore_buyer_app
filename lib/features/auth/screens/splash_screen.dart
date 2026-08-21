@@ -83,7 +83,7 @@ class _SplashScreenState extends State<SplashScreen>
       }
     });
 
-    // Start session restoration in background
+    // Start session restoration in background (non-blocking)
     context.read<AuthCubit>().restoreSession();
 
     // Display splash gracefully before seamlessly proceeding to Marketplace
@@ -110,7 +110,7 @@ class _SplashScreenState extends State<SplashScreen>
   Widget build(BuildContext context) {
     return BlocListener<AuthCubit, AuthState>(
       listener: (context, state) {
-        // If session resolves after minimum display duration, proceed
+        // If session resolves after minimum display duration, proceed to marketplace
         if (state is AuthAuthenticated ||
             state is AuthUnauthenticated ||
             state is AuthError) {
