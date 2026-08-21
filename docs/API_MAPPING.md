@@ -20,7 +20,7 @@
 8. [Support & Tickets APIs](#support--tickets-apis)
 9. [Wishlist & Follows APIs](#wishlist--follows-apis)
 10. [App Settings & Configuration](#app-settings--configuration)
-11. [Critical Implementation Notes](#critical-implementation-notes)
+11. [Critical Implementa8tion Notes](#critical-implementation-notes)
 
 ---
 

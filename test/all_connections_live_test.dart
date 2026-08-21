@@ -10,6 +10,7 @@ import 'package:softstore_buyer_app/core/network/dio_client.dart';
 import 'package:softstore_buyer_app/core/network/http_overrides.dart';
 import 'package:softstore_buyer_app/core/utils/csrf_service.dart';
 import 'package:softstore_buyer_app/core/utils/html_parser_util.dart';
+import 'package:softstore_buyer_app/core/errors/failures.dart';
 import 'package:softstore_buyer_app/features/auth/repository/auth_repository.dart';
 import 'package:softstore_buyer_app/features/catalog/repository/catalog_repository.dart';
 import 'package:softstore_buyer_app/features/orders/data/order_service.dart';
@@ -159,6 +160,52 @@ void main() {
       } catch (e) {
         print('✓ AuthRepository.login handled server response: $e');
         expect(e.toString(), isNotEmpty);
+      }
+    });
+
+    test('14. Profile: changePassword endpoints discovery', () async {
+      final client = DioClient();
+
+      final routesToProbe = [
+        '/marketplace/account/profile',
+        '/marketplace/account/password',
+        '/marketplace/account/change-password',
+        '/marketplace/account/edit-password',
+        '/marketplace/account/security',
+        '/account/password',
+        '/account/change-password',
+        '/account/profile',
+        '/store/account/password',
+        '/store/account/change-password',
+        '/store/account/profile',
+        '/buyer/change-password',
+        '/api/buyer/change-password',
+        '/api/buyer/account/change-password',
+        '/api/v1/buyer/change-password',
+        '/api/account/change-password',
+        '/api/store/change-password',
+      ];
+
+      for (final route in routesToProbe) {
+        try {
+          final getRes = await client.get<String>(
+            route,
+            options: Options(
+              validateStatus: (s) => true,
+              followRedirects: false,
+            ),
+          );
+          final postRes = await client.post<String>(
+            route,
+            options: Options(
+              validateStatus: (s) => true,
+              followRedirects: false,
+            ),
+          );
+          print('Route: $route -> GET: ${getRes.statusCode} (${getRes.headers.value('location')}), POST: ${postRes.statusCode} (${postRes.headers.value('location')})');
+        } catch (e) {
+          print('Route: $route -> Exception: $e');
+        }
       }
     });
   });

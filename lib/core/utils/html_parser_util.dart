@@ -91,32 +91,46 @@ class HtmlParserUtil {
     try {
       final doc = html_parser.parse(htmlBody);
 
-      // Check SoftStore specific alert elements & common validation containers
-      const selectors = [
-        '.sx-alert-err',
-        '.sx-alert',
-        '.alert-tf.alert-danger',
-        '[role="alert"]',
+      // Check SoftStore specific error elements & common validation containers
+      const errorSelectors = [
         '.invalid-feedback',
         '.alert-danger',
         '.alert-error',
-        '.alert-warning',
+        '.sx-alert-err',
+        '.alert-tf.alert-danger',
         '.text-danger',
         '.error-message',
         '.error-msg',
         '.form-error',
-        '.alert',
         '.error',
         '.help-block.text-danger',
+        '.alert-warning',
+        '.sx-alert-warn',
       ];
 
-      for (final selector in selectors) {
+      for (final selector in errorSelectors) {
         final el = doc.querySelector(selector);
         if (el != null) {
           final text = el.text.trim();
           if (text.isNotEmpty && !text.toLowerCase().contains('javascript')) {
             return text;
           }
+        }
+      }
+
+      // Check general alert elements, excluding success and info banners
+      final alerts = doc.querySelectorAll('.alert, .sx-alert, [role="alert"]');
+      for (final el in alerts) {
+        final classes = el.classes;
+        if (classes.contains('alert-success') ||
+            classes.contains('alert-info') ||
+            classes.contains('alert-primary') ||
+            classes.contains('sx-alert-ok')) {
+          continue;
+        }
+        final text = el.text.trim();
+        if (text.isNotEmpty && !text.toLowerCase().contains('javascript')) {
+          return text;
         }
       }
     } catch (e) {
