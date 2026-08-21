@@ -862,6 +862,69 @@ class _HomeScreenState extends State<HomeScreen> {
                   categorySlug: 'furniture',
                   products: _getProductsForCategory('furniture'),
                 ),
+
+                const SizedBox(height: 24),
+
+                // ── 7. Just for You (Marketplace-wide Product Grid) ──────────
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 4,
+                        height: 19,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFF6A00),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Just for You',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF111827),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFF6A00).withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Text(
+                          'Marketplace',
+                          style: TextStyle(
+                            color: Color(0xFFFF6A00),
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  child: GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: allProducts.length,
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                      childAspectRatio: 0.70,
+                    ),
+                    itemBuilder: (context, index) {
+                      final product = allProducts[index];
+                      return _buildProductCard(context, product);
+                    },
+                  ),
+                ),
               ],
 
               const SizedBox(height: 32),
