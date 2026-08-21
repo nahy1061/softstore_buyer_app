@@ -50,7 +50,7 @@ class EnvConfig {
   /// OneSignal App ID for push notifications and announcements
   static const String oneSignalAppId = String.fromEnvironment(
     'ONESIGNAL_APP_ID',
-    defaultValue: 'YOUR_ONESIGNAL_APP_ID',
+    defaultValue: 'd0f5b480-a1b5-4e8f-bf55-8f066370cf45',
   );
 
   // Helper methods

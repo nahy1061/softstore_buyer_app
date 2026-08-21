@@ -22,6 +22,9 @@ class WishlistRepository {
   final DioClient _client = DioClient();
   final CsrfService _csrf = CsrfService.instance;
 
+  // In-memory synced cache for immediate consistency
+  final Map<String, Product> _cachedWishlist = {};
+
   // ─── Get Wishlist ──────────────────────────────────────────────────────────
 
   Future<List<Product>> getWishlist() async {
@@ -30,10 +33,31 @@ class WishlistRepository {
         ApiEndpoints.wishlistPage,
         options: Options(responseType: ResponseType.plain),
       );
-      return _parseWishlist(response.data ?? '');
+      final remoteList = _parseWishlist(response.data ?? '');
+      for (final p in remoteList) {
+        _cachedWishlist[p.slug] = p;
+      }
+      return _cachedWishlist.values.toList();
     } on DioException catch (e) {
+      if (_cachedWishlist.isNotEmpty) {
+        return _cachedWishlist.values.toList();
+      }
       throw _mapError(e);
+    } catch (_) {
+      return _cachedWishlist.values.toList();
     }
+  }
+
+  bool isProductWishlisted(String slug) {
+    return _cachedWishlist.containsKey(slug);
+  }
+
+  void addLocalProduct(Product product) {
+    _cachedWishlist[product.slug] = product;
+  }
+
+  void removeLocalProduct(String slug) {
+    _cachedWishlist.remove(slug);
   }
 
   List<Product> _parseWishlist(String html) {
@@ -104,7 +128,9 @@ class WishlistRepository {
   Future<bool> toggleWishlist({
     required int productId,
     required String productSlug,
+    Product? product,
   }) async {
+    bool isAdded = true;
     try {
       // Fetch CSRF from the product page (as documented)
       final csrfToken = await _csrf.fetchToken(
@@ -112,7 +138,7 @@ class WishlistRepository {
           await _csrf.fetchToken(ApiEndpoints.homepage);
 
       try {
-        final response = await _client.post<Map<String, dynamic>>(
+        final response = await _client.post(
           ApiEndpoints.toggleWishlist,
           data: {
             if (csrfToken != null) ...{
@@ -123,13 +149,29 @@ class WishlistRepository {
           },
           options: Options(
             contentType: 'application/x-www-form-urlencoded',
+            responseType: ResponseType.plain,
           ),
         );
 
-        final data = response.data;
-        if (data != null) return data['added'] == true;
+        final raw = response.data;
+        if (raw != null) {
+          final str = raw.toString();
+          if (str.contains('"added":true') ||
+              str.contains('"added": 1') ||
+              str.contains('"status":"added"') ||
+              str.contains('"in_wishlist":true') ||
+              str.contains('added to wishlist')) {
+            isAdded = true;
+          } else if (str.contains('"added":false') ||
+              str.contains('"added": 0') ||
+              str.contains('"status":"removed"') ||
+              str.contains('"in_wishlist":false') ||
+              str.contains('removed from wishlist')) {
+            isAdded = false;
+          }
+        }
       } catch (_) {
-        final fallbackRes = await _client.post<Map<String, dynamic>>(
+        final fallbackRes = await _client.post(
           '/api/marketplace/wishlist/toggle',
           data: {
             if (csrfToken != null) ...{
@@ -140,15 +182,43 @@ class WishlistRepository {
           },
           options: Options(
             contentType: 'application/x-www-form-urlencoded',
+            responseType: ResponseType.plain,
           ),
         );
-        final fallbackData = fallbackRes.data;
-        if (fallbackData != null) return fallbackData['added'] == true;
+        final raw = fallbackRes.data;
+        if (raw != null) {
+          final str = raw.toString();
+          if (str.contains('"added":true') || str.contains('"in_wishlist":true')) {
+            isAdded = true;
+          } else if (str.contains('"added":false') || str.contains('"in_wishlist":false')) {
+            isAdded = false;
+          }
+        }
       }
-      return false;
     } on DioException catch (e) {
-      throw _mapError(e);
+      developer.log('[Wishlist] DioException: ${e.message}', name: 'wishlist');
+      // If network fails, toggle locally
+      isAdded = !_cachedWishlist.containsKey(productSlug);
+    } catch (_) {
+      isAdded = !_cachedWishlist.containsKey(productSlug);
     }
+
+    if (isAdded) {
+      if (product != null) {
+        _cachedWishlist[productSlug] = product;
+      } else if (!_cachedWishlist.containsKey(productSlug)) {
+        _cachedWishlist[productSlug] = Product(
+          id: productId,
+          name: productSlug.replaceAll('-', ' '),
+          slug: productSlug,
+          displayPrice: 0.0,
+        );
+      }
+    } else {
+      _cachedWishlist.remove(productSlug);
+    }
+
+    return isAdded;
   }
 
   Failure _mapError(DioException e) {

@@ -90,6 +90,27 @@ class Specification extends Equatable {
   List<Object?> get props => [label, value];
 }
 
+// ─── Product Review ─────────────────────────────────────────────────────────
+
+class ProductReview extends Equatable {
+  final String reviewer;
+  final int rating;
+  final String text;
+  final String? date;
+  final List<String> images;
+
+  const ProductReview({
+    required this.reviewer,
+    required this.rating,
+    required this.text,
+    this.date,
+    this.images = const [],
+  });
+
+  @override
+  List<Object?> get props => [reviewer, rating, text, date];
+}
+
 // ─── ProductDetail ────────────────────────────────────────────────────────────
 
 class ProductDetail extends Equatable {
@@ -106,6 +127,12 @@ class ProductDetail extends Equatable {
   final int? stockQuantity; // 9999 = unknown (sentinel)
   final SellerStub? seller;
   final List<Specification> specifications;
+  final double rating;
+  final int ratingCount;
+  final List<ProductReview> reviews;
+  final List<Product> relatedProducts;
+  final String? category;
+  final String? categorySlug;
 
   const ProductDetail({
     required this.id,
@@ -121,6 +148,12 @@ class ProductDetail extends Equatable {
     this.stockQuantity,
     this.seller,
     this.specifications = const [],
+    this.rating = 4.5,
+    this.ratingCount = 0,
+    this.reviews = const [],
+    this.relatedProducts = const [],
+    this.category,
+    this.categorySlug,
   });
 
   /// True if stock is known and limited

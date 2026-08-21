@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SoftStore notification bar icon — Pure monochrome white with cutout matching the bag + S logo -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- Handle -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:pathData="M9,7 C9,4.5 10.2,2.8 12,2.8 C13.8,2.8 15,4.5 15,7" />
+
+    <!-- Shopping Bag with S Cutout (Combined Path for Android Status Bar) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="
+            M6.2,7 L4.5,20 C4.2,21.1 5,22 6.1,22 L17.9,22 C19,22 19.8,21.1 19.5,20 L17.8,7 Z
+            M12,10.2
+            C13.6,10.2 14.8,11.3 14.8,12.7
+            L13.5,12.7
+            C13.5,12 12.9,11.5 12,11.5
+            C11.1,11.5 10.5,12 10.5,12.7
+            C10.5,13.2 10.8,13.5 11.4,13.7
+            L13.2,14.4
+            C14.2,14.8 14.8,15.4 14.8,16.3
+            C14.8,17.7 13.5,18.8 12,18.8
+            C10.4,18.8 9.2,17.7 9.2,16.3
+            L10.5,16.3
+            C10.5,17 11.1,17.5 12,17.5
+            C12.9,17.5 13.5,17 13.5,16.3
+            C13.5,15.8 13.2,15.5 12.6,15.3
+            L10.8,14.6
+            C9.8,14.2 9.2,13.6 9.2,12.7
+            C9.2,11.3 10.4,10.2 12,10.2
+            Z" />
+</vector>

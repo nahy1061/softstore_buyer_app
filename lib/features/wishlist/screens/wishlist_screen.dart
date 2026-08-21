@@ -7,6 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_dimensions.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_bottom_nav_bar.dart';
 import '../../auth/cubit/auth_cubit.dart';
 import '../../auth/cubit/auth_state.dart';
@@ -242,7 +243,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
                                           ),
                                           const SizedBox(height: AppSpacing.xs),
                                           Text(
-                                            'PKR ${product.displayPrice.toStringAsFixed(0)}',
+                                            Formatters.pKRCurrency(product.displayPrice),
                                             style: AppTypography.pricePrimary
                                                 .copyWith(
                                               color: AppColors.primary,

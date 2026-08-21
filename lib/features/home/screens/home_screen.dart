@@ -4,11 +4,16 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/router.dart';
 import '../../../core/errors/failures.dart';
+import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_bottom_nav_bar.dart';
+import '../../auth/cubit/auth_cubit.dart';
+import '../../auth/cubit/auth_state.dart';
+import '../../auth/screens/login_screen.dart';
 import '../../cart/cubit/cart_cubit.dart';
 import '../../cart/cubit/cart_state.dart';
 import '../../catalog/models/catalog_models.dart';
 import '../../catalog/repository/catalog_repository.dart';
+import '../../wishlist/repository/wishlist_repository.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -862,6 +867,69 @@ class _HomeScreenState extends State<HomeScreen> {
                   categorySlug: 'furniture',
                   products: _getProductsForCategory('furniture'),
                 ),
+
+                const SizedBox(height: 24),
+
+                // ── 7. Just for You (Marketplace-wide Product Grid) ──────────
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 4,
+                        height: 19,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFF6A00),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Just for You',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF111827),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFF6A00).withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Text(
+                          'Marketplace',
+                          style: TextStyle(
+                            color: Color(0xFFFF6A00),
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  child: GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: allProducts.length,
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                      childAspectRatio: 0.70,
+                    ),
+                    itemBuilder: (context, index) {
+                      final product = allProducts[index];
+                      return _buildProductCard(context, product);
+                    },
+                  ),
+                ),
               ],
 
               const SizedBox(height: 32),
@@ -1019,7 +1087,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Rs ${product.displayPrice.toStringAsFixed(0)}',
+                            Formatters.pKRCurrency(product.displayPrice),
                             style: const TextStyle(
                               color: Color(0xFFFFC107),
                               fontWeight: FontWeight.w900,
@@ -1211,36 +1279,52 @@ class _HomeScreenState extends State<HomeScreen> {
             // Image Container
             SizedBox(
               height: 136,
-              child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(15),
-                ),
-                child: Container(
-                  color: Colors.white,
-                  padding: const EdgeInsets.all(6),
-                  child: product.imageUrl != null && product.imageUrl!.isNotEmpty
-                      ? Image.network(
-                          product.imageUrl!,
-                          fit: BoxFit.contain,
-                          errorBuilder: (_, __, ___) => const Center(
-                            child: Icon(
-                              Icons.image_not_supported_outlined,
-                              color: Colors.grey,
-                            ),
-                          ),
-                        )
-                      : const Center(
-                          child: Icon(
-                            Icons.image_outlined,
-                            color: Colors.grey,
-                          ),
-                        ),
-                ),
+              width: double.infinity,
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: ClipRRect(
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(15),
+                      ),
+                      child: Container(
+                        color: const Color(0xFFF9FAFB),
+                        child: product.imageUrl != null && product.imageUrl!.isNotEmpty
+                            ? Image.network(
+                                product.imageUrl!,
+                                fit: BoxFit.cover,
+                                width: double.infinity,
+                                height: double.infinity,
+                                errorBuilder: (_, __, ___) => const Center(
+                                  child: Icon(
+                                    Icons.image_not_supported_outlined,
+                                    color: Colors.grey,
+                                    size: 32,
+                                  ),
+                                ),
+                              )
+                            : const Center(
+                                child: Icon(
+                                  Icons.image_outlined,
+                                  color: Colors.grey,
+                                  size: 32,
+                                ),
+                              ),
+                      ),
+                    ),
+                  ),
+                  // Wishlist heart button on product card
+                  Positioned(
+                    top: 6,
+                    right: 6,
+                    child: _ProductWishlistButton(product: product),
+                  ),
+                ],
               ),
             ),
             // Title & Price
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
@@ -1256,9 +1340,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 6),
                   Text(
-                    'Rs ${product.displayPrice.toStringAsFixed(0)}',
+                    Formatters.pKRCurrency(product.displayPrice),
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
@@ -1341,5 +1425,190 @@ class _HomeScreenState extends State<HomeScreen> {
       return Icons.spa_outlined;
     }
     return Icons.grid_view_outlined;
+  }
+}
+
+class _ProductWishlistButton extends StatefulWidget {
+  final Product product;
+
+  const _ProductWishlistButton({required this.product});
+
+  @override
+  State<_ProductWishlistButton> createState() => _ProductWishlistButtonState();
+}
+
+class _ProductWishlistButtonState extends State<_ProductWishlistButton> {
+  late bool _isWishlisted;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _isWishlisted = WishlistRepository.instance.isProductWishlisted(widget.product.slug);
+  }
+
+  Future<void> _toggleWishlist() async {
+    final authState = context.read<AuthCubit>().state;
+    if (authState is! AuthAuthenticated) {
+      final loggedIn = await LoginScreen.showAsModal(context);
+      if (loggedIn != true &&
+          mounted &&
+          context.read<AuthCubit>().state is! AuthAuthenticated) {
+        return;
+      }
+    }
+    if (!mounted) return;
+
+    setState(() => _isLoading = true);
+    final target = !_isWishlisted;
+
+    try {
+      final added = await WishlistRepository.instance.toggleWishlist(
+        productId: widget.product.id,
+        productSlug: widget.product.slug,
+        product: widget.product,
+      );
+      if (!mounted) return;
+      setState(() {
+        _isWishlisted = added;
+        _isLoading = false;
+      });
+      _showWishlistSnackBar(isAdded: added);
+    } catch (_) {
+      if (!mounted) return;
+      if (target) {
+        WishlistRepository.instance.addLocalProduct(widget.product);
+      } else {
+        WishlistRepository.instance.removeLocalProduct(widget.product.slug);
+      }
+      setState(() {
+        _isWishlisted = target;
+        _isLoading = false;
+      });
+      _showWishlistSnackBar(isAdded: target);
+    }
+  }
+
+  void _showWishlistSnackBar({required bool isAdded}) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        elevation: 6,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        backgroundColor: const Color(0xFF1E2022),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(
+            color: isAdded ? const Color(0xFFFF6A00) : const Color(0xFF374151),
+            width: 1.2,
+          ),
+        ),
+        content: Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: isAdded
+                    ? const Color(0xFFFF6A00).withValues(alpha: 0.18)
+                    : Colors.white.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                isAdded ? Icons.favorite : Icons.heart_broken_rounded,
+                color: isAdded ? const Color(0xFFFF6A00) : const Color(0xFF9E9E9E),
+                size: 18,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isAdded ? 'Added to Wishlist' : 'Removed from Wishlist',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    isAdded
+                        ? 'Saved in your SoftStore account'
+                        : 'Item removed from saved list',
+                    style: const TextStyle(
+                      color: Color(0xFFB0B0B0),
+                      fontSize: 11.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (isAdded) ...[
+              const SizedBox(width: 8),
+              InkWell(
+                onTap: () {
+                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                  context.push(AppRoutes.wishlist);
+                },
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFF6A00),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text(
+                    'View',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+        duration: const Duration(milliseconds: 2400),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white.withValues(alpha: 0.92),
+      shape: const CircleBorder(),
+      elevation: 2,
+      shadowColor: Colors.black26,
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: _isLoading ? null : _toggleWishlist,
+        child: Padding(
+          padding: const EdgeInsets.all(6.0),
+          child: _isLoading
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Color(0xFFFF6A00),
+                  ),
+                )
+              : Icon(
+                  _isWishlisted ? Icons.favorite : Icons.favorite_border_rounded,
+                  color: _isWishlisted ? Colors.red : const Color(0xFF6B7280),
+                  size: 17,
+                ),
+        ),
+      ),
+    );
   }
 }
