@@ -113,7 +113,7 @@ void main() {
       expect(results.length, 2);
       
       final first = results[0];
-      expect(first.threadUrl, '/store/messages/101');
+      expect(first.threadUrl, '/messages/101');
       expect(first.sellerName, 'Gadget Hub');
       expect(first.productName, 'Smart Watch Pro');
       expect(first.productImage, 'https://softstore.pk/media/smartwatch.jpg');
@@ -122,7 +122,7 @@ void main() {
       expect(first.unreadCount, 2);
 
       final second = results[1];
-      expect(second.threadUrl, '/store/messages/102');
+      expect(second.threadUrl, '/messages/102');
       expect(second.sellerName, 'Fashion World');
       expect(second.productName, 'Denim Jacket');
       expect(second.productImage, 'https://softstore.pk/media/jacket.jpg');
@@ -187,6 +187,118 @@ void main() {
 
       expect(messages[1].isFromSeller, isTrue);
       expect(messages[1].text, 'Hello Naheed! How can we help you?');
+    });
+
+    test('parseConversationsHtml extracts threads from live .sx-table HTML', () {
+      const liveTableHtml = '''
+      <div class="sx-card">
+        <table class="sx-table">
+          <thead>
+            <tr><th>From</th><th>Subject</th><th>Product</th><th>Status</th><th>Last activity</th><th></th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Naheed</td>
+              <td>delivery charges?</td>
+              <td class="sx-t-xs">Cococola</td>
+              <td><span class="sx-badge sx-badge-accent">Open</span></td>
+              <td class="sx-t-xs">21 Aug 2026, 03:07 PM</td>
+              <td><a href="/inbox/13" class="sx-btn sx-btn-ghost sx-btn-sm">Open</a></td>
+            </tr>
+            <tr>
+              <td>Naheed</td>
+              <td>inquiry about product</td>
+              <td class="sx-t-xs">Mac book</td>
+              <td><span class="sx-badge sx-badge-accent">Open</span></td>
+              <td class="sx-t-xs">21 Aug 2026, 03:05 PM</td>
+              <td><a href="/inbox/12" class="sx-btn sx-btn-ghost sx-btn-sm">Open</a></td>
+            </tr>
+            <tr>
+              <td>Usman Zahoor</td>
+              <td>is this original</td>
+              <td class="sx-t-xs">Iphone 15 Pro Cover</td>
+              <td><span class="sx-badge sx-badge-accent">Open</span></td>
+              <td class="sx-t-xs">20 Aug 2026, 03:33 PM</td>
+              <td><a href="/inbox/7" class="sx-btn sx-btn-ghost sx-btn-sm">Open</a></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      ''';
+
+      final results = MessagesRepository.parseConversationsHtml(liveTableHtml);
+
+      expect(results.length, 3);
+
+      expect(results[0].threadUrl, '/messages/13');
+      expect(results[0].sellerName, 'Cococola');
+      expect(results[0].productName, 'Cococola');
+      expect(results[0].lastMessage, 'delivery charges?');
+      expect(results[0].isUnread, isTrue);
+
+      expect(results[1].threadUrl, '/messages/12');
+      expect(results[1].sellerName, 'Mac book');
+      expect(results[1].productName, 'Mac book');
+      expect(results[1].lastMessage, 'inquiry about product');
+
+      expect(results[2].threadUrl, '/messages/7');
+      expect(results[2].sellerName, 'Iphone 15 Pro Cover');
+      expect(results[2].lastMessage, 'is this original');
+    });
+
+    test('parseConversationsHtml extracts buyer dashboard cards with seller and product accurately', () {
+      const buyerDashboardHtml = '''
+      <div class="sx-card">
+        <div class="sx-card-hd">
+          <strong class="sx-head">Conversations</strong>
+          <span class="sx-t-xs">2 total</span>
+        </div>
+        <div>
+          <a href="/messages/19" style="display:block;padding:.9rem 1.25rem;">
+            <div>
+              <strong>Inquiry: Le Falconé Garcia Pour Homme Perfumed Body Spray-200ml</strong>
+            </div>
+            <div class="sx-t-xs">
+              UZquettastore · Le Falconé Garcia Pour Homme Perfumed Body Spray-200ml
+            </div>
+            <div>
+              <span class="sx-badge sx-badge-accent">Open</span>
+              <span class="sx-t-xs">21 Aug 2026, 05:03 PM</span>
+            </div>
+          </a>
+          <a href="/messages/13" style="display:block;padding:.9rem 1.25rem;">
+            <div>
+              <strong>delivery charges?</strong>
+            </div>
+            <div class="sx-t-xs">
+              Uzquetta · Cococola
+            </div>
+            <div>
+              <span class="sx-badge sx-badge-accent">Open</span>
+              <span class="sx-t-xs">21 Aug 2026, 04:54 PM</span>
+            </div>
+          </a>
+        </div>
+      </div>
+      ''';
+
+      final results = MessagesRepository.parseConversationsHtml(buyerDashboardHtml);
+
+      expect(results.length, 2);
+
+      expect(results[0].id, '19');
+      expect(results[0].threadUrl, '/messages/19');
+      expect(results[0].sellerName, 'UZquettastore');
+      expect(results[0].productName, 'Le Falconé Garcia Pour Homme Perfumed Body Spray-200ml');
+      expect(results[0].lastMessage, 'Inquiry: Le Falconé Garcia Pour Homme Perfumed Body Spray-200ml');
+      expect(results[0].isUnread, isTrue);
+
+      expect(results[1].id, '13');
+      expect(results[1].threadUrl, '/messages/13');
+      expect(results[1].sellerName, 'Uzquetta');
+      expect(results[1].productName, 'Cococola');
+      expect(results[1].lastMessage, 'delivery charges?');
+      expect(results[1].isUnread, isTrue);
     });
   });
 }

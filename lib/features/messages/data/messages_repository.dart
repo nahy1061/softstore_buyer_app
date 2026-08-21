@@ -3,14 +3,12 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 
 import 'package:dio/dio.dart';
-import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html_parser;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/constants/api_endpoints.dart';
 import '../../../core/errors/failures.dart';
 import '../../../core/network/dio_client.dart';
-import '../../../core/utils/csrf_extractor.dart';
 import '../../../core/utils/csrf_service.dart';
 import '../models/chat_message_model.dart';
 import '../models/conversation_model.dart';
@@ -160,33 +158,40 @@ class MessagesRepository {
     }
 
     try {
-      Response<String>? response;
-      try {
-        response = await _dio.get<String>(
-          ApiEndpoints.messagesList,
-          options: Options(responseType: ResponseType.plain),
-        );
-      } catch (_) {
-        response = await _dio.get<String>(
-          ApiEndpoints.storeMessages,
-          options: Options(responseType: ResponseType.plain),
-        );
-      }
+      List<ConversationThread> parsedList = [];
+      final endpointsToTry = ['/inbox', ApiEndpoints.messagesList, ApiEndpoints.storeMessages];
 
-      final htmlContent = response.data ?? '';
-      final parsedList = parseConversationsHtml(htmlContent);
-
-      _cachedConversations.clear();
-      _cachedConversations.addAll(parsedList);
-
-      // Update product map where productId is present
-      for (final conv in parsedList) {
-        if (conv.productId != null && conv.threadUrl.isNotEmpty) {
-          _productThreadMap[conv.productId!] = conv.threadUrl;
+      for (final ep in endpointsToTry) {
+        try {
+          final res = await _dio.get<String>(
+            ep,
+            options: Options(responseType: ResponseType.plain),
+          );
+          final html = res.data ?? '';
+          final list = parseConversationsHtml(html);
+          if (list.isNotEmpty) {
+            parsedList = list;
+            break;
+          }
+        } catch (err) {
+          developer.log('[MessagesRepository] fetchConversations error on $ep: $err', name: 'messages');
         }
       }
 
-      await _saveStorage();
+      if (parsedList.isNotEmpty) {
+        _cachedConversations.clear();
+        _cachedConversations.addAll(parsedList);
+
+        // Update product map where productId is present
+        for (final conv in parsedList) {
+          if (conv.productId != null && conv.threadUrl.isNotEmpty) {
+            _productThreadMap[conv.productId!] = conv.threadUrl;
+          }
+        }
+
+        await _saveStorage();
+      }
+
       return List.unmodifiable(_cachedConversations);
     } on DioException catch (e) {
       developer.log('[MessagesRepository] fetchConversations DioException: ${e.message}', name: 'messages');
@@ -525,74 +530,181 @@ class MessagesRepository {
 
   // ─── HTML Parsing Helpers ──────────────────────────────────────────────────
 
-  /// Parses the `/messages` conversations list HTML
+  /// Parses the `/messages` or `/inbox` conversations list HTML
   static List<ConversationThread> parseConversationsHtml(String html) {
     if (html.isEmpty) return [];
+
+    // If redirected to login page, abort
+    if (html.contains('action="/login"') || html.contains('name="password"')) {
+      developer.log('[MessagesRepository] HTML is login page, user unauthenticated', name: 'messages');
+      return [];
+    }
 
     final document = html_parser.parse(html);
     final List<ConversationThread> results = [];
 
-    // Find conversation container elements
-    final threadElements = document.querySelectorAll(
-      '.bsm-thread-item, .message-thread, .conversation-item, .chat-thread, .msg-card, a[href*="/messages/"], a[href*="/store/messages/"]',
-    );
+    // 1. Check for Buyer Dashboard Conversation Cards: <a href="/messages/{id}">
+    final buyerCards = document.querySelectorAll('a[href*="/messages/"], a[href*="/inbox/"]');
+    for (final card in buyerCards) {
+      // Ignore action buttons inside table cells
+      if (card.parent?.localName == 'td' || card.classes.contains('sx-btn')) continue;
 
-    if (threadElements.isEmpty) {
-      final genericLinks = document.querySelectorAll('a[href*="/messages/"], a[href*="/store/messages/"]');
-      for (final link in genericLinks) {
-        final threadUrl = link.attributes['href'] ?? '';
-        if (threadUrl.isEmpty ||
-            threadUrl == ApiEndpoints.messagesList ||
-            threadUrl == ApiEndpoints.storeMessages ||
-            threadUrl.contains('/new') ||
-            threadUrl.contains('/start')) continue;
+      final href = card.attributes['href'] ?? '';
+      final idMatch = RegExp(r'/(?:messages|inbox|store/messages)/(\d+)').firstMatch(href);
+      if (idMatch == null) continue;
 
-        final sellerEl = link.querySelector('.seller-name, .store-name, h4, h5, strong');
-        final sellerName = sellerEl?.text.trim() ?? 'Store Seller';
+      final threadId = idMatch.group(1)!;
+      final threadUrl = '/messages/$threadId';
 
-        final msgEl = link.querySelector('.message-preview, .last-message, p, span.text-muted');
-        final lastMessage = msgEl?.text.trim() ?? '';
+      // Avoid duplicates
+      if (results.any((t) => t.id == threadId)) continue;
 
-        final imgEl = link.querySelector('img');
-        String? imgUrl = imgEl?.attributes['src'] ?? imgEl?.attributes['data-src'];
-        imgUrl = _normalizeImageUrl(imgUrl);
+      // Extract subject/topic from <strong> or heading
+      final strongEl = card.querySelector('strong, .sx-head, h4, h5');
+      final rawSubject = strongEl?.text.trim() ?? '';
 
-        final unreadEl = link.querySelector('.unread, .badge-danger, .badge-primary');
-        final isUnread = unreadEl != null || link.classes.contains('unread');
+      // Extract Store & Product line (e.g. "UZquettastore · Le Falconé Garcia...")
+      String storeName = '';
+      String productName = '';
 
-        final id = threadUrl.replaceAll(RegExp(r'[^0-9]'), '');
-
-        results.add(
-          ConversationThread(
-            id: id.isNotEmpty ? id : threadUrl,
-            threadUrl: _normalizeThreadUrl(threadUrl),
-            sellerName: sellerName,
-            productImage: imgUrl,
-            lastMessage: lastMessage,
-            lastMessageTime: DateTime.now(),
-            isUnread: isUnread,
-            unreadCount: isUnread ? 1 : 0,
-          ),
-        );
+      final allDivs = card.querySelectorAll('.sx-t-xs, div, p, span');
+      for (final el in allDivs) {
+        final text = el.text.trim();
+        if (text.contains('·')) {
+          final parts = text.split('·');
+          if (parts.isNotEmpty) {
+            storeName = parts[0].trim();
+          }
+          if (parts.length > 1) {
+            productName = parts.sublist(1).join('·').trim();
+          }
+          break;
+        }
       }
+
+      if (storeName.isEmpty) {
+        final sellerEl = card.querySelector('.seller-name, .store-name, .vendor-name');
+        storeName = sellerEl?.text.trim() ?? '';
+      }
+
+      // Extract Status
+      final badgeEl = card.querySelector('.sx-badge, .badge');
+      final statusText = badgeEl?.text.trim() ?? 'Open';
+      final isClosed = statusText.toLowerCase().contains('closed');
+      final isUnread = !isClosed && (statusText.toLowerCase().contains('open') || card.classes.contains('unread'));
+
+      // Extract Timestamp
+      String timeText = '';
+      for (final el in card.querySelectorAll('.sx-t-xs, small, span')) {
+        final text = el.text.trim();
+        if (RegExp(r'\d{1,2}\s+[A-Za-z]{3}\s+\d{4}|\d+:\d+\s*(?:AM|PM)|ago', caseSensitive: false).hasMatch(text)) {
+          timeText = text;
+          break;
+        }
+      }
+      final parsedDate = _parseRelativeTime(timeText);
+
+      // Clean subject display
+      var cleanSubject = rawSubject;
+      if (cleanSubject.toLowerCase().startsWith('inquiry:')) {
+        cleanSubject = cleanSubject.substring(8).trim();
+      }
+
+      final effectiveSellerName = storeName.isNotEmpty
+          ? storeName
+          : (productName.isNotEmpty ? productName : 'SoftStore Seller');
+      final effectiveProductName = productName.isNotEmpty
+          ? productName
+          : (cleanSubject.isNotEmpty ? cleanSubject : null);
+      final effectiveLastMessage = rawSubject.isNotEmpty
+          ? rawSubject
+          : (effectiveProductName ?? 'Tap to view conversation');
+
+      results.add(
+        ConversationThread(
+          id: threadId,
+          threadUrl: threadUrl,
+          sellerName: effectiveSellerName,
+          productName: effectiveProductName,
+          lastMessage: effectiveLastMessage,
+          lastMessageTime: parsedDate,
+          isUnread: isUnread,
+          unreadCount: isUnread ? 1 : 0,
+        ),
+      );
+    }
+
+    if (results.isNotEmpty) {
       return results;
     }
 
-    for (final el in threadElements) {
+    // 2. Fallback: Table view (.sx-table)
+    final tableRows = document.querySelectorAll('.sx-table tbody tr, table.sx-table tr, table tbody tr');
+    if (tableRows.isNotEmpty) {
+      for (final tr in tableRows) {
+        final tds = tr.querySelectorAll('td');
+        if (tds.length >= 4) {
+          final fromText = tds.isNotEmpty ? tds[0].text.trim() : '';
+          final subjectText = tds.length > 1 ? tds[1].text.trim() : '';
+          final productText = tds.length > 2 ? tds[2].text.trim() : '';
+          final statusText = tds.length > 3 ? tds[3].text.trim() : '';
+          final timeText = tds.length > 4 ? tds[4].text.trim() : '';
+          final actionAnchor = tr.querySelector('a[href*="/inbox/"], a[href*="/messages/"], a.sx-btn, td a');
+          final href = actionAnchor?.attributes['href'] ?? '';
+
+          final idMatch = RegExp(r'/(?:messages|inbox|store/messages)/(\d+)').firstMatch(href);
+          if (idMatch != null) {
+            final threadId = idMatch.group(1)!;
+            final threadUrl = '/messages/$threadId';
+            final isClosed = statusText.toLowerCase().contains('closed');
+            final isUnread = !isClosed && (statusText.toLowerCase().contains('open') || tr.classes.contains('unread'));
+            final parsedDate = _parseRelativeTime(timeText);
+
+            final displayName = productText.isNotEmpty
+                ? productText
+                : (fromText.isNotEmpty && fromText.toLowerCase() != 'naheed' ? fromText : (subjectText.isNotEmpty ? subjectText : 'SoftStore Seller'));
+
+            results.add(
+              ConversationThread(
+                id: threadId,
+                threadUrl: threadUrl,
+                sellerName: displayName,
+                productName: productText.isNotEmpty ? productText : (subjectText.isNotEmpty ? subjectText : null),
+                lastMessage: subjectText.isNotEmpty ? subjectText : (productText.isNotEmpty ? productText : 'Tap to open conversation'),
+                lastMessageTime: parsedDate,
+                isUnread: isUnread,
+                unreadCount: isUnread ? 1 : 0,
+              ),
+            );
+          }
+        }
+      }
+
+      if (results.isNotEmpty) {
+        return results;
+      }
+    }
+
+    // 3. Fallback: Generic container elements (.message-thread, .conversation-item, .bsm-thread-item)
+    final threadContainers = document.querySelectorAll(
+      '.bsm-thread-item, .message-thread, .conversation-item, .chat-thread, .msg-card',
+    );
+
+    for (final el in threadContainers) {
       String threadUrl = el.attributes['href'] ?? '';
       if (threadUrl.isEmpty) {
-        final anchor = el.querySelector('a[href*="/messages/"], a[href*="/store/messages/"]');
+        final anchor = el.querySelector('a[href*="/messages/"], a[href*="/store/messages/"], a[href*="/inbox/"]');
         threadUrl = anchor?.attributes['href'] ?? '';
       }
 
-      if (threadUrl.isEmpty ||
-          threadUrl == ApiEndpoints.messagesList ||
-          threadUrl == ApiEndpoints.storeMessages ||
-          threadUrl.contains('/new') ||
-          threadUrl.contains('/start')) continue;
+      final idMatch = RegExp(r'/(?:messages|inbox|store/messages)/(\d+)').firstMatch(threadUrl);
+      if (idMatch == null) continue;
 
-      final sellerEl = el.querySelector('.seller-name, .store-name, .vendor-name, h4, h5');
-      final sellerName = sellerEl?.text.trim() ?? 'Store Seller';
+      final threadId = idMatch.group(1)!;
+      final normalizedUrl = '/messages/$threadId';
+
+      final sellerEl = el.querySelector('.seller-name, .store-name, .vendor-name, h4, h5, strong');
+      final rawSellerName = sellerEl?.text.trim();
 
       final productEl = el.querySelector('.product-name, .product-title, .item-title');
       final productName = productEl?.text.trim();
@@ -601,27 +713,29 @@ class MessagesRepository {
       String? imgUrl = imgEl?.attributes['src'] ?? imgEl?.attributes['data-src'];
       imgUrl = _normalizeImageUrl(imgUrl);
 
-      final msgEl = el.querySelector('.last-message, .preview-text, .msg-preview, p');
+      final msgEl = el.querySelector('.last-message, .preview-text, .msg-preview, .message-preview, p, span.text-muted');
       final lastMessage = msgEl?.text.trim() ?? '';
 
       final timeEl = el.querySelector('.timestamp, .time, .date, small, span.text-muted');
       final timeStr = timeEl?.text.trim();
       final parsedDate = _parseRelativeTime(timeStr);
 
-      final unreadBadge = el.querySelector('.unread-badge, .unread, .badge');
+      final unreadBadge = el.querySelector('.unread-badge, .unread, .badge, .badge-danger');
       final isUnread = el.classes.contains('unread') || unreadBadge != null;
       final unreadCount = isUnread ? (int.tryParse(unreadBadge?.text.trim() ?? '1') ?? 1) : 0;
 
-      final id = threadUrl.replaceAll(RegExp(r'[^0-9]'), '');
+      final sellerName = (rawSellerName != null && rawSellerName.isNotEmpty)
+          ? rawSellerName
+          : (productName != null && productName.isNotEmpty ? productName : 'Conversation #$threadId');
 
       results.add(
         ConversationThread(
-          id: id.isNotEmpty ? id : threadUrl,
-          threadUrl: _normalizeThreadUrl(threadUrl),
+          id: threadId,
+          threadUrl: normalizedUrl,
           sellerName: sellerName,
           productName: productName,
           productImage: imgUrl,
-          lastMessage: lastMessage,
+          lastMessage: lastMessage.isNotEmpty ? lastMessage : 'Tap to view conversation',
           lastMessageTime: parsedDate,
           unreadCount: unreadCount,
           isUnread: isUnread,
@@ -699,12 +813,21 @@ class MessagesRepository {
   }
 
   static String _normalizeThreadUrl(String url) {
-    final clean = url.trim();
+    var clean = url.trim();
     if (clean.isEmpty) return ApiEndpoints.messagesList;
-    if (clean.startsWith('http://') || clean.startsWith('https://')) return clean;
-    if (clean.startsWith('//')) return 'https:$clean';
-    if (clean.startsWith('/')) return clean;
-    return '/$clean';
+    if (clean.startsWith('http://') || clean.startsWith('https://')) {
+      final uri = Uri.tryParse(clean);
+      if (uri != null) {
+        clean = uri.path;
+      }
+    }
+    if (clean.startsWith('//')) clean = clean.substring(1);
+    if (!clean.startsWith('/')) clean = '/$clean';
+
+    // SoftStore conversation thread view is /messages/{id}
+    clean = clean.replaceAll(RegExp(r'^/inbox/'), '/messages/');
+    clean = clean.replaceAll(RegExp(r'^/store/messages/'), '/messages/');
+    return clean;
   }
 
   static DateTime _parseRelativeTime(String? text) {

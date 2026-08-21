@@ -26,6 +26,7 @@ class MessagesScreen extends StatelessWidget {
         final authState = context.read<AuthCubit>().state;
         final cubit = MessagesListCubit();
         cubit.loadConversations(
+          forceRefresh: true,
           isAuthenticated: authState is AuthAuthenticated,
         );
         return cubit;
