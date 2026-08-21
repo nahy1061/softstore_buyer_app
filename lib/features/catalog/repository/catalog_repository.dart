@@ -653,30 +653,65 @@ class CatalogRepository {
       final html = response.data ?? '';
       var profile = _parseSellerProfile(html, slug);
 
-      // If store profile has only 0 or 1 product parsed from static HTML, query the catalog search for this seller's products
+      // If store profile has only 0 or 1 product parsed from HTML, search for products with this seller
       if (profile.products.isEmpty || profile.products.length <= 1) {
-        final storeQuery = sellerName?.isNotEmpty == true ? sellerName! : (profile.name.isNotEmpty && profile.name != slug ? profile.name : slug);
+        final storeQuery = sellerName?.isNotEmpty == true
+            ? sellerName!
+            : (profile.name.isNotEmpty && profile.name != slug ? profile.name : slug);
+
         try {
-          final searchRes = await searchProducts(query: storeQuery);
-          if (searchRes.products.isNotEmpty) {
-            final combined = <Product>[...profile.products];
-            for (final p in searchRes.products) {
-              if (!combined.any((item) => item.slug == p.slug || item.id == p.id)) {
-                combined.add(p);
+          final suggestData = await searchSuggest(storeQuery);
+          final suggestProducts = suggestData['products'];
+          if (suggestProducts is List && suggestProducts.isNotEmpty) {
+            final filtered = <Product>[...profile.products];
+            for (final item in suggestProducts) {
+              if (item is Map<String, dynamic>) {
+                final sName = item['seller_name']?.toString().toLowerCase() ?? '';
+                final sSlug = item['seller_slug']?.toString().toLowerCase() ?? '';
+                final targetName = (sellerName ?? profile.name).toLowerCase();
+                final targetSlug = slug.toLowerCase();
+
+                // Strictly ensure product belongs to this store/seller
+                if (sSlug == targetSlug ||
+                    sName == targetName ||
+                    sSlug.contains(targetSlug) ||
+                    (targetName.isNotEmpty && sName.contains(targetName))) {
+                  final pSlug = item['slug']?.toString() ?? '';
+                  final pName = item['product_name']?.toString() ?? '';
+                  final pPrice = double.tryParse(item['selling_price']?.toString() ?? '') ?? 0;
+                  final pImg = item['image_url']?.toString();
+                  final pId = int.tryParse(item['id']?.toString() ?? '') ?? pSlug.hashCode.abs();
+
+                  if (!filtered.any((existing) => existing.slug == pSlug || existing.id == pId)) {
+                    filtered.add(Product(
+                      id: pId,
+                      name: pName,
+                      slug: pSlug,
+                      displayPrice: pPrice,
+                      imageUrl: pImg != null && pImg.isNotEmpty
+                          ? HtmlParserUtil.toAbsoluteUrl(pImg)
+                          : null,
+                      seller: SellerStub(name: item['seller_name']?.toString() ?? profile.name, slug: sSlug.isNotEmpty ? sSlug : slug),
+                    ));
+                  }
+                }
               }
             }
-            profile = SellerProfile(
-              id: profile.id,
-              name: profile.name,
-              slug: profile.slug,
-              description: profile.description,
-              logoUrl: profile.logoUrl,
-              bannerUrl: profile.bannerUrl,
-              rating: profile.rating,
-              ratingCount: profile.ratingCount,
-              products: combined,
-              categories: profile.categories,
-            );
+
+            if (filtered.isNotEmpty) {
+              profile = SellerProfile(
+                id: profile.id,
+                name: profile.name,
+                slug: profile.slug,
+                description: profile.description,
+                logoUrl: profile.logoUrl,
+                bannerUrl: profile.bannerUrl,
+                rating: profile.rating,
+                ratingCount: profile.ratingCount,
+                products: filtered,
+                categories: profile.categories,
+              );
+            }
           }
         } catch (_) {}
       }
