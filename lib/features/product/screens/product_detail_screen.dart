@@ -1660,6 +1660,30 @@ class _BottomBar extends StatelessWidget {
     }
   }
 
+  Future<void> _handleChat(BuildContext context) async {
+    final authState = context.read<AuthCubit>().state;
+    if (authState is! AuthAuthenticated) {
+      final loggedIn = await LoginScreen.showAsModal(context);
+      if (loggedIn != true &&
+          context.mounted &&
+          context.read<AuthCubit>().state is! AuthAuthenticated) {
+        return;
+      }
+    }
+    if (!context.mounted) return;
+
+    context.push(
+      AppRoutes.sellerChat,
+      extra: {
+        'productId': id ?? slug.hashCode.abs(),
+        'productName': name,
+        'productImage': imageUrl,
+        'productPrice': price.toDouble(),
+        'sellerName': sellerName ?? 'Store Seller',
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -1696,7 +1720,7 @@ class _BottomBar extends StatelessWidget {
           _IconAction(
             icon: Icons.chat_bubble_outline,
             label: 'Chat',
-            onTap: () => context.push(AppRoutes.messages),
+            onTap: () => _handleChat(context),
           ),
           const SizedBox(width: 8),
           // Buy Now
