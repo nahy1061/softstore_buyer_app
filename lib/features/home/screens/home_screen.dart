@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/router.dart';
 import '../../../core/errors/failures.dart';
+import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_bottom_nav_bar.dart';
 import '../../cart/cubit/cart_cubit.dart';
 import '../../cart/cubit/cart_state.dart';
@@ -1082,7 +1083,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Rs ${product.displayPrice.toStringAsFixed(0)}',
+                            Formatters.pKRCurrency(product.displayPrice),
                             style: const TextStyle(
                               color: Color(0xFFFFC107),
                               fontWeight: FontWeight.w900,
@@ -1274,21 +1275,24 @@ class _HomeScreenState extends State<HomeScreen> {
             // Image Container
             SizedBox(
               height: 136,
+              width: double.infinity,
               child: ClipRRect(
                 borderRadius: const BorderRadius.vertical(
                   top: Radius.circular(15),
                 ),
                 child: Container(
-                  color: Colors.white,
-                  padding: const EdgeInsets.all(6),
+                  color: const Color(0xFFF9FAFB),
                   child: product.imageUrl != null && product.imageUrl!.isNotEmpty
                       ? Image.network(
                           product.imageUrl!,
-                          fit: BoxFit.contain,
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          height: double.infinity,
                           errorBuilder: (_, __, ___) => const Center(
                             child: Icon(
                               Icons.image_not_supported_outlined,
                               color: Colors.grey,
+                              size: 32,
                             ),
                           ),
                         )
@@ -1296,6 +1300,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           child: Icon(
                             Icons.image_outlined,
                             color: Colors.grey,
+                            size: 32,
                           ),
                         ),
                 ),
@@ -1303,7 +1308,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             // Title & Price
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
@@ -1319,9 +1324,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 6),
                   Text(
-                    'Rs ${product.displayPrice.toStringAsFixed(0)}',
+                    Formatters.pKRCurrency(product.displayPrice),
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
