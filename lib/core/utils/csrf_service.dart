@@ -6,7 +6,6 @@ import '../network/dio_client.dart';
 import 'html_parser_util.dart';
 
 /// Service for fetching and caching CSRF tokens from SoftStore pages.
-///
 /// SoftStore requires a `_csrf_token` (and sometimes also `csrf_token`) field
 /// in the body of every mutating (POST/PUT/DELETE) form request.
 ///

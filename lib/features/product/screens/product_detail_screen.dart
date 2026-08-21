@@ -12,8 +12,10 @@ import '../../cart/cubit/cart_cubit.dart';
 import '../../cart/cubit/cart_state.dart';
 import '../../cart/models/cart_models.dart';
 import '../../cart/screens/cart_screen.dart';
+import '../../catalog/models/catalog_models.dart';
+import '../../catalog/repository/recently_viewed_repository.dart';
 
-class ProductDetailScreen extends StatelessWidget {
+class ProductDetailScreen extends StatefulWidget {
   final int? id;
   final String slug;
   final String name;
@@ -33,9 +35,32 @@ class ProductDetailScreen extends StatelessWidget {
     this.colors = const [],
   });
 
+  @override
+  State<ProductDetailScreen> createState() => _ProductDetailScreenState();
+}
+
+class _ProductDetailScreenState extends State<ProductDetailScreen> {
+  @override
+  void initState() {
+    super.initState();
+    _recordView();
+  }
+
+  void _recordView() {
+    RecentlyViewedRepository.instance.recordProductView(
+      Product(
+        id: widget.id ?? 0,
+        name: widget.name,
+        slug: widget.slug,
+        imageUrl: widget.imageUrl,
+        displayPrice: widget.price.toDouble(),
+      ),
+    );
+  }
+
   IconData get _icon =>
       // ignore: non_const_argument_for_const_parameter
-      IconData(iconCodePoint, fontFamily: 'MaterialIcons');
+      IconData(widget.iconCodePoint, fontFamily: 'MaterialIcons');
 
   @override
   Widget build(BuildContext context) {
@@ -131,32 +156,31 @@ class ProductDetailScreen extends StatelessWidget {
               child: TabBarView(
                 children: [
                   _OverviewTab(
-                    name: name,
-                    price: price,
-                    imageUrl: imageUrl,
+                    name: widget.name,
+                    price: widget.price,
+                    imageUrl: widget.imageUrl,
                     icon: _icon,
                   ),
                   const _RatingsTab(),
-                  _ProductDetailsTab(name: name),
-                  _RecommendedTab(currentSlug: slug),
+                  _ProductDetailsTab(name: widget.name),
+                  _RecommendedTab(currentSlug: widget.slug),
                 ],
               ),
             ),
           ],
         ),
         bottomNavigationBar: _BottomBar(
-          id: id,
-          name: name,
-          price: price,
-          imageUrl: imageUrl,
-          iconCodePoint: iconCodePoint,
-          slug: slug,
-          colors: colors,
+          id: widget.id,
+          name: widget.name,
+          price: widget.price,
+          imageUrl: widget.imageUrl,
+          iconCodePoint: widget.iconCodePoint,
+          slug: widget.slug,
+          colors: widget.colors,
         ),
       ),
     );
   }
-
 }
 
 // ── Overview tab ────────────────────────────────────────────────────────────
@@ -189,7 +213,7 @@ class _OverviewTab extends StatelessWidget {
                 ? Image.network(
                     imageUrl!,
                     fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => Center(
+                    errorBuilder: (context, error, stackTrace) => Center(
                       child: Icon(icon, size: 100, color: AppColors.primary),
                     ),
                   )

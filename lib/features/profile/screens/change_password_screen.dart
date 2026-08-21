@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import '../../../app/router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -50,16 +51,29 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.pop(),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(AppRoutes.profile);
+            }
+          },
         ),
       ),
       body: BlocListener<ProfileCubit, ProfileState>(
         listener: (context, state) {
           if (state is PasswordChangeSuccess) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(state.message)),
+              SnackBar(
+                content: Text(state.message),
+                backgroundColor: AppColors.success,
+              ),
             );
-            context.pop();
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(AppRoutes.profile);
+            }
           } else if (state is ProfileError) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(

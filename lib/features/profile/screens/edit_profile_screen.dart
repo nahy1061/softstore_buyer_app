@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import '../../../app/router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/utils/validators.dart';
+import '../../auth/cubit/auth_cubit.dart';
+import '../../auth/cubit/auth_state.dart';
 import '../cubit/profile_cubit.dart';
 import '../cubit/profile_state.dart';
 
@@ -39,6 +42,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         _firstNameController.text = state.user.firstName;
         _lastNameController.text = state.user.lastName;
         _phoneController.text = state.user.phone;
+      } else {
+        final authState = context.read<AuthCubit>().state;
+        if (authState is AuthAuthenticated) {
+          _firstNameController.text = authState.user.firstName;
+          _lastNameController.text = authState.user.lastName;
+          _phoneController.text = authState.user.phone ?? '';
+        }
+        context.read<ProfileCubit>().loadProfile();
       }
       _isInitialized = true;
     }
@@ -58,6 +69,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           firstName: _firstNameController.text.trim(),
           lastName: _lastNameController.text.trim(),
           phone: _phoneController.text.trim(),
+          authCubit: context.read<AuthCubit>(),
         );
   }
 
@@ -71,16 +83,29 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.pop(),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(AppRoutes.profile);
+            }
+          },
         ),
       ),
       body: BlocListener<ProfileCubit, ProfileState>(
         listener: (context, state) {
           if (state is ProfileUpdateSuccess) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(state.message)),
+              SnackBar(
+                content: Text(state.message),
+                backgroundColor: AppColors.success,
+              ),
             );
-            context.pop();
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(AppRoutes.profile);
+            }
           } else if (state is ProfileError) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(

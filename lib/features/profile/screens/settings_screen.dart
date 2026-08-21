@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../../app/router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -33,6 +34,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: SingleChildScrollView(
         child: Column(
           children: [
+            _SettingsSection(
+              title: 'Account & Security',
+              children: [
+                _ActionTile(
+                  icon: Icons.person_outline,
+                  label: 'Edit Profile',
+                  subtitle: 'Change name, phone and profile info',
+                  onTap: () => context.push(AppRoutes.editProfile),
+                ),
+                _ActionTile(
+                  icon: Icons.lock_outline,
+                  label: 'Change Password',
+                  subtitle: 'Update your account security password',
+                  onTap: () => context.push(AppRoutes.changePassword),
+                ),
+                _ActionTile(
+                  icon: Icons.location_on_outlined,
+                  label: 'Saved Addresses',
+                  subtitle: 'Manage your delivery locations',
+                  onTap: () => context.push(AppRoutes.addresses),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.md),
             _SettingsSection(
               title: 'Notifications',
               children: [
@@ -217,10 +242,15 @@ class _InfoTile extends StatelessWidget {
 class _ActionTile extends StatelessWidget {
   final IconData icon;
   final String label;
+  final String? subtitle;
   final VoidCallback onTap;
 
-  const _ActionTile(
-      {required this.icon, required this.label, required this.onTap});
+  const _ActionTile({
+    required this.icon,
+    required this.label,
+    this.subtitle,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -235,16 +265,32 @@ class _ActionTile extends StatelessWidget {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha:0.08),
+                color: AppColors.primary.withValues(alpha: 0.08),
                 borderRadius: AppDimensions.radiusSm,
               ),
               child: Icon(icon, color: AppColors.primary, size: 20),
             ),
             const SizedBox(width: AppSpacing.md),
             Expanded(
-                child: Text(label,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
                     style: AppTypography.bodyMedium
-                        .copyWith(fontWeight: FontWeight.w500))),
+                        .copyWith(fontWeight: FontWeight.w500),
+                  ),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle!,
+                      style: AppTypography.bodySmall
+                          .copyWith(color: AppColors.textSecondary),
+                    ),
+                  ],
+                ],
+              ),
+            ),
             const Icon(Icons.chevron_right,
                 color: AppColors.textSecondary, size: 20),
           ],

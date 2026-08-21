@@ -33,6 +33,7 @@ import '../features/orders/screens/orders_screen.dart';
 
 import '../features/product/screens/product_detail_screen.dart';
 
+import '../features/profile/models/address_model.dart';
 import '../features/profile/screens/address_form_screen.dart';
 import '../features/profile/screens/addresses_screen.dart';
 import '../features/profile/screens/change_password_screen.dart';
@@ -323,7 +324,12 @@ final GoRouter goRouter = GoRouter(
           path: 'edit/:id',
           builder: (context, state) {
             final id = state.pathParameters['id'] ?? '';
-            return AddressFormScreen(isEditing: true, addressId: id);
+            final address = state.extra as Address?;
+            return AddressFormScreen(
+              isEditing: true,
+              addressId: id,
+              initialAddress: address,
+            );
           },
         ),
       ],

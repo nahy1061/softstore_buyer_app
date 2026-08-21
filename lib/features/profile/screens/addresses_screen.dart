@@ -30,22 +30,30 @@ class _AddressesScreenState extends State<AddressesScreen> {
   void _delete(Address address) {
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Delete Address'),
-        content: const Text('Are you sure you want to delete this address?'),
+      builder: (dialogCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Delete Address', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: Text('Are you sure you want to delete "${address.label.isNotEmpty ? address.label : address.name}"?'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel')),
-          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
             onPressed: () {
-              Navigator.pop(context);
+              Navigator.pop(dialogCtx);
               if (address.id != null) {
                 context.read<AddressCubit>().deleteAddress(address.id!);
+              } else {
+                context.read<AddressCubit>().deleteAddressByItem(address);
               }
             },
-            child: const Text('Delete',
-                style: TextStyle(color: AppColors.error)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+              elevation: 0,
+            ),
+            child: const Text('Delete'),
           ),
         ],
       ),
@@ -62,18 +70,37 @@ class _AddressesScreenState extends State<AddressesScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.pop(),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(AppRoutes.profile);
+            }
+          },
         ),
       ),
       body: BlocConsumer<AddressCubit, AddressState>(
         listener: (context, state) {
           if (state is AddressAddSuccess) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(state.message)),
+              SnackBar(
+                content: Text(state.message),
+                backgroundColor: AppColors.success,
+              ),
+            );
+          } else if (state is AddressUpdateSuccess) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(state.message),
+                backgroundColor: AppColors.success,
+              ),
             );
           } else if (state is AddressDeleteSuccess) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(state.message)),
+              SnackBar(
+                content: Text(state.message),
+                backgroundColor: AppColors.success,
+              ),
             );
           } else if (state is AddressError) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -95,14 +122,18 @@ class _AddressesScreenState extends State<AddressesScreen> {
                   ? state.addresses
                   : state is AddressAddSuccess
                       ? state.addresses
-                      : state is AddressDeleting
+                      : state is AddressUpdating
                           ? state.addresses
-                          : state is AddressDeleteSuccess
+                          : state is AddressUpdateSuccess
                               ? state.addresses
-                              : <Address>[];
+                              : state is AddressDeleting
+                                  ? state.addresses
+                                  : state is AddressDeleteSuccess
+                                      ? state.addresses
+                                      : <Address>[];
 
           if (addresses.isEmpty) {
-            return _EmptyAddresses(onAdd: () => context.go(AppRoutes.addressAdd));
+            return _EmptyAddresses(onAdd: () => context.push(AppRoutes.addressAdd));
           }
 
           return ListView.separated(
@@ -120,7 +151,7 @@ class _AddressesScreenState extends State<AddressesScreen> {
                   }
                 },
                 onEdit: () =>
-                    context.go('/addresses/edit/${address.id}'),
+                    context.push('/addresses/edit/${address.id}', extra: address),
                 onDelete: () => _delete(address),
               );
             },
@@ -135,16 +166,20 @@ class _AddressesScreenState extends State<AddressesScreen> {
                   ? state.addresses
                   : state is AddressAddSuccess
                       ? state.addresses
-                      : state is AddressDeleting
+                      : state is AddressUpdating
                           ? state.addresses
-                          : state is AddressDeleteSuccess
+                          : state is AddressUpdateSuccess
                               ? state.addresses
-                              : <Address>[];
+                              : state is AddressDeleting
+                                  ? state.addresses
+                                  : state is AddressDeleteSuccess
+                                      ? state.addresses
+                                      : <Address>[];
 
           if (addresses.isEmpty) return const SizedBox.shrink();
 
           return FloatingActionButton.extended(
-            onPressed: () => context.go(AppRoutes.addressAdd),
+            onPressed: () => context.push(AppRoutes.addressAdd),
             backgroundColor: AppColors.primary,
             icon: const Icon(Icons.add, color: Colors.white),
             label: const Text('Add Address',
@@ -217,6 +252,8 @@ class _AddressCard extends StatelessWidget {
               ],
               const Spacer(),
               PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert, color: AppColors.textSecondary),
+                tooltip: 'Address options',
                 onSelected: (value) {
                   if (value == 'edit') onEdit();
                   if (value == 'delete') onDelete();
@@ -225,17 +262,36 @@ class _AddressCard extends StatelessWidget {
                 itemBuilder: (_) => [
                   if (!address.isDefault)
                     const PopupMenuItem(
-                        value: 'default',
-                        child: Text('Set as Default')),
-                  const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                      value: 'default',
+                      child: Row(
+                        children: [
+                          Icon(Icons.check_circle_outline, size: 18, color: AppColors.primary),
+                          SizedBox(width: 8),
+                          Text('Set as Default'),
+                        ],
+                      ),
+                    ),
+                  const PopupMenuItem(
+                    value: 'edit',
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit_outlined, size: 18, color: AppColors.textPrimary),
+                        SizedBox(width: 8),
+                        Text('Edit'),
+                      ],
+                    ),
+                  ),
                   const PopupMenuItem(
                     value: 'delete',
-                    child: Text('Delete',
-                        style: TextStyle(color: AppColors.error)),
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete_outline, size: 18, color: AppColors.error),
+                        SizedBox(width: 8),
+                        Text('Delete', style: TextStyle(color: AppColors.error)),
+                      ],
+                    ),
                   ),
                 ],
-                child: const Icon(Icons.more_vert,
-                    color: AppColors.textSecondary),
               ),
             ],
           ),

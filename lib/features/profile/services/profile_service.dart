@@ -1,143 +1,209 @@
+import 'dart:developer' as developer;
+
 import 'package:dio/dio.dart';
-import '../../../core/network/dio_client.dart';
+
+import '../../../core/config/env_config.dart';
 import '../../../core/constants/api_endpoints.dart';
-import '../models/user_model.dart';
+import '../../../core/network/dio_client.dart';
+import '../../../core/utils/csrf_service.dart';
+import '../../../core/utils/html_parser_util.dart';
 import '../models/dashboard_stats_model.dart';
+import '../models/user_model.dart';
 
 class ProfileService {
   final DioClient _dio = DioClient();
-
-  /// Get CSRF token from a page (API Mapping critical note)
-  Future<String> _getCsrfToken(String pagePath) async {
-    try {
-      final response = await _dio.get(pagePath);
-      if (response.data is String) {
-        return extractCsrfToken(response.data as String);
-      }
-      return '';
-    } catch (_) {
-      return '';
-    }
-  }
+  final CsrfService _csrf = CsrfService.instance;
 
   /// Get current user profile (API Mapping #22)
-  /// GET /store/account/profile
+  /// GET /marketplace/account/profile
   Future<User> getProfile() async {
     try {
-      final response = await _dio.get(ApiEndpoints.getProfile);
-      if (response.data is String) {
-        return User.fromHtml(response.data as String);
-      }
-      return User.fromJson(response.data as Map<String, dynamic>);
-    } on DioException {
+      final response = await _dio.get<String>(
+        ApiEndpoints.profilePage,
+        options: Options(
+          responseType: ResponseType.plain,
+          validateStatus: (status) => status != null && status < 500,
+          headers: {
+            'User-Agent': 'SoftStoreBuyer/1.0 iOS',
+            'Accept': 'text/html,application/xhtml+xml,*/*;q=0.9',
+          },
+        ),
+      );
+      final html = response.data ?? '';
+      return User.fromHtml(html);
+    } on DioException catch (e) {
+      developer.log('[ProfileService] getProfile DioException: ${e.message}', name: 'profile');
+      rethrow;
+    } catch (e) {
+      developer.log('[ProfileService] getProfile error: $e', name: 'profile');
       rethrow;
     }
   }
 
   /// Update user profile (API Mapping #23)
-  /// POST /store/account/profile
+  /// POST /marketplace/account/profile
   Future<void> updateProfile({
     required String firstName,
     required String lastName,
     required String phone,
   }) async {
     try {
-      // Step 1: GET the profile page to extract CSRF token
-      final csrfToken = await _getCsrfToken(ApiEndpoints.getProfile);
+      final csrfToken = await _csrf.fetchToken(ApiEndpoints.profilePage) ?? '';
 
-      // Step 2: POST with CSRF token
-      await _dio.post(
-        ApiEndpoints.updateProfile,
-        data: {
-          if (csrfToken.isNotEmpty) ...{
-            '_csrf_token': csrfToken,
-            'csrf_token': csrfToken,
-          },
-          'first_name': firstName,
-          'last_name': lastName,
-          'phone': phone,
+      final formData = <String, String>{
+        if (csrfToken.isNotEmpty) ...{
+          '_csrf_token': csrfToken,
+          'csrf_token': csrfToken,
+          '_token': csrfToken,
         },
+        'first_name': firstName.trim(),
+        'last_name': lastName.trim(),
+        'name': '$firstName $lastName'.trim(),
+        'full_name': '$firstName $lastName'.trim(),
+        'phone': phone.trim(),
+        'phone_number': phone.trim(),
+        'action': 'update_profile',
+      };
+
+      final formBody = Uri(queryParameters: formData).query;
+
+      final response = await _dio.post<dynamic>(
+        ApiEndpoints.updateProfile,
+        data: formBody,
         options: Options(
           contentType: 'application/x-www-form-urlencoded',
+          responseType: ResponseType.plain,
           followRedirects: false,
           validateStatus: (status) => status != null && status < 500,
+          headers: {
+            'User-Agent': 'SoftStoreBuyer/1.0 iOS',
+            'Referer': '${EnvConfig.baseUrl}/marketplace/account/profile',
+            'Origin': EnvConfig.baseUrl,
+            if (csrfToken.isNotEmpty) 'X-CSRF-TOKEN': csrfToken,
+            'Accept': 'text/html,application/xhtml+xml,*/*;q=0.9',
+          },
         ),
       );
-    } on DioException {
-      rethrow;
+
+      final status = response.statusCode ?? 0;
+      final rawData = response.data;
+
+      // 302 redirect is standard success in SoftStore PHP backend
+      if (status == 302) {
+        final location = response.headers.value('location') ?? '';
+        if (location.contains('/login')) {
+          throw Exception('Session expired. Please log in again.');
+        }
+        return;
+      }
+
+      if (rawData is String && rawData.isNotEmpty) {
+        final error = HtmlParserUtil.extractFormError(rawData);
+        if (error != null) {
+          throw Exception(error);
+        }
+      }
+    } on DioException catch (e) {
+      if (e.type == DioExceptionType.connectionError ||
+          e.type == DioExceptionType.connectionTimeout) {
+        throw Exception('No internet connection. Please try again.');
+      }
+      throw Exception(e.message ?? 'Failed to update profile.');
     }
   }
 
   /// Change password (API Mapping #24)
-  /// POST /store/account/password
+  /// POST /marketplace/account/profile
   Future<void> changePassword({
     required String currentPassword,
     required String newPassword,
   }) async {
     try {
-      // Step 1: GET a page to extract CSRF token
-      final csrfToken = await _getCsrfToken(ApiEndpoints.getProfile);
+      final csrfToken = await _csrf.fetchToken(ApiEndpoints.profilePage) ?? '';
 
-      // Step 2: POST with CSRF token
-      await _dio.post(
-        ApiEndpoints.changePassword,
-        data: {
-          if (csrfToken.isNotEmpty) ...{
-            '_csrf_token': csrfToken,
-            'csrf_token': csrfToken,
-          },
-          'current_password': currentPassword,
-          'new_password': newPassword,
+      final formData = <String, String>{
+        if (csrfToken.isNotEmpty) ...{
+          '_csrf_token': csrfToken,
+          'csrf_token': csrfToken,
+          '_token': csrfToken,
         },
+        'current_password': currentPassword,
+        'old_password': currentPassword,
+        'new_password': newPassword,
+        'password': newPassword,
+        'new_password_confirmation': newPassword,
+        'password_confirmation': newPassword,
+        'confirm_password': newPassword,
+        'action': 'change_password',
+      };
+
+      final formBody = Uri(queryParameters: formData).query;
+
+      final response = await _dio.post<dynamic>(
+        ApiEndpoints.changePassword,
+        data: formBody,
         options: Options(
           contentType: 'application/x-www-form-urlencoded',
+          responseType: ResponseType.plain,
           followRedirects: false,
           validateStatus: (status) => status != null && status < 500,
+          headers: {
+            'User-Agent': 'SoftStoreBuyer/1.0 iOS',
+            'Referer': '${EnvConfig.baseUrl}/marketplace/account/profile',
+            'Origin': EnvConfig.baseUrl,
+            if (csrfToken.isNotEmpty) 'X-CSRF-TOKEN': csrfToken,
+            'Accept': 'text/html,application/xhtml+xml,*/*;q=0.9',
+          },
         ),
       );
-    } on DioException {
-      rethrow;
+
+      final status = response.statusCode ?? 0;
+      final rawData = response.data;
+
+      if (status == 302) {
+        final location = response.headers.value('location') ?? '';
+        if (location.contains('/login')) {
+          throw Exception('Session expired. Please log in again.');
+        }
+        return;
+      }
+
+      if (rawData is String && rawData.isNotEmpty) {
+        final error = HtmlParserUtil.extractFormError(rawData);
+        if (error != null) {
+          throw Exception(error);
+        }
+      }
+    } on DioException catch (e) {
+      if (e.type == DioExceptionType.connectionError ||
+          e.type == DioExceptionType.connectionTimeout) {
+        throw Exception('No internet connection. Please try again.');
+      }
+      throw Exception(e.message ?? 'Failed to change password.');
     }
   }
 
   /// Get dashboard stats (API Mapping #25)
-  /// GET /store/account/dashboard
+  /// GET /marketplace/account
   Future<DashboardStats> getDashboard() async {
     try {
-      final response = await _dio.get(ApiEndpoints.getDashboard);
-      if (response.data is String) {
+      final response = await _dio.get<String>(
+        ApiEndpoints.getDashboard,
+        options: Options(
+          responseType: ResponseType.plain,
+          validateStatus: (s) => s != null && s < 500,
+          headers: {
+            'User-Agent': 'SoftStoreBuyer/1.0 iOS',
+            'Accept': 'text/html,application/xhtml+xml,*/*;q=0.9',
+          },
+        ),
+      );
+      if (response.data is String && (response.data as String).isNotEmpty) {
         return DashboardStats.fromHtml(response.data as String);
       }
-      return DashboardStats.fromJson(response.data as Map<String, dynamic>);
-    } on DioException {
-      rethrow;
+      return const DashboardStats();
+    } catch (_) {
+      return const DashboardStats();
     }
-  }
-
-  /// Extract CSRF token from HTML page
-  /// Checks 3 patterns: name-before-value, value-before-name, JS variable
-  String extractCsrfToken(String html) {
-    // Pattern 1: <input name="_csrf_token" value="TOKEN">
-    final p1 = RegExp(
-      '<input[^>]*name=["\']_csrf_token["\'][^>]*value=["\']([^"\']*)["\']',
-      caseSensitive: false,
-    );
-    final m1 = p1.firstMatch(html);
-    if (m1 != null) return m1.group(1) ?? '';
-
-    // Pattern 2: <input value="TOKEN" name="_csrf_token">
-    final p2 = RegExp(
-      '<input[^>]*value=["\']([^"\']*)["\'][^>]*name=["\']_csrf_token["\']',
-      caseSensitive: false,
-    );
-    final m2 = p2.firstMatch(html);
-    if (m2 != null) return m2.group(1) ?? '';
-
-    // Pattern 3: var csrfToken = 'TOKEN'
-    final p3 = RegExp("var\\s+csrfToken\\s*=\\s*'([^']*)'");
-    final m3 = p3.firstMatch(html);
-    if (m3 != null) return m3.group(1) ?? '';
-
-    return '';
   }
 }

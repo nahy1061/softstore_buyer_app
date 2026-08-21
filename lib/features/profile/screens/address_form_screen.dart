@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import '../../../app/router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -12,11 +13,13 @@ import '../models/address_model.dart';
 class AddressFormScreen extends StatefulWidget {
   final bool isEditing;
   final String? addressId;
+  final Address? initialAddress;
 
   const AddressFormScreen({
     super.key,
     required this.isEditing,
     this.addressId,
+    this.initialAddress,
   });
 
   @override
@@ -41,27 +44,29 @@ class _AddressFormScreenState extends State<AddressFormScreen> {
   }
 
   void _loadAddress() {
-    final state = context.read<AddressCubit>().state;
-    List<Address> addresses = [];
-    if (state is AddressLoaded) {
-      addresses = state.addresses;
-    } else if (state is AddressAddSuccess) {
-      addresses = state.addresses;
-    } else if (state is AddressDeleteSuccess) {
-      addresses = state.addresses;
+    Address? address = widget.initialAddress;
+
+    if (address == null && widget.addressId != null) {
+      final state = context.read<AddressCubit>().state;
+      List<Address> addresses = [];
+      if (state is AddressLoaded) {
+        addresses = state.addresses;
+      } else if (state is AddressAddSuccess) {
+        addresses = state.addresses;
+      } else if (state is AddressUpdateSuccess) {
+        addresses = state.addresses;
+      } else if (state is AddressDeleteSuccess) {
+        addresses = state.addresses;
+      }
+
+      final id = int.tryParse(widget.addressId!);
+      address = addresses.cast<Address?>().firstWhere(
+        (a) => a?.id == id,
+        orElse: () => null,
+      );
     }
 
-    if (widget.addressId != null) {
-      final id = int.tryParse(widget.addressId!);
-      final address = addresses.firstWhere(
-        (a) => a.id == id,
-        orElse: () => const Address(
-          label: '',
-          name: '',
-          phone: '',
-          address: '',
-        ),
-      );
+    if (address != null) {
       _labelController.text = address.label;
       _nameController.text = address.name;
       _phoneController.text = address.phone;
@@ -84,10 +89,12 @@ class _AddressFormScreenState extends State<AddressFormScreen> {
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
 
+    final targetId = widget.isEditing && widget.addressId != null
+        ? int.tryParse(widget.addressId!) ?? widget.initialAddress?.id
+        : widget.initialAddress?.id;
+
     final address = Address(
-      id: widget.isEditing && widget.addressId != null
-          ? int.tryParse(widget.addressId!)
-          : null,
+      id: targetId,
       label: _labelController.text.trim(),
       name: _nameController.text.trim(),
       phone: _phoneController.text.trim(),
@@ -96,7 +103,11 @@ class _AddressFormScreenState extends State<AddressFormScreen> {
       isDefault: _isDefault,
     );
 
-    await context.read<AddressCubit>().addAddress(address);
+    if (widget.isEditing) {
+      await context.read<AddressCubit>().updateAddress(address);
+    } else {
+      await context.read<AddressCubit>().addAddress(address);
+    }
   }
 
   @override
@@ -112,16 +123,41 @@ class _AddressFormScreenState extends State<AddressFormScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.pop(),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(AppRoutes.addresses);
+            }
+          },
         ),
       ),
       body: BlocListener<AddressCubit, AddressState>(
         listener: (context, state) {
           if (state is AddressAddSuccess) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(state.message)),
+              SnackBar(
+                content: Text(state.message),
+                backgroundColor: AppColors.success,
+              ),
             );
-            context.pop();
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(AppRoutes.addresses);
+            }
+          } else if (state is AddressUpdateSuccess) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(state.message),
+                backgroundColor: AppColors.success,
+              ),
+            );
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(AppRoutes.addresses);
+            }
           } else if (state is AddressError) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -216,7 +252,7 @@ class _AddressFormScreenState extends State<AddressFormScreen> {
                 const SizedBox(height: AppSpacing.xl),
                 BlocBuilder<AddressCubit, AddressState>(
                   builder: (context, state) {
-                    final isSaving = state is AddressAdding;
+                    final isSaving = state is AddressAdding || state is AddressUpdating;
                     return ElevatedButton(
                       onPressed: isSaving ? null : _save,
                       child: isSaving

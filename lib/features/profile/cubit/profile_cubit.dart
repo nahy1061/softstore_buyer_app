@@ -1,6 +1,7 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../models/user_model.dart';
+import '../../auth/cubit/auth_cubit.dart';
 import '../models/dashboard_stats_model.dart';
+import '../models/user_model.dart';
 import '../services/profile_service.dart';
 import 'profile_state.dart';
 
@@ -33,17 +34,34 @@ class ProfileCubit extends Cubit<ProfileState> {
 
   /// Load profile and dashboard stats (API Mapping #22 + #25)
   Future<void> loadProfile() async {
+    final previousUser = _currentUser;
+    final previousStats = _currentStats;
     emit(const ProfileLoading());
     try {
       final results = await Future.wait([
         _profileService.getProfile(),
         _profileService.getDashboard(),
       ]);
-      final user = results[0] as User;
+      var user = results[0] as User;
       final stats = results[1] as DashboardStats;
+
+      // If user from HTML has empty name but we had a valid local name, merge
+      if (user.firstName.isEmpty && previousUser.firstName.isNotEmpty) {
+        user = user.copyWith(
+          firstName: previousUser.firstName,
+          lastName: previousUser.lastName,
+          phone: user.phone.isNotEmpty ? user.phone : previousUser.phone,
+          email: user.email.isNotEmpty ? user.email : previousUser.email,
+        );
+      }
+
       emit(ProfileLoaded(user: user, stats: stats));
     } catch (e) {
-      emit(ProfileError(message: e.toString()));
+      final cleanMsg = e.toString().replaceFirst('Exception: ', '');
+      emit(ProfileError(message: cleanMsg));
+      if (previousUser.firstName.isNotEmpty || previousUser.email.isNotEmpty) {
+        emit(ProfileLoaded(user: previousUser, stats: previousStats));
+      }
     }
   }
 
@@ -52,6 +70,7 @@ class ProfileCubit extends Cubit<ProfileState> {
     required String firstName,
     required String lastName,
     required String phone,
+    AuthCubit? authCubit,
   }) async {
     final currentUser = _currentUser;
     final currentStats = _currentStats;
@@ -67,6 +86,11 @@ class ProfileCubit extends Cubit<ProfileState> {
         lastName: lastName,
         phone: phone,
       );
+      authCubit?.updateUser(
+        firstName: firstName,
+        lastName: lastName,
+        phone: phone,
+      );
       emit(ProfileUpdateSuccess(
         user: updatedUser,
         stats: currentStats,
@@ -74,8 +98,36 @@ class ProfileCubit extends Cubit<ProfileState> {
       ));
       emit(ProfileLoaded(user: updatedUser, stats: currentStats));
     } catch (e) {
-      emit(ProfileError(message: e.toString()));
-      emit(ProfileLoaded(user: currentUser, stats: currentStats));
+      final errorStr = e.toString();
+      final isNetwork = errorStr.contains('internet') ||
+          errorStr.contains('Failed host lookup') ||
+          errorStr.contains('SocketException') ||
+          errorStr.contains('Connection refused') ||
+          errorStr.contains('timed out');
+
+      final updatedUser = currentUser.copyWith(
+        firstName: firstName,
+        lastName: lastName,
+        phone: phone,
+      );
+      authCubit?.updateUser(
+        firstName: firstName,
+        lastName: lastName,
+        phone: phone,
+      );
+
+      if (isNetwork) {
+        emit(ProfileUpdateSuccess(
+          user: updatedUser,
+          stats: currentStats,
+          message: 'Profile saved locally (offline mode)',
+        ));
+        emit(ProfileLoaded(user: updatedUser, stats: currentStats));
+      } else {
+        final cleanMsg = errorStr.replaceFirst('Exception: ', '');
+        emit(ProfileError(message: cleanMsg));
+        emit(ProfileLoaded(user: updatedUser, stats: currentStats));
+      }
     }
   }
 
@@ -99,7 +151,8 @@ class ProfileCubit extends Cubit<ProfileState> {
       ));
       emit(ProfileLoaded(user: currentUser, stats: currentStats));
     } catch (e) {
-      emit(ProfileError(message: e.toString()));
+      final cleanMsg = e.toString().replaceFirst('Exception: ', '');
+      emit(ProfileError(message: cleanMsg));
       emit(ProfileLoaded(user: currentUser, stats: currentStats));
     }
   }
