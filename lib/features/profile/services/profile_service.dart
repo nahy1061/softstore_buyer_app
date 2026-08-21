@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 
 import '../../../core/config/env_config.dart';
 import '../../../core/constants/api_endpoints.dart';
+import '../../../core/errors/failures.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/utils/csrf_service.dart';
 import '../../../core/utils/html_parser_util.dart';
@@ -108,6 +109,16 @@ class ProfileService {
           e.type == DioExceptionType.connectionTimeout) {
         throw Exception('No internet connection. Please try again.');
       }
+      if (e.error is AuthFailure) {
+        throw Exception((e.error as AuthFailure).message);
+      }
+      if (e.error is Failure) {
+        throw Exception((e.error as Failure).message);
+      }
+      if (e.response?.data is String && (e.response!.data as String).isNotEmpty) {
+        final error = HtmlParserUtil.extractFormError(e.response!.data as String);
+        if (error != null) throw Exception(error);
+      }
       throw Exception(e.message ?? 'Failed to update profile.');
     }
   }
@@ -117,6 +128,7 @@ class ProfileService {
   Future<void> changePassword({
     required String currentPassword,
     required String newPassword,
+    User? user,
   }) async {
     try {
       final csrfToken = await _csrf.fetchToken(ApiEndpoints.profilePage) ?? '';
@@ -129,21 +141,31 @@ class ProfileService {
         },
         'current_password': currentPassword,
         'old_password': currentPassword,
+        'existing_password': currentPassword,
+        'password_current': currentPassword,
         'new_password': newPassword,
         'password': newPassword,
         'new_password_confirmation': newPassword,
         'password_confirmation': newPassword,
         'confirm_password': newPassword,
+        'confirm_new_password': newPassword,
+        'password_confirm': newPassword,
         'action': 'change_password',
+        'update_type': 'password',
+        'type': 'password',
+        if (user != null) ...{
+          if (user.firstName.isNotEmpty) 'first_name': user.firstName,
+          if (user.lastName.isNotEmpty) 'last_name': user.lastName,
+          if (user.phone.isNotEmpty) 'phone': user.phone,
+          if (user.email.isNotEmpty) 'email': user.email,
+        },
       };
-
-      final formBody = Uri(queryParameters: formData).query;
 
       final response = await _dio.post<dynamic>(
         ApiEndpoints.changePassword,
-        data: formBody,
+        data: formData,
         options: Options(
-          contentType: 'application/x-www-form-urlencoded',
+          contentType: Headers.formUrlEncodedContentType,
           responseType: ResponseType.plain,
           followRedirects: false,
           validateStatus: (status) => status != null && status < 500,
@@ -160,6 +182,7 @@ class ProfileService {
       final status = response.statusCode ?? 0;
       final rawData = response.data;
 
+      // 302 redirect is the standard PHP success response upon updating DB
       if (status == 302) {
         final location = response.headers.value('location') ?? '';
         if (location.contains('/login')) {
@@ -169,17 +192,37 @@ class ProfileService {
       }
 
       if (rawData is String && rawData.isNotEmpty) {
+        final lower = rawData.toLowerCase();
+        if (lower.contains('password updated') ||
+            lower.contains('password changed') ||
+            lower.contains('alert-success')) {
+          return;
+        }
+
         final error = HtmlParserUtil.extractFormError(rawData);
         if (error != null) {
           throw Exception(error);
         }
+
+        // If returned 200 without positive confirmation or redirect, DB was not updated
+        throw Exception('Current password incorrect or server could not update password. Please try again.');
       }
     } on DioException catch (e) {
       if (e.type == DioExceptionType.connectionError ||
           e.type == DioExceptionType.connectionTimeout) {
         throw Exception('No internet connection. Please try again.');
       }
-      throw Exception(e.message ?? 'Failed to change password.');
+      if (e.error is AuthFailure) {
+        throw Exception((e.error as AuthFailure).message);
+      }
+      if (e.error is Failure) {
+        throw Exception((e.error as Failure).message);
+      }
+      if (e.response?.data is String && (e.response!.data as String).isNotEmpty) {
+        final error = HtmlParserUtil.extractFormError(e.response!.data as String);
+        if (error != null) throw Exception(error);
+      }
+      throw Exception(e.message ?? 'Failed to change password. Please check your credentials and try again.');
     }
   }
 
