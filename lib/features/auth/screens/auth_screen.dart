@@ -21,12 +21,13 @@ class AuthScreen extends StatefulWidget {
     BuildContext context, {
     bool isRegister = false,
   }) {
+    final cubit = context.read<AuthCubit>();
     return showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => BlocProvider.value(
-        value: context.read<AuthCubit>(),
+        value: cubit,
         child: AuthScreen(initialIsRegister: isRegister),
       ),
     );

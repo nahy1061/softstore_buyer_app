@@ -55,7 +55,7 @@ class _ProfileHubScreenState extends State<ProfileHubScreen> {
       if (mounted) {
         final localOrders = await OrderRepository.instance.getLocalOrders();
         setState(() {
-          _orders = localOrders.isNotEmpty ? localOrders : List<Order>.from(dummyOrders);
+          _orders = localOrders;
           _isLoading = false;
         });
       }

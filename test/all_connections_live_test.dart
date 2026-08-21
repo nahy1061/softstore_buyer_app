@@ -127,20 +127,20 @@ void main() {
       }
     });
 
-    test('11. Profile: getDashboardStats() connects to /store/account/dashboard', () async {
+    test('11. Profile: getDashboardStats() connects to /marketplace/account/dashboard', () async {
       final client = DioClient();
       try {
-        final response = await client.get<String>('/store/account/dashboard');
+        final response = await client.get<String>('/marketplace/account/dashboard');
         print('✓ Dashboard endpoint response status: ${response.statusCode}');
       } catch (e) {
         print('✓ Dashboard endpoint verified: $e');
       }
     });
 
-    test('12. Profile: getProfile() connects to /store/account/profile', () async {
+    test('12. Profile: getProfile() connects to /marketplace/account/profile', () async {
       final client = DioClient();
       try {
-        final response = await client.get<String>('/store/account/profile');
+        final response = await client.get<String>('/marketplace/account/profile');
         print('✓ Profile endpoint response status: ${response.statusCode}');
       } catch (e) {
         print('✓ Profile endpoint verified: $e');

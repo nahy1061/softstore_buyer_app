@@ -4,8 +4,6 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/app_dimensions.dart';
 import '../../../core/widgets/app_bottom_nav_bar.dart';
-import '../models/order_model.dart';
-import '../repository/order_repository.dart';
 
 class OrderConfirmationScreen extends StatefulWidget {
   final String referenceNumber;
@@ -80,47 +78,6 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen>
       curve: const Interval(0.4, 1.0, curve: Curves.easeOut),
     );
     _animController.forward();
-    _ensureSavedLocally();
-  }
-
-  Future<void> _ensureSavedLocally() async {
-    final inv = _invoice;
-    final now = DateTime.now();
-    final order = Order(
-      id: inv,
-      referenceNumber: inv,
-      placedAt: now,
-      status: OrderStatus.pending,
-      items: [
-        OrderItem(
-          id: 'item-1',
-          name: _productName,
-          quantity: _productQty,
-          unitPrice: _productPrice.toDouble(),
-          sku: 'SKU-$inv',
-        ),
-      ],
-      deliveryAddress: OrderAddress(
-        name: widget.customerName ?? 'Customer',
-        phone: widget.customerPhone ?? '',
-        addressLine: widget.customerAddress ?? 'Delivery Address',
-        city: widget.customerCity ?? '',
-      ),
-      subtotal: _subtotal.toDouble(),
-      deliveryFee: _delivery.toDouble(),
-      discount: 0,
-      storeName: 'SoftStore Official Partner',
-      storeCity: widget.customerCity,
-      estimatedDelivery: 'Expected in 2-3 business days',
-      statusHistory: [
-        OrderStatusEvent(
-          status: OrderStatus.pending,
-          timestamp: now,
-          note: 'Order placed successfully',
-        ),
-      ],
-    );
-    await OrderRepository.instance.saveLocalOrder(order);
   }
 
   @override

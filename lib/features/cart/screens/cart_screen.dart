@@ -6,6 +6,7 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_dimensions.dart';
 import '../../../app/router.dart';
+import '../../../core/errors/failures.dart';
 import '../cubit/cart_cubit.dart';
 import '../cubit/cart_state.dart';
 import '../models/cart_models.dart';
@@ -13,6 +14,8 @@ import '../models/cart_models.dart' as cart_models;
 import '../repository/cart_repository.dart' as cart_repo;
 import '../../orders/models/order_model.dart';
 import '../../orders/repository/order_repository.dart';
+import '../../auth/cubit/auth_cubit.dart';
+import '../../auth/cubit/auth_state.dart';
 import '../../catalog/models/catalog_models.dart';
 import '../../catalog/repository/catalog_repository.dart';
 // Shared bottom navigation bar used across all main screens
@@ -2394,17 +2397,11 @@ Future<void> _processOrderPlacement({
   required CartState cartState,
   required int shippingFee,
   required String paymentMethod,
-  String customerName = 'Muhammad Khalid',
-  String customerPhone = '03408014187',
-  String customerAddress = 'House 12, Street 4, Model Town, Lahore',
-  String customerCity = 'Lahore',
+  String customerName = '',
+  String customerPhone = '',
+  String customerAddress = '',
+  String customerCity = '',
 }) async {
-  final now = DateTime.now();
-  // Standard web invoice format: INV-YYYYMMDD-XXXXX
-  final rand5 = 10000 + (now.microsecondsSinceEpoch % 90000);
-  final invoice =
-      'INV-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}-$rand5';
-
   final orderItems = cartState.items.map((i) {
     return OrderItem(
       id: i.id,
@@ -2426,15 +2423,25 @@ Future<void> _processOrderPlacement({
     );
   }).toList();
 
+  // Read authenticated user email from AuthCubit
+  String customerEmail = 'buyer@softstore.pk';
+  try {
+    final authState = context.read<AuthCubit>().state;
+    if (authState is AuthAuthenticated && authState.user.email.isNotEmpty) {
+      customerEmail = authState.user.email.trim();
+    }
+  } catch (_) {}
+
   final orderRequest = cart_models.OrderRequest(
     items: repoItems,
     customerName: customerName,
     customerAddress: customerAddress,
     customerPhone: customerPhone,
-    customerEmail: 'buyer@softstore.pk',
+    customerEmail: customerEmail,
   );
 
-  String finalInvoice = invoice;
+  String? finalInvoice;
+  String? errorMsg;
 
   try {
     final result =
@@ -2443,15 +2450,35 @@ Future<void> _processOrderPlacement({
         result.invoiceNumber != null &&
         result.invoiceNumber!.isNotEmpty) {
       finalInvoice = result.invoiceNumber!;
+    } else {
+      errorMsg = result.message ?? 'Order failed. Please try again.';
     }
-  } catch (_) {
-    // Graceful offline fallback with exact web invoice format
+  } on AuthFailure catch (e) {
+    errorMsg = e.message.contains('email_unverified')
+        ? 'Please verify your email before placing an order.'
+        : e.message;
+  } catch (e) {
+    errorMsg = 'Failed to place order. Please check your connection and try again.';
+  }
+
+  // If no invoice received, show error and stop
+  if (finalInvoice == null) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(errorMsg ?? 'Order failed. Please try again.'),
+          backgroundColor: AppColors.error,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
+    return;
   }
 
   final placedOrder = Order(
     id: finalInvoice,
     referenceNumber: finalInvoice,
-    placedAt: now,
+    placedAt: DateTime.now(),
     status: OrderStatus.pending,
     items: orderItems,
     deliveryAddress: OrderAddress(
@@ -2469,7 +2496,7 @@ Future<void> _processOrderPlacement({
     statusHistory: [
       OrderStatusEvent(
         status: OrderStatus.pending,
-        timestamp: now,
+        timestamp: DateTime.now(),
         note: 'Order placed via $paymentMethod by customer',
       ),
     ],

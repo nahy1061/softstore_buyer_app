@@ -52,30 +52,42 @@ class AuthRepository {
         token = await RecaptchaController.instance.getFreshToken();
       }
 
+      developer.log('[Auth] Login attempt — email: $cleanEmail', name: 'auth');
+
+      // Clear any old session cookies that may conflict with new login
+      try {
+        final cookieJar = _client.cookieJar;
+        final uri = Uri.parse(EnvConfig.baseUrl);
+        await cookieJar.delete(uri);
+        developer.log('[Auth] Cleared old cookies for ${uri.host}', name: 'auth');
+      } catch (e) {
+        developer.log('[Auth] Cookie clear note: $e', name: 'auth');
+      }
+
       // ── Strategy 1: Standard Web Form Login (/login) ────────────────────────
-      // Replicates the native iOS WebSessionClient login flow
       _csrf.clearAll();
       final csrfToken = await _csrf.fetchToken(ApiEndpoints.loginPage);
+      developer.log('[Auth] CSRF token fetched: ${csrfToken != null}', name: 'auth');
+
       if (csrfToken != null) {
+        // Send as Map — Dio encodes for application/x-www-form-urlencoded correctly
         final formData = <String, String>{
           '_csrf_token': csrfToken,
           'email': cleanEmail,
           'password': cleanPassword,
-          if (token.isNotEmpty) 'g-recaptcha-response': token,
         };
 
-        final formBody = Uri(queryParameters: formData).query;
+        developer.log('[Auth] Strategy 1: POST /login — fields: ${formData.keys.toList()}', name: 'auth');
 
         final response = await _client.post<dynamic>(
           ApiEndpoints.loginPage,
-          data: formBody,
+          data: formData,
           options: Options(
             contentType: 'application/x-www-form-urlencoded',
             responseType: ResponseType.plain,
             validateStatus: (s) => s != null && s < 500,
             followRedirects: false,
             headers: {
-              'User-Agent': 'SoftStoreBuyer/1.0 iOS',
               'Referer': '${EnvConfig.baseUrl}/login',
               'X-CSRF-TOKEN': csrfToken,
               'Accept': 'text/html,application/xhtml+xml,*/*;q=0.9',
@@ -85,11 +97,12 @@ class AuthRepository {
 
         final status = response.statusCode ?? 0;
         final location = response.headers.value('location') ?? '';
-        final rawData = response.data;
+        final rawData = response.data?.toString() ?? '';
+        developer.log('[Auth] Form login: status=$status, location=$location', name: 'auth');
 
-        // Case A: 302 redirect away from /login (standard PHP success redirect)
+        // Case A: 302 redirect away from /login (success)
         if (status == 302 && !location.contains('/login')) {
-          developer.log('[Auth] Form login successful, redirected to: $location', name: 'auth');
+          developer.log('[Auth] Form login SUCCESS — redirected to: $location', name: 'auth');
           _csrf.clearAll();
           final user = await restoreSession();
           if (user != null) return user;
@@ -100,25 +113,28 @@ class AuthRepository {
           );
         }
 
-        // Case B: Check if session was successfully established
+        // Case B: Check if session was established (some servers use 200 + JS redirect)
         final userAfterLogin = await restoreSession();
         if (userAfterLogin != null && userAfterLogin.email.isNotEmpty) {
+          developer.log('[Auth] Session established after form login', name: 'auth');
           _csrf.clearAll();
           return userAfterLogin;
         }
 
-        // Case C: Surface server form error from HTML response
-        if (rawData is String && rawData.isNotEmpty) {
+        // Case C: Surface server form error from HTML
+        if (rawData.isNotEmpty) {
           final error = HtmlParserUtil.extractFormError(rawData);
-          if (error != null && !error.toLowerCase().contains('captcha')) {
+          if (error != null) {
+            developer.log('[Auth] Server error: $error', name: 'auth');
             throw AuthFailure(error);
           }
+          developer.log('[Auth] No form error extracted. Body (500 chars): ${rawData.substring(0, rawData.length > 500 ? 500 : rawData.length)}', name: 'auth');
         }
       }
 
       // ── Strategy 2: Direct JSON API Login (/api/auth/login) ───────────────
-      // Mobile-friendly API endpoint fallback
       try {
+        developer.log('[Auth] Strategy 2: POST /api/auth/login', name: 'auth');
         final apiResponse = await _client.post<dynamic>(
           ApiEndpoints.apiAuthLogin,
           data: {
@@ -133,10 +149,11 @@ class AuthRepository {
 
         final apiStatus = apiResponse.statusCode ?? 0;
         final data = apiResponse.data;
+        developer.log('[Auth] API login: status=$apiStatus', name: 'auth');
 
         if (apiStatus == 200 && data is Map<String, dynamic>) {
           if (data['success'] == true) {
-            developer.log('[Auth] API login successful for: $cleanEmail', name: 'auth');
+            developer.log('[Auth] API login SUCCESS for: $cleanEmail', name: 'auth');
             _csrf.clearAll();
 
             if (data['user'] is Map<String, dynamic>) {
@@ -160,6 +177,7 @@ class AuthRepository {
           final errorMsg = (data is Map<String, dynamic>)
               ? (data['message'] ?? data['error'] ?? 'Those credentials do not match our records.')
               : 'Invalid email or password. Please verify your credentials.';
+          developer.log('[Auth] API login REJECTED: $errorMsg', name: 'auth');
           throw AuthFailure(errorMsg.toString());
         }
       } on AuthFailure {
@@ -394,8 +412,14 @@ class AuthRepository {
   User _parseUserFromProfileHtml(String html) {
     final doc = HtmlParserUtil.parse(html);
 
-    String? inputVal(String name) =>
-        doc.querySelector('input[name="$name"]')?.attributes['value']?.trim();
+    String? inputVal(String name) {
+      try {
+        return doc.querySelector('input[name="$name"]')?.attributes['value']?.trim();
+      } catch (e) {
+        developer.log('[Auth] Selector failed for $name: $e', name: 'auth');
+        return null;
+      }
+    }
 
     final firstName = inputVal('first_name') ?? '';
     final lastName = inputVal('last_name') ?? '';

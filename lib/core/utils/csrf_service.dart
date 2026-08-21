@@ -30,7 +30,10 @@ class CsrfService {
     try {
       final response = await _dioClient.get<String>(
         path,
-        options: Options(responseType: ResponseType.plain),
+        options: Options(
+          responseType: ResponseType.plain,
+          followRedirects: true,
+        ),
       );
       final html = response.data ?? '';
       final token = HtmlParserUtil.extractCsrfToken(html);

@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/router.dart';
+import '../../../core/errors/failures.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_bottom_nav_bar.dart';
 import '../../auth/cubit/auth_cubit.dart';
@@ -165,11 +166,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           _couponCtrl.text.trim().isEmpty ? null : _couponCtrl.text.trim(),
     );
 
-    final now = DateTime.now();
-    final rand5 = 10000 + (now.microsecondsSinceEpoch % 90000);
-    final fallbackInvoice =
-        'INV-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}-$rand5';
-    String invoice = fallbackInvoice;
+    String? invoice;
+    String? errorMsg;
 
     try {
       final result = await _repo.placeOrder(request);
@@ -177,11 +175,31 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           result.invoiceNumber != null &&
           result.invoiceNumber!.isNotEmpty) {
         invoice = result.invoiceNumber!;
+      } else {
+        errorMsg = result.message ?? 'Order failed. Please try again.';
       }
-    } catch (_) {
-      // Graceful local fallback
+    } on AuthFailure catch (e) {
+      errorMsg = e.message.contains('email_unverified')
+          ? 'Please verify your email before placing an order.'
+          : e.message;
+    } catch (e) {
+      errorMsg = 'Failed to place order. Please check your connection and try again.';
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
+    }
+
+    // If no invoice received, show error and stop
+    if (invoice == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMsg ?? 'Order failed. Please try again.'),
+            backgroundColor: AppColors.error,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+      return;
     }
 
     final firstItem =
@@ -192,7 +210,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final placedOrder = order_models.Order(
       id: invoice,
       referenceNumber: invoice,
-      placedAt: now,
+      placedAt: DateTime.now(),
       status: order_models.OrderStatus.pending,
       items: cartState.items
           .map((i) => order_models.OrderItem(
@@ -217,7 +235,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       statusHistory: [
         order_models.OrderStatusEvent(
           status: order_models.OrderStatus.pending,
-          timestamp: now,
+          timestamp: DateTime.now(),
           note: 'Order placed by customer',
         ),
       ],
@@ -226,7 +244,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     await _orderRepo.saveLocalOrder(placedOrder);
 
     if (mounted) {
-      final firstItem = cartState.items.isNotEmpty ? cartState.items.first : null;
       context.read<CartCubit>().clearCart();
       context.go(
         '/order-confirmation/$invoice',

@@ -85,57 +85,57 @@ class ApiEndpoints {
   static const String placeOrder = '/store/checkout';
 
   // ─── Orders ─────────────────────────────────────────────────────────────────
-  /// GET — orders list HTML
-  static const String ordersList = '/store/account/orders';
-  static const String getOrders = '/store/account/orders';
+  /// GET — orders list HTML (login page redirects here: /marketplace/account/orders)
+  static const String ordersList = '/marketplace/account/orders';
+  static const String getOrders = '/marketplace/account/orders';
 
-  /// GET /store/account/orders/{invoiceNumber} — order detail HTML
-  static const String orderDetail = '/store/account/orders/';
-  static const String getOrderDetail = '/store/account/orders';
+  /// GET /marketplace/account/orders/{invoiceNumber} — order detail HTML
+  static const String orderDetail = '/marketplace/account/orders/';
+  static const String getOrderDetail = '/marketplace/account/orders';
 
-  /// POST (with CSRF) {invoice_number, phone} — guest order tracking HTML
-  static const String trackOrder = '/store/track-order';
+  /// GET ?invoice=...&phone=... — guest order tracking HTML (no CSRF needed, GET request)
+  static const String trackOrder = '/track-order';
 
-  /// POST multipart /store/account/orders/{invoice}/return
+  /// POST multipart /marketplace/account/orders/{invoice}/return
   static const String requestReturnSuffix = '/return';
-  static const String requestReturn = '/store/account/orders';
+  static const String requestReturn = '/marketplace/account/orders';
 
-  /// POST /store/account/orders/{invoice}/cancel
+  /// POST /marketplace/account/orders/{invoice}/cancel
   static const String cancelOrderSuffix = '/cancel';
-  static const String cancelOrder = '/store/account/orders/';
+  static const String cancelOrder = '/marketplace/account/orders/';
   static const String apiCancelOrder = '/api/buyer/orders/';
 
   /// GET — returns list HTML
-  static const String returnsList = '/store/account/returns';
+  static const String returnsList = '/marketplace/account/returns';
 
   // ─── Profile ────────────────────────────────────────────────────────────────
   /// POST form to profile page (same as GET profilePage)
-  static const String updateProfile = '/store/account/profile';
-  static const String profile = '/store/account/profile';
-  static const String getProfile = '/store/account/profile';
+  static const String updateProfile = '/marketplace/account/profile';
+  static const String profile = '/marketplace/account/profile';
+  static const String getProfile = '/marketplace/account/profile';
 
   /// POST form {current_password, new_password}
-  static const String changePassword = '/store/account/password';
+  static const String changePassword = '/marketplace/account/password';
 
   /// GET — dashboard stats HTML
-  static const String dashboard = '/store/account/dashboard';
-  static const String dashboardStats = '/store/account/dashboard';
-  static const String getDashboard = '/store/account/dashboard';
+  static const String dashboard = '/marketplace/account/dashboard';
+  static const String dashboardStats = '/marketplace/account/dashboard';
+  static const String getDashboard = '/marketplace/account/dashboard';
 
   // ─── Addresses ──────────────────────────────────────────────────────────────
   /// GET — addresses list HTML; POST form to add
-  static const String addresses = '/store/account/addresses';
-  static const String getAddresses = '/store/account/addresses';
-  static const String addAddress = '/store/account/addresses';
+  static const String addresses = '/marketplace/account/addresses';
+  static const String getAddresses = '/marketplace/account/addresses';
+  static const String addAddress = '/marketplace/account/addresses';
 
   /// POST /store/account/addresses/{id}/delete — delete address
   static const String deleteAddressSuffix = '/delete';
-  static const String deleteAddress = '/store/account/addresses';
+  static const String deleteAddress = '/marketplace/account/addresses';
 
   // ─── Wishlist ───────────────────────────────────────────────────────────────
   /// GET — wishlist HTML (parse mpToggleWishlist(ID) onclick)
-  static const String wishlistPage = '/store/account/wishlist';
-  static const String wishlist = '/store/account/wishlist';
+  static const String wishlistPage = '/marketplace/account/wishlist';
+  static const String wishlist = '/marketplace/account/wishlist';
 
   /// POST form {product_id} → JSON {success, added}
   static const String toggleWishlist = '/store/wishlist/toggle';

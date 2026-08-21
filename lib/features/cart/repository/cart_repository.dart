@@ -8,6 +8,7 @@ import '../../../core/errors/failures.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/storage/hive_service.dart';
 import '../../../core/utils/csrf_service.dart';
+import '../../../core/utils/html_parser_util.dart';
 import '../models/cart_models.dart';
 
 /// Manages the local cart and handles cart-related server calls.
@@ -105,12 +106,38 @@ class CartRepository {
 
   Future<PlacedOrderResult> placeOrder(OrderRequest request) async {
     try {
-      // Step 1: Fetch CSRF from checkout page with 3-second timeout
-      final csrfToken = await _csrf
-          .fetchToken(ApiEndpoints.checkoutPage)
-          .timeout(const Duration(seconds: 3), onTimeout: () => null);
+      // Step 1: Verify session is alive by fetching CSRF from checkout page
+      String? csrfToken;
+      try {
+        final checkoutResponse = await _client.get<String>(
+          ApiEndpoints.checkoutPage,
+          options: Options(
+            responseType: ResponseType.plain,
+            validateStatus: (s) => s != null && s < 500,
+            followRedirects: true,
+            maxRedirects: 3,
+          ),
+        );
+        final html = checkoutResponse.data ?? '';
+
+        // If we got redirected to login or the page contains a login form,
+        // the session is expired — throw immediately
+        if (html.contains('action="/login"') && html.contains('name="password"')) {
+          developer.log('[Cart] Session expired — checkout page shows login form', name: 'cart');
+          throw const AuthFailure('Session expired. Please login again.');
+        }
+
+        csrfToken = HtmlParserUtil.extractCsrfToken(html);
+      } catch (e) {
+        if (e is AuthFailure) rethrow;
+        developer.log('[Cart] CSRF fetch error: $e', name: 'cart');
+      }
 
       final token = csrfToken ?? '';
+
+      if (token.isEmpty) {
+        developer.log('[Cart] WARNING: CSRF token is empty — order will likely fail with 419', name: 'cart');
+      }
 
       final payload = {
         '_csrf_token': token,
@@ -133,37 +160,42 @@ class CartRepository {
         if (request.couponCode != null) 'coupon_code': request.couponCode,
       };
 
+      developer.log('[Cart] Placing order — items: ${request.items.length}, email: ${request.customerEmail}', name: 'cart');
+
       final response = await _client
           .post<dynamic>(
             ApiEndpoints.placeOrder,
             data: payload,
             options: Options(
               contentType: 'application/json',
-              sendTimeout: const Duration(seconds: 4),
-              receiveTimeout: const Duration(seconds: 4),
+              sendTimeout: const Duration(seconds: 15),
+              receiveTimeout: const Duration(seconds: 15),
             ),
           )
-          .timeout(const Duration(seconds: 5));
+          .timeout(const Duration(seconds: 20));
 
-      final data = _parseJsonMap(response.data);
-
+      // Handle 419 CSRF expired — refresh token and retry once
       if (response.statusCode == 419) {
         developer.log('[Cart] 419 — refreshing CSRF and retrying', name: 'cart');
         final freshCsrf =
             await _csrf.refreshToken(ApiEndpoints.checkoutPage);
-        if (freshCsrf != null) {
+        if (freshCsrf != null && freshCsrf.isNotEmpty) {
           payload['_csrf_token'] = freshCsrf;
           payload['csrf_token'] = freshCsrf;
           final retryResponse = await _client.post<dynamic>(
             ApiEndpoints.placeOrder,
             data: payload,
-            options: Options(contentType: 'application/json'),
-          );
+            options: Options(
+              contentType: 'application/json',
+              sendTimeout: const Duration(seconds: 15),
+              receiveTimeout: const Duration(seconds: 15),
+            ),
+          ).timeout(const Duration(seconds: 20));
           return _handleOrderResponse(_parseJsonMap(retryResponse.data), retryResponse.data);
         }
       }
 
-      return _handleOrderResponse(data, response.data);
+      return _handleOrderResponse(_parseJsonMap(response.data), response.data);
     } on AuthFailure {
       rethrow;
     } on DioException catch (e) {
@@ -182,26 +214,55 @@ class CartRepository {
             lower.contains('email verification')) {
           throw const AuthFailure('email_unverified');
         }
-        if (lower.contains('order') || lower.contains('inv-') || lower.contains('invoice')) {
-          final regex = RegExp(r'INV-[0-9\-]+', caseSensitive: false);
-          final match = regex.firstMatch(rawStr);
+        // Try to extract invoice from raw HTML/JSON response
+        final regex = RegExp(r'INV[- ]?[0-9\-]+', caseSensitive: false);
+        final match = regex.firstMatch(rawStr);
+        if (match != null) {
           return PlacedOrderResult(
             success: true,
-            invoiceNumber: match != null ? match.group(0) : null,
+            invoiceNumber: match.group(0),
           );
         }
       }
-      throw const ServerFailure('No response from server.');
+      throw const ServerFailure('No response from server. Please try again.');
     }
+
+    // Check for email verification errors first
+    final msg = (data['message'] ?? data['error'] ?? '').toString();
+    final lowerMsg = msg.toLowerCase();
+    if (lowerMsg.contains('email_unverified') ||
+        lowerMsg.contains('verify your email') ||
+        lowerMsg.contains('unverified') ||
+        lowerMsg.contains('email verification')) {
+      throw const AuthFailure('email_unverified');
+    }
+
     final result = PlacedOrderResult.fromJson(data);
 
-    final msg = result.message?.toLowerCase() ?? '';
-    if (!result.success &&
-        (result.message == 'email_unverified' ||
-            msg.contains('verify your email') ||
-            msg.contains('unverified') ||
-            msg.contains('email verification'))) {
-      throw const AuthFailure('email_unverified');
+    // If server returned success but no invoice, try to extract from response
+    if (result.success && (result.invoiceNumber == null || result.invoiceNumber!.isEmpty)) {
+      final rawStr = rawData?.toString() ?? '';
+      final regex = RegExp(r'INV[- ]?[0-9\-]+', caseSensitive: false);
+      final match = regex.firstMatch(rawStr);
+      if (match != null) {
+        return PlacedOrderResult(
+          success: true,
+          invoiceNumber: match.group(0),
+          invoices: result.invoices,
+          discountAmount: result.discountAmount,
+        );
+      }
+    }
+
+    // If not successful, throw error with server message
+    if (!result.success) {
+      throw ServerFailure(
+        result.message?.isNotEmpty == true ? result.message! : 'Order failed. Please try again.',
+      );
+    }
+
+    if (result.invoiceNumber == null || result.invoiceNumber!.isEmpty) {
+      throw const ServerFailure('Order placed but no invoice number received. Please check your orders.');
     }
 
     return result;

@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import 'package:dio/dio.dart';
 
 import '../../constants/app_config.dart';
+import '../dio_client.dart';
 
 /// Interceptor to retry failed requests with exponential backoff.
 /// Retries on timeout (408) and server errors (5xx).
@@ -24,7 +25,7 @@ class RetryInterceptor extends Interceptor {
 
       // Calculate exponential backoff delay
       final delaySeconds = _calculateBackoffSeconds(retryCount);
-      developer.log('[RetryInterceptor] Retrying request (attempt $retryCount/$maxRetries) after ${delaySeconds}s: ${requestOptions.path}', name: 'network');
+      developer.log('[RetryInterceptor] Retrying request (attempt $retryCount/${AppConfig.maxRetries}) after ${delaySeconds}s: ${requestOptions.path}', name: 'network');
 
       // Wait before retrying
       await Future.delayed(Duration(seconds: delaySeconds));
@@ -50,6 +51,11 @@ class RetryInterceptor extends Interceptor {
 
   /// Check if error should be retried
   bool _shouldRetry(DioException err) {
+    // Never retry POST — would create duplicate orders/payments
+    if (err.requestOptions.method.toUpperCase() == 'POST') {
+      return false;
+    }
+
     // Retry on timeout
     if (err.type == DioExceptionType.connectionTimeout ||
         err.type == DioExceptionType.receiveTimeout ||
@@ -77,22 +83,20 @@ class RetryInterceptor extends Interceptor {
     return retryCount;
   }
 
-  /// Retry the request using Dio instance
+  /// Retry the request using the singleton DioClient's Dio instance
+  /// so that cookies and interceptors (including CookieManager) are preserved.
   Future<Response> _retry(RequestOptions requestOptions) async {
-    final dio = Dio(BaseOptions(
-      method: requestOptions.method,
-      baseUrl: requestOptions.baseUrl,
-      headers: requestOptions.headers,
-      contentType: requestOptions.contentType,
-    ));
-
-    return dio.request(
+    final client = DioClient();
+    return client.dio.request(
       requestOptions.path,
       data: requestOptions.data,
       queryParameters: requestOptions.queryParameters,
-      options: Options(method: requestOptions.method),
+      options: Options(
+        method: requestOptions.method,
+        headers: requestOptions.headers,
+        contentType: requestOptions.contentType,
+        responseType: requestOptions.responseType,
+      ),
     );
   }
 }
-
-const int maxRetries = 2;

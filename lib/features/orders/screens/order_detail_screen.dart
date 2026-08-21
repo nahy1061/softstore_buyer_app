@@ -29,6 +29,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   void initState() {
     super.initState();
     currentOrder = widget.order;
+    // loadOrderDetail is already called by the router when creating this cubit
+    // No need to call it again here — that would cause duplicate network requests
   }
 
   @override
@@ -552,7 +554,7 @@ class _ItemTableRow extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Product image placeholder
+            // Product image
             Container(
               width: 60,
               height: 60,
@@ -561,13 +563,28 @@ class _ItemTableRow extends StatelessWidget {
                 borderRadius: BorderRadius.circular(6),
                 border: Border.all(color: AppColors.divider),
               ),
-              child: Center(
-                child: Icon(
-                  Icons.image_not_supported_outlined,
-                  size: 24,
-                  color: AppColors.textDisabled,
-                ),
-              ),
+              child: item.imageUrl != null && item.imageUrl!.isNotEmpty
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: Image.network(
+                        item.imageUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stack) => Center(
+                          child: Icon(
+                            Icons.image_not_supported_outlined,
+                            size: 24,
+                            color: AppColors.textDisabled,
+                          ),
+                        ),
+                      ),
+                    )
+                  : Center(
+                      child: Icon(
+                        Icons.image_not_supported_outlined,
+                        size: 24,
+                        color: AppColors.textDisabled,
+                      ),
+                    ),
             ),
             const SizedBox(width: AppSpacing.md),
             Expanded(
@@ -728,8 +745,25 @@ class _ActionButtons extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // Cancel order button for pending and processing orders only
-        if (_canCancel)
+        // Track order — always visible
+        OutlinedButton.icon(
+          onPressed: () {
+            // Pre-fill the lookup screen with this order's reference number
+            context.push(AppRoutes.orderLookup);
+          },
+          icon: const Icon(Icons.local_shipping_outlined, size: 18),
+          label: const Text('Track Order'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.primary,
+            side: const BorderSide(color: AppColors.primary),
+            minimumSize:
+                const Size.fromHeight(AppDimensions.touchTarget),
+            shape: RoundedRectangleBorder(
+                borderRadius: AppDimensions.radiusSm),
+          ),
+        ),
+        if (_canCancel) ...[
+          const SizedBox(height: AppSpacing.md),
           OutlinedButton.icon(
             onPressed: () => _showCancellationReasonDialog(context),
             style: OutlinedButton.styleFrom(
@@ -743,6 +777,7 @@ class _ActionButtons extends StatelessWidget {
             icon: const Icon(Icons.close_rounded, size: 18),
             label: const Text('Cancel Order'),
           ),
+        ],
         if (order.status == OrderStatus.delivered) ...[
           ElevatedButton.icon(
             onPressed: () {
