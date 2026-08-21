@@ -158,5 +158,35 @@ void main() {
       expect(messages[1].isFromSeller, isTrue);
       expect(messages[1].text, 'Yes, cash on delivery is available throughout Lahore!');
     });
+
+    test('parseThreadMessagesHtml extracts .bsm-msg structure from live SoftStore chat', () {
+      const liveChatHtml = '''
+      <div class="sx-card">
+        <div class="bsm-thread" id="bsmThread">
+          <div class="bsm-msg mine">
+            <div class="bsm-msg-meta">Naheed · 21 Aug 2026, 02:52 PM</div>
+            <div class="bsm-msg-bubble">testing 123</div>
+          </div>
+          <div class="bsm-msg">
+            <div class="bsm-msg-meta">Store Seller · 21 Aug 2026, 02:54 PM</div>
+            <div class="bsm-msg-bubble">Hello Naheed! How can we help you?</div>
+          </div>
+        </div>
+      </div>
+      ''';
+
+      final messages = MessagesRepository.parseThreadMessagesHtml(
+        liveChatHtml,
+        threadUrl: '/messages/14',
+      );
+
+      expect(messages.length, 2);
+
+      expect(messages[0].isFromBuyer, isTrue);
+      expect(messages[0].text, 'testing 123');
+
+      expect(messages[1].isFromSeller, isTrue);
+      expect(messages[1].text, 'Hello Naheed! How can we help you?');
+    });
   });
 }

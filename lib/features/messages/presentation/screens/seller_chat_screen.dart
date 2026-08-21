@@ -296,8 +296,15 @@ class _SellerChatScreenContentState extends State<_SellerChatScreenContent> {
               const SizedBox(height: AppSpacing.md),
               OutlinedButton(
                 onPressed: () {
-                  final effectiveUrl = widget.initialSellerName;
-                  context.read<SellerChatCubit>().loadThread(effectiveUrl);
+                  if (widget.productId != null) {
+                    context.read<SellerChatCubit>().startChatWithProduct(
+                          productId: widget.productId!,
+                          initialMessage: '',
+                          productName: widget.initialProductName,
+                          productImage: widget.initialProductImage,
+                          sellerName: widget.initialSellerName,
+                        );
+                  }
                 },
                 child: const Text('Retry'),
               ),

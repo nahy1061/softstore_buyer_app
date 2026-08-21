@@ -63,7 +63,8 @@ class MessagesRepository {
   List<ConversationThread> get cachedConversations => List.unmodifiable(_cachedConversations);
 
   List<ChatMessage> getCachedMessages(String threadUrl) {
-    return List.unmodifiable(_cachedThreadMessages[threadUrl] ?? []);
+    final normalized = _normalizeThreadUrl(threadUrl);
+    return List.unmodifiable(_cachedThreadMessages[normalized] ?? []);
   }
 
   String? getCachedThreadUrlForProduct(int productId) {
@@ -150,7 +151,7 @@ class MessagesRepository {
     }
   }
 
-  /// 1. Fetch Conversations List (GET /store/messages)
+  /// 1. Fetch Conversations List (GET /messages or GET /store/messages)
   Future<List<ConversationThread>> fetchConversations({bool forceRefresh = false}) async {
     await _initStorage();
 
@@ -159,10 +160,18 @@ class MessagesRepository {
     }
 
     try {
-      final response = await _dio.get<String>(
-        ApiEndpoints.messagesList,
-        options: Options(responseType: ResponseType.plain),
-      );
+      Response<String>? response;
+      try {
+        response = await _dio.get<String>(
+          ApiEndpoints.messagesList,
+          options: Options(responseType: ResponseType.plain),
+        );
+      } catch (_) {
+        response = await _dio.get<String>(
+          ApiEndpoints.storeMessages,
+          options: Options(responseType: ResponseType.plain),
+        );
+      }
 
       final htmlContent = response.data ?? '';
       final parsedList = parseConversationsHtml(htmlContent);
@@ -198,21 +207,23 @@ class MessagesRepository {
   Future<List<ChatMessage>> getThreadMessages(String threadUrl, {bool forceRefresh = true}) async {
     await _initStorage();
 
-    if (!forceRefresh && _cachedThreadMessages.containsKey(threadUrl)) {
-      return List.unmodifiable(_cachedThreadMessages[threadUrl]!);
+    final normalizedUrl = _normalizeThreadUrl(threadUrl);
+
+    if (!forceRefresh && _cachedThreadMessages.containsKey(normalizedUrl)) {
+      return List.unmodifiable(_cachedThreadMessages[normalizedUrl]!);
     }
 
     try {
       final response = await _dio.get<String>(
-        threadUrl,
+        normalizedUrl,
         options: Options(responseType: ResponseType.plain),
       );
 
       final htmlContent = response.data ?? '';
-      final parsedMessages = parseThreadMessagesHtml(htmlContent, threadUrl: threadUrl);
+      final parsedMessages = parseThreadMessagesHtml(htmlContent, threadUrl: normalizedUrl);
 
       // Preserve any pending optimistic messages
-      final existing = _cachedThreadMessages[threadUrl] ?? [];
+      final existing = _cachedThreadMessages[normalizedUrl] ?? [];
       final pending = existing.where((m) => m.isSending || m.isFailed).toList();
 
       final combined = [...parsedMessages];
@@ -222,25 +233,25 @@ class MessagesRepository {
         }
       }
 
-      _cachedThreadMessages[threadUrl] = combined;
+      _cachedThreadMessages[normalizedUrl] = combined;
       await _saveStorage();
-      return List.unmodifiable(_cachedThreadMessages[threadUrl]!);
+      return List.unmodifiable(_cachedThreadMessages[normalizedUrl]!);
     } on DioException catch (e) {
       developer.log('[MessagesRepository] getThreadMessages error: ${e.message}', name: 'messages');
-      if (_cachedThreadMessages.containsKey(threadUrl)) {
-        return List.unmodifiable(_cachedThreadMessages[threadUrl]!);
+      if (_cachedThreadMessages.containsKey(normalizedUrl)) {
+        return List.unmodifiable(_cachedThreadMessages[normalizedUrl]!);
       }
       throw ServerFailure(e.message ?? 'Failed to load messages.');
     } catch (e) {
       developer.log('[MessagesRepository] getThreadMessages general error: $e', name: 'messages');
-      if (_cachedThreadMessages.containsKey(threadUrl)) {
-        return List.unmodifiable(_cachedThreadMessages[threadUrl]!);
+      if (_cachedThreadMessages.containsKey(normalizedUrl)) {
+        return List.unmodifiable(_cachedThreadMessages[normalizedUrl]!);
       }
       throw ServerFailure(e.toString());
     }
   }
 
-  /// 3. Start New Conversation or reuse existing thread
+  /// 3. Start New Conversation: POST /messages/start
   Future<String> startConversation({
     required int productId,
     required String message,
@@ -252,21 +263,35 @@ class MessagesRepository {
 
     final existingThreadUrl = _productThreadMap[productId];
     if (existingThreadUrl != null && existingThreadUrl.isNotEmpty) {
-      // Thread exists, reply directly to thread
+      // Thread already exists, reply directly to thread
       await sendMessage(threadUrl: existingThreadUrl, message: message);
       return existingThreadUrl;
     }
 
     try {
-      // 1. Get CSRF token
-      final csrf = await CsrfService.instance.refreshToken(ApiEndpoints.messagesList) ?? '';
+      // 1. Get CSRF token from the new inquiry form page
+      final formPageUrl = '/messages/new?product_id=$productId';
+      final csrf = await CsrfService.instance.refreshToken(formPageUrl) ??
+          await CsrfService.instance.refreshToken(ApiEndpoints.messagesList) ??
+          '';
 
-      // 2. Post to /store/messages/new
+      // 2. Post to /messages/start
+      final subject = productName != null && productName.isNotEmpty
+          ? 'Inquiry: $productName'
+          : 'Product Inquiry';
+
+      developer.log(
+        '[MessagesRepository] Posting new inquiry to ${ApiEndpoints.startMessage} for productId $productId',
+        name: 'messages',
+      );
+
       final response = await _dio.post<dynamic>(
-        ApiEndpoints.newMessage,
+        ApiEndpoints.startMessage,
         data: {
           '_csrf_token': csrf,
-          'product_id': productId,
+          'csrf_token': csrf,
+          'product_id': productId.toString(),
+          'subject': subject,
           'message': message,
         },
         options: Options(
@@ -284,9 +309,18 @@ class MessagesRepository {
         }
       }
 
+      // Check for login redirect (session expired)
+      if (newThreadUrl != null && newThreadUrl.contains('/login')) {
+        throw const AuthFailure('Please log in to contact this seller.');
+      }
+
+      // Strip query parameters (e.g. /messages/14?opened=1 -> /messages/14)
+      if (newThreadUrl != null && newThreadUrl.contains('?')) {
+        newThreadUrl = newThreadUrl.split('?').first;
+      }
+
       // If location header was relative or not returned directly
       if (newThreadUrl == null || newThreadUrl.isEmpty) {
-        // Fetch conversations list to discover newly created thread
         final refreshedList = await fetchConversations(forceRefresh: true);
         final match = refreshedList.firstWhere(
           (t) => t.productId == productId || (productName != null && t.productName == productName),
@@ -294,20 +328,16 @@ class MessagesRepository {
               ? refreshedList.first
               : ConversationThread(
                   id: 'temp',
-                  threadUrl: '/store/messages',
-                  sellerName: 'Seller',
-                  lastMessage: '',
-                  lastMessageTime: DateTime.fromMillisecondsSinceEpoch(0),
+                  threadUrl: '/messages',
+                  sellerName: sellerName ?? 'Seller',
+                  lastMessage: message,
+                  lastMessageTime: DateTime.now(),
                 ),
         );
-        newThreadUrl = match.threadUrl.isNotEmpty ? match.threadUrl : ApiEndpoints.messagesList;
+        newThreadUrl = match.threadUrl.isNotEmpty ? match.threadUrl : '/messages';
       }
 
-      // Normalize threadUrl path
-      if (!newThreadUrl.startsWith('http') && !newThreadUrl.startsWith('/')) {
-        newThreadUrl = '/$newThreadUrl';
-      }
-
+      newThreadUrl = _normalizeThreadUrl(newThreadUrl);
       _productThreadMap[productId] = newThreadUrl;
 
       // Optimistically add message to cache
@@ -343,17 +373,19 @@ class MessagesRepository {
     }
   }
 
-  /// 4. Send Message to existing Thread (POST {threadUrl})
+  /// 4. Send Message (Reply) to existing Thread (POST /messages/{id}/reply with JSON + X-CSRF-TOKEN)
   Future<ChatMessage> sendMessage({
     required String threadUrl,
     required String message,
   }) async {
     await _initStorage();
 
+    final normalizedUrl = _normalizeThreadUrl(threadUrl);
+
     final clientSideId = 'msg_${DateTime.now().millisecondsSinceEpoch}';
     final optimisticMsg = ChatMessage(
       id: DateTime.now().millisecondsSinceEpoch,
-      threadUrl: threadUrl,
+      threadUrl: normalizedUrl,
       sender: MessageSender.buyer,
       text: message,
       sentAt: DateTime.now(),
@@ -362,55 +394,91 @@ class MessagesRepository {
     );
 
     // Optimistically insert
-    final currentMsgs = _cachedThreadMessages[threadUrl] ?? [];
-    _cachedThreadMessages[threadUrl] = [...currentMsgs, optimisticMsg];
+    final currentMsgs = _cachedThreadMessages[normalizedUrl] ?? [];
+    _cachedThreadMessages[normalizedUrl] = [...currentMsgs, optimisticMsg];
 
     try {
-      final csrf = await CsrfService.instance.refreshToken(threadUrl) ?? '';
+      final csrf = await CsrfService.instance.refreshToken(normalizedUrl) ??
+          await CsrfService.instance.getToken(ApiEndpoints.messagesList) ??
+          '';
 
-      final response = await _dio.post<dynamic>(
-        threadUrl,
-        data: {
-          '_csrf_token': csrf,
-          'message': message,
-        },
-        options: Options(
-          contentType: Headers.formUrlEncodedContentType,
-          followRedirects: false,
-          validateStatus: (status) => status != null && (status < 400 || status == 302),
-        ),
-      );
+      // SoftStore uses /messages/{id}/reply JSON endpoint
+      final replyEndpoint = normalizedUrl.endsWith('/reply')
+          ? normalizedUrl
+          : '${normalizedUrl.split('?').first}/reply';
 
-      if (response.statusCode == 302 || response.statusCode == 200) {
-        final confirmedMsg = optimisticMsg.copyWith(status: MessageStatus.sent);
-        _updateMessageInCache(threadUrl, confirmedMsg);
-        _updateConversationLastMessage(threadUrl, message);
-        await _saveStorage();
-        return confirmedMsg;
-      } else {
-        throw ServerFailure('Server returned status ${response.statusCode}');
+      developer.log('[MessagesRepository] Sending reply to $replyEndpoint with CSRF $csrf', name: 'messages');
+
+      int? newMsgId;
+      try {
+        final response = await _dio.post<dynamic>(
+          replyEndpoint,
+          data: jsonEncode({'message': message}),
+          options: Options(
+            contentType: Headers.jsonContentType,
+            headers: {
+              'X-CSRF-TOKEN': csrf,
+              'x-csrf-token': csrf,
+              'Accept': 'application/json, text/plain, */*',
+            },
+            followRedirects: false,
+            validateStatus: (status) => status != null && status < 500,
+          ),
+        );
+
+        if (response.data is Map) {
+          final map = response.data as Map<String, dynamic>;
+          newMsgId = map['message_id'] as int?;
+        }
+      } catch (jsonErr) {
+        developer.log('[MessagesRepository] JSON reply error, trying form POST fallback: $jsonErr', name: 'messages');
+        // Fallback: standard Form POST to threadUrl
+        await _dio.post<dynamic>(
+          normalizedUrl,
+          data: {
+            '_csrf_token': csrf,
+            'csrf_token': csrf,
+            'message': message,
+          },
+          options: Options(
+            contentType: Headers.formUrlEncodedContentType,
+            followRedirects: false,
+            validateStatus: (status) => status != null && (status < 400 || status == 302),
+          ),
+        );
       }
+
+      final confirmedMsg = optimisticMsg.copyWith(
+        id: newMsgId ?? optimisticMsg.id,
+        status: MessageStatus.sent,
+      );
+      _updateMessageInCache(normalizedUrl, confirmedMsg);
+      _updateConversationLastMessage(normalizedUrl, message);
+      await _saveStorage();
+      return confirmedMsg;
     } catch (e) {
       developer.log('[MessagesRepository] sendMessage error: $e', name: 'messages');
       final failedMsg = optimisticMsg.copyWith(status: MessageStatus.failed);
-      _updateMessageInCache(threadUrl, failedMsg);
+      _updateMessageInCache(normalizedUrl, failedMsg);
       await _saveStorage();
       throw ServerFailure(e.toString());
     }
   }
 
   void _updateMessageInCache(String threadUrl, ChatMessage updated) {
-    final list = _cachedThreadMessages[threadUrl] ?? [];
+    final normalized = _normalizeThreadUrl(threadUrl);
+    final list = _cachedThreadMessages[normalized] ?? [];
     final idx = list.indexWhere((m) =>
         (m.clientSideId != null && m.clientSideId == updated.clientSideId) || m.id == updated.id);
     if (idx != -1) {
       list[idx] = updated;
-      _cachedThreadMessages[threadUrl] = List.from(list);
+      _cachedThreadMessages[normalized] = List.from(list);
     }
   }
 
   void _updateConversationLastMessage(String threadUrl, String message) {
-    final idx = _cachedConversations.indexWhere((c) => c.threadUrl == threadUrl);
+    final normalized = _normalizeThreadUrl(threadUrl);
+    final idx = _cachedConversations.indexWhere((c) => _normalizeThreadUrl(c.threadUrl) == normalized);
     if (idx != -1) {
       _cachedConversations[idx] = _cachedConversations[idx].copyWith(
         lastMessage: message,
@@ -427,7 +495,8 @@ class MessagesRepository {
     String? sellerName,
     required String lastMessage,
   }) {
-    final idx = _cachedConversations.indexWhere((c) => c.threadUrl == threadUrl);
+    final normalized = _normalizeThreadUrl(threadUrl);
+    final idx = _cachedConversations.indexWhere((c) => _normalizeThreadUrl(c.threadUrl) == normalized);
     if (idx != -1) {
       _cachedConversations[idx] = _cachedConversations[idx].copyWith(
         lastMessage: lastMessage,
@@ -437,10 +506,10 @@ class MessagesRepository {
       _cachedConversations.insert(
         0,
         ConversationThread(
-          id: threadUrl.replaceAll(RegExp(r'[^0-9]'), '').isNotEmpty
-              ? threadUrl.replaceAll(RegExp(r'[^0-9]'), '')
+          id: normalized.replaceAll(RegExp(r'[^0-9]'), '').isNotEmpty
+              ? normalized.replaceAll(RegExp(r'[^0-9]'), '')
               : 'conv_${DateTime.now().millisecondsSinceEpoch}',
-          threadUrl: threadUrl,
+          threadUrl: normalized,
           sellerName: sellerName ?? 'Store Seller',
           productId: productId,
           productName: productName,
@@ -456,7 +525,7 @@ class MessagesRepository {
 
   // ─── HTML Parsing Helpers ──────────────────────────────────────────────────
 
-  /// Parses the `/store/messages` conversations list HTML
+  /// Parses the `/messages` conversations list HTML
   static List<ConversationThread> parseConversationsHtml(String html) {
     if (html.isEmpty) return [];
 
@@ -465,15 +534,18 @@ class MessagesRepository {
 
     // Find conversation container elements
     final threadElements = document.querySelectorAll(
-      '.message-thread, .conversation-item, .chat-thread, .msg-card, a[href*="/store/messages/"]',
+      '.bsm-thread-item, .message-thread, .conversation-item, .chat-thread, .msg-card, a[href*="/messages/"], a[href*="/store/messages/"]',
     );
 
     if (threadElements.isEmpty) {
-      // Fallback: look for table rows or generic cards containing message links
-      final genericLinks = document.querySelectorAll('a[href*="/store/messages/"]');
+      final genericLinks = document.querySelectorAll('a[href*="/messages/"], a[href*="/store/messages/"]');
       for (final link in genericLinks) {
         final threadUrl = link.attributes['href'] ?? '';
-        if (threadUrl.isEmpty || threadUrl == ApiEndpoints.messagesList) continue;
+        if (threadUrl.isEmpty ||
+            threadUrl == ApiEndpoints.messagesList ||
+            threadUrl == ApiEndpoints.storeMessages ||
+            threadUrl.contains('/new') ||
+            threadUrl.contains('/start')) continue;
 
         final sellerEl = link.querySelector('.seller-name, .store-name, h4, h5, strong');
         final sellerName = sellerEl?.text.trim() ?? 'Store Seller';
@@ -493,7 +565,7 @@ class MessagesRepository {
         results.add(
           ConversationThread(
             id: id.isNotEmpty ? id : threadUrl,
-            threadUrl: threadUrl,
+            threadUrl: _normalizeThreadUrl(threadUrl),
             sellerName: sellerName,
             productImage: imgUrl,
             lastMessage: lastMessage,
@@ -509,11 +581,15 @@ class MessagesRepository {
     for (final el in threadElements) {
       String threadUrl = el.attributes['href'] ?? '';
       if (threadUrl.isEmpty) {
-        final anchor = el.querySelector('a[href*="/store/messages/"]');
+        final anchor = el.querySelector('a[href*="/messages/"], a[href*="/store/messages/"]');
         threadUrl = anchor?.attributes['href'] ?? '';
       }
 
-      if (threadUrl.isEmpty || threadUrl == ApiEndpoints.messagesList) continue;
+      if (threadUrl.isEmpty ||
+          threadUrl == ApiEndpoints.messagesList ||
+          threadUrl == ApiEndpoints.storeMessages ||
+          threadUrl.contains('/new') ||
+          threadUrl.contains('/start')) continue;
 
       final sellerEl = el.querySelector('.seller-name, .store-name, .vendor-name, h4, h5');
       final sellerName = sellerEl?.text.trim() ?? 'Store Seller';
@@ -541,7 +617,7 @@ class MessagesRepository {
       results.add(
         ConversationThread(
           id: id.isNotEmpty ? id : threadUrl,
-          threadUrl: threadUrl,
+          threadUrl: _normalizeThreadUrl(threadUrl),
           sellerName: sellerName,
           productName: productName,
           productImage: imgUrl,
@@ -556,7 +632,7 @@ class MessagesRepository {
     return results;
   }
 
-  /// Parses individual conversation messages HTML
+  /// Parses individual conversation messages HTML (supports .bsm-msg and standard bubbles)
   static List<ChatMessage> parseThreadMessagesHtml(String html, {required String threadUrl}) {
     if (html.isEmpty) return [];
 
@@ -564,12 +640,13 @@ class MessagesRepository {
     final List<ChatMessage> messages = [];
 
     final bubbleElements = document.querySelectorAll(
-      '.message-bubble, .chat-bubble, .chat-message, .msg-item, .direct-chat-msg, .chat-row',
+      '.bsm-msg, .message-bubble, .chat-bubble, .chat-message, .msg-item, .direct-chat-msg, .chat-row',
     );
 
     int fallbackId = 1;
     for (final el in bubbleElements) {
-      final isBuyer = el.classes.contains('buyer-message') ||
+      final isBuyer = el.classes.contains('mine') ||
+          el.classes.contains('buyer-message') ||
           el.classes.contains('right') ||
           el.classes.contains('sent') ||
           el.classes.contains('me') ||
@@ -579,18 +656,18 @@ class MessagesRepository {
           el.classes.contains('left') ||
           el.classes.contains('received') ||
           el.classes.contains('store') ||
-          el.querySelector('.seller, .store') != null;
+          (!isBuyer && el.classes.contains('bsm-msg'));
 
       final sender = isBuyer
           ? MessageSender.buyer
           : (isSeller ? MessageSender.seller : MessageSender.seller);
 
-      final textEl = el.querySelector('.text, .message-content, .msg-text, .bubble-text, p');
+      final textEl = el.querySelector('.bsm-msg-bubble, .text, .message-content, .msg-text, .bubble-text, p');
       final text = textEl != null ? textEl.text.trim() : el.text.trim();
 
       if (text.isEmpty) continue;
 
-      final timeEl = el.querySelector('.time, .timestamp, .date, small, .msg-time');
+      final timeEl = el.querySelector('.bsm-msg-meta, .time, .timestamp, .date, small, .msg-time');
       final timeStr = timeEl?.text.trim();
       final sentAt = _parseRelativeTime(timeStr);
 
@@ -600,7 +677,7 @@ class MessagesRepository {
       messages.add(
         ChatMessage(
           id: id,
-          threadUrl: threadUrl,
+          threadUrl: _normalizeThreadUrl(threadUrl),
           sender: sender,
           text: text,
           sentAt: sentAt,
@@ -619,6 +696,15 @@ class MessagesRepository {
     if (url.startsWith('//')) return 'https:$url';
     if (url.startsWith('/')) return 'https://softstore.pk$url';
     return 'https://softstore.pk/$url';
+  }
+
+  static String _normalizeThreadUrl(String url) {
+    final clean = url.trim();
+    if (clean.isEmpty) return ApiEndpoints.messagesList;
+    if (clean.startsWith('http://') || clean.startsWith('https://')) return clean;
+    if (clean.startsWith('//')) return 'https:$clean';
+    if (clean.startsWith('/')) return clean;
+    return '/$clean';
   }
 
   static DateTime _parseRelativeTime(String? text) {

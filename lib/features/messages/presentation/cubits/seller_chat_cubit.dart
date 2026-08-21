@@ -12,6 +12,13 @@ class SellerChatCubit extends Cubit<SellerChatState> {
   final MessagesRepository _repository;
   Timer? _pollingTimer;
 
+  String? _currentThreadUrl;
+  int? _productId;
+  String? _productName;
+  String? _productImage;
+  String? _sellerName;
+  ConversationThread? _threadInfo;
+
   SellerChatCubit({MessagesRepository? repository})
       : _repository = repository ?? MessagesRepository(),
         super(const SellerChatInitial());
@@ -25,17 +32,24 @@ class SellerChatCubit extends Cubit<SellerChatState> {
     String? productImage,
     String? sellerName,
   }) async {
+    _currentThreadUrl = threadUrl;
+    _threadInfo = threadInfo ?? _threadInfo;
+    _productId = productId ?? threadInfo?.productId ?? _productId;
+    _productName = productName ?? threadInfo?.productName ?? _productName;
+    _productImage = productImage ?? threadInfo?.productImage ?? _productImage;
+    _sellerName = sellerName ?? threadInfo?.sellerName ?? _sellerName;
+
     // Show cached messages immediately if available
     final cached = _repository.getCachedMessages(threadUrl);
     if (cached.isNotEmpty) {
       emit(SellerChatLoaded(
         threadUrl: threadUrl,
         messages: cached,
-        threadInfo: threadInfo,
-        productId: productId ?? threadInfo?.productId,
-        productName: productName ?? threadInfo?.productName,
-        productImage: productImage ?? threadInfo?.productImage,
-        sellerName: sellerName ?? threadInfo?.sellerName,
+        threadInfo: _threadInfo,
+        productId: _productId,
+        productName: _productName,
+        productImage: _productImage,
+        sellerName: _sellerName,
       ));
     } else {
       emit(const SellerChatLoading());
@@ -46,11 +60,11 @@ class SellerChatCubit extends Cubit<SellerChatState> {
       emit(SellerChatLoaded(
         threadUrl: threadUrl,
         messages: messages,
-        threadInfo: threadInfo,
-        productId: productId ?? threadInfo?.productId,
-        productName: productName ?? threadInfo?.productName,
-        productImage: productImage ?? threadInfo?.productImage,
-        sellerName: sellerName ?? threadInfo?.sellerName,
+        threadInfo: _threadInfo,
+        productId: _productId,
+        productName: _productName,
+        productImage: _productImage,
+        sellerName: _sellerName,
       ));
     } catch (e) {
       final cachedFallback = _repository.getCachedMessages(threadUrl);
@@ -58,11 +72,11 @@ class SellerChatCubit extends Cubit<SellerChatState> {
         emit(SellerChatLoaded(
           threadUrl: threadUrl,
           messages: cachedFallback,
-          threadInfo: threadInfo,
-          productId: productId ?? threadInfo?.productId,
-          productName: productName ?? threadInfo?.productName,
-          productImage: productImage ?? threadInfo?.productImage,
-          sellerName: sellerName ?? threadInfo?.sellerName,
+          threadInfo: _threadInfo,
+          productId: _productId,
+          productName: _productName,
+          productImage: _productImage,
+          sellerName: _sellerName,
         ));
       } else {
         emit(SellerChatError(e.toString().replaceAll('Exception:', '').trim()));
@@ -78,9 +92,15 @@ class SellerChatCubit extends Cubit<SellerChatState> {
     String? productImage,
     String? sellerName,
   }) async {
+    _productId = productId;
+    _productName = productName ?? _productName;
+    _productImage = productImage ?? _productImage;
+    _sellerName = sellerName ?? _sellerName;
+
     // Check if we already have a cached threadUrl for this product
     final existingThreadUrl = _repository.getCachedThreadUrlForProduct(productId);
     if (existingThreadUrl != null && existingThreadUrl.isNotEmpty) {
+      _currentThreadUrl = existingThreadUrl;
       await loadThread(
         existingThreadUrl,
         productId: productId,
@@ -91,6 +111,20 @@ class SellerChatCubit extends Cubit<SellerChatState> {
       if (initialMessage.trim().isNotEmpty) {
         await sendMessage(initialMessage.trim());
       }
+      return;
+    }
+
+    if (initialMessage.trim().isEmpty) {
+      // Just initialize empty screen for new product inquiry without making network call yet
+      _currentThreadUrl = '';
+      emit(SellerChatLoaded(
+        threadUrl: '',
+        messages: const [],
+        productId: productId,
+        productName: productName,
+        productImage: productImage,
+        sellerName: sellerName,
+      ));
       return;
     }
 
@@ -105,6 +139,7 @@ class SellerChatCubit extends Cubit<SellerChatState> {
         sellerName: sellerName,
       );
 
+      _currentThreadUrl = threadUrl;
       final messages = _repository.getCachedMessages(threadUrl);
       emit(SellerChatLoaded(
         threadUrl: threadUrl,
@@ -119,17 +154,23 @@ class SellerChatCubit extends Cubit<SellerChatState> {
     }
   }
 
-  /// Send message to current active thread
+  /// Send message to current active thread (or create thread if new)
   Future<void> sendMessage(String text) async {
-    if (state is! SellerChatLoaded) return;
-    final currentState = state as SellerChatLoaded;
     final cleanText = text.trim();
     if (cleanText.isEmpty) return;
+
+    final String activeThreadUrl = (state is SellerChatLoaded)
+        ? (state as SellerChatLoaded).threadUrl
+        : (_currentThreadUrl ?? '');
+
+    final List<ChatMessage> currentMessages = (state is SellerChatLoaded)
+        ? (state as SellerChatLoaded).messages
+        : const [];
 
     final clientSideId = 'msg_${DateTime.now().millisecondsSinceEpoch}';
     final optimisticMsg = ChatMessage(
       id: DateTime.now().millisecondsSinceEpoch,
-      threadUrl: currentState.threadUrl,
+      threadUrl: activeThreadUrl,
       sender: MessageSender.buyer,
       text: cleanText,
       sentAt: DateTime.now(),
@@ -138,52 +179,101 @@ class SellerChatCubit extends Cubit<SellerChatState> {
     );
 
     // Optimistically update UI
-    final updatedMessages = [...currentState.messages, optimisticMsg];
-    emit(currentState.copyWith(
+    final updatedMessages = [...currentMessages, optimisticMsg];
+    emit(SellerChatLoaded(
+      threadUrl: activeThreadUrl,
       messages: updatedMessages,
       isSending: true,
       errorMessage: null,
+      threadInfo: _threadInfo,
+      productId: _productId,
+      productName: _productName,
+      productImage: _productImage,
+      sellerName: _sellerName,
     ));
 
     try {
-      final confirmed = await _repository.sendMessage(
-        threadUrl: currentState.threadUrl,
-        message: cleanText,
-      );
+      if (activeThreadUrl.isEmpty && _productId != null) {
+        // Start brand new thread on server
+        developer.log('[SellerChatCubit] Starting new conversation for productId: $_productId', name: 'messages');
+        final newThreadUrl = await _repository.startConversation(
+          productId: _productId!,
+          message: cleanText,
+          productName: _productName,
+          productImage: _productImage,
+          sellerName: _sellerName,
+        );
 
-      // Update state with confirmed message
-      if (state is SellerChatLoaded) {
-        final current = state as SellerChatLoaded;
-        final list = current.messages.map((m) {
+        _currentThreadUrl = newThreadUrl;
+
+        final confirmed = optimisticMsg.copyWith(
+          threadUrl: newThreadUrl,
+          status: MessageStatus.sent,
+        );
+        final list = updatedMessages.map((m) {
           if (m.clientSideId == clientSideId || m.id == optimisticMsg.id) {
             return confirmed;
           }
           return m;
         }).toList();
 
-        emit(current.copyWith(
+        emit(SellerChatLoaded(
+          threadUrl: newThreadUrl,
           messages: list,
           isSending: false,
           errorMessage: null,
+          threadInfo: _threadInfo,
+          productId: _productId,
+          productName: _productName,
+          productImage: _productImage,
+          sellerName: _sellerName,
         ));
-      }
-    } catch (e) {
-      developer.log('[SellerChatCubit] sendMessage failed: $e', name: 'messages');
-      if (state is SellerChatLoaded) {
-        final current = state as SellerChatLoaded;
-        final list = current.messages.map((m) {
+      } else {
+        developer.log('[SellerChatCubit] Sending message to thread: $activeThreadUrl', name: 'messages');
+        final confirmed = await _repository.sendMessage(
+          threadUrl: activeThreadUrl,
+          message: cleanText,
+        );
+
+        final list = updatedMessages.map((m) {
           if (m.clientSideId == clientSideId || m.id == optimisticMsg.id) {
-            return m.copyWith(status: MessageStatus.failed);
+            return confirmed;
           }
           return m;
         }).toList();
 
-        emit(current.copyWith(
+        emit(SellerChatLoaded(
+          threadUrl: activeThreadUrl,
           messages: list,
           isSending: false,
-          errorMessage: 'Failed to send message. Tap to retry.',
+          errorMessage: null,
+          threadInfo: _threadInfo,
+          productId: _productId,
+          productName: _productName,
+          productImage: _productImage,
+          sellerName: _sellerName,
         ));
       }
+    } catch (e) {
+      developer.log('[SellerChatCubit] sendMessage failed: $e', name: 'messages');
+      final list = updatedMessages.map((m) {
+        if (m.clientSideId == clientSideId || m.id == optimisticMsg.id) {
+          return m.copyWith(status: MessageStatus.failed);
+        }
+        return m;
+      }).toList();
+
+      emit(SellerChatLoaded(
+        threadUrl: _currentThreadUrl ?? '',
+        messages: list,
+        isSending: false,
+        errorMessage: 'Failed to send message. Tap refresh icon on bubble to retry.',
+        threadInfo: _threadInfo,
+        productId: _productId,
+        productName: _productName,
+        productImage: _productImage,
+        sellerName: _sellerName,
+      ));
     }
   }
 
@@ -193,7 +283,9 @@ class SellerChatCubit extends Cubit<SellerChatState> {
     final currentState = state as SellerChatLoaded;
 
     // Remove the failed message and call sendMessage
-    final filtered = currentState.messages.where((m) => m.id != failedMessage.id && m.clientSideId != failedMessage.clientSideId).toList();
+    final filtered = currentState.messages
+        .where((m) => m.id != failedMessage.id && m.clientSideId != failedMessage.clientSideId)
+        .toList();
     emit(currentState.copyWith(messages: filtered));
 
     await sendMessage(failedMessage.text);
@@ -203,10 +295,10 @@ class SellerChatCubit extends Cubit<SellerChatState> {
   void startPolling({Duration interval = const Duration(seconds: 5)}) {
     _pollingTimer?.cancel();
     _pollingTimer = Timer.periodic(interval, (_) async {
-      if (state is SellerChatLoaded) {
-        final current = state as SellerChatLoaded;
+      final activeUrl = _currentThreadUrl;
+      if (activeUrl != null && activeUrl.isNotEmpty) {
         try {
-          final freshMessages = await _repository.getThreadMessages(current.threadUrl, forceRefresh: true);
+          final freshMessages = await _repository.getThreadMessages(activeUrl, forceRefresh: true);
           if (state is SellerChatLoaded) {
             final latest = state as SellerChatLoaded;
             // Merge while preserving any local pending/sending items

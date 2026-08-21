@@ -143,11 +143,16 @@ class ApiEndpoints {
 
   // ─── Messaging ──────────────────────────────────────────────────────────────
   /// GET — conversations list HTML
-  static const String messagesList = '/store/messages';
-  static const String messages = '/store/messages';
+  static const String messagesList = '/messages';
+  static const String messages = '/messages';
+  static const String storeMessages = '/store/messages';
 
-  /// POST form {product_id, message} → 302 to threadUrl
-  static const String newMessage = '/store/messages/new';
+  /// GET form page: /messages/new?product_id=N
+  static const String newMessagePage = '/messages/new';
+
+  /// POST form {product_id, subject, message, _csrf_token} → 302 to /messages/{id}
+  static const String startMessage = '/messages/start';
+  static const String newMessage = '/messages/start';
 
   // ─── Support ────────────────────────────────────────────────────────────────
   /// GET — tickets list HTML; POST form to create ticket
