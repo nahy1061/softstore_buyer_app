@@ -51,7 +51,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   RecaptchaController? _recaptchaController;
-
   bool _isRegistering = false;
 
   @override
@@ -159,9 +158,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Future<void> _handlePostRegistrationVerification(User user) async {
     _isHandlingPostRegistration = true;
 
-    // Show email verification popup: "Verify Your Email" (Verify Now vs Later)
-    // The "Verify Now" button calls Send OTP API before closing!
-    final choice = await EmailVerificationPromptDialog.show(
+    // Show email verification choice popup: "Verify Your Email" (Verify Now vs Later)
+    final shouldVerify = await EmailVerificationPromptDialog.show(
       context,
       email: user.email,
       name: user.fullName,
@@ -170,9 +168,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     if (!mounted) return;
 
-    if (choice == 'verify_success' || choice == 'verify') {
-      // Option 1: User tapped "Verify Now" and OTP was successfully sent!
-      // Open 6-digit OTP verification dialog (autoSendOtp: false because it was already sent)
+    if (shouldVerify == true) {
+      // Option 1: User tapped "Verify Now"
+      // Open the EXACT same OTP verification dialog used during order placement (autoSendOtp: true)
       final verified = await OtpVerificationDialog.show(
         context,
         email: user.email,
@@ -181,7 +179,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         title: 'Verify Your Email',
         subtitle: 'Enter the 6-digit code sent to ${user.email}.',
         primaryButtonText: 'Verify & Continue',
-        autoSendOtp: false,
+        autoSendOtp: true,
       );
 
       if (verified && mounted) {
@@ -223,9 +221,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
             debugPrint('[RegisterScreen] BlocListener fired: ${state.runtimeType}');
             if (state is AuthAuthenticated) {
               debugPrint('[RegisterScreen] Authenticated! Checking post-registration flow...');
-              if (_isRegistering && !_isHandlingPostRegistration) {
+              if (!_isHandlingPostRegistration) {
                 _isRegistering = false;
-                _handlePostRegistrationVerification(state.user);
+                if (!state.user.isEmailVerified) {
+                  _handlePostRegistrationVerification(state.user);
+                } else {
+                  _completeRegistration();
+                }
               }
             } else if (state is AuthError) {
               _isRegistering = false;

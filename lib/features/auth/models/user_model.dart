@@ -26,16 +26,28 @@ class User extends Equatable {
     final last = json['last_name']?.toString() ??
         (nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '');
 
+    final dynamic ev = json['email_verified'] ??
+        json['is_email_verified'] ??
+        json['is_verified'];
+    final bool verified = ev == true ||
+        ev == 1 ||
+        ev == '1' ||
+        ev == 'true' ||
+        json['email_verified_at'] != null;
+
     return User(
       id: json['id']?.toString(),
       firstName: first,
       lastName: last,
       email: json['email']?.toString() ?? '',
       phone: json['phone']?.toString(),
-      isEmailVerified: json['email_verified'] == true ||
-          json['is_email_verified'] == true,
+      isEmailVerified: verified,
     );
   }
+
+  /// Alias for [isEmailVerified] for domain consistency.
+  bool get emailVerified => isEmailVerified;
+
   String get fullName => '$firstName $lastName'.trim();
 
   User copyWith({

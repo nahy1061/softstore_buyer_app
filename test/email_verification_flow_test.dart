@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:softstore_buyer_app/features/auth/cubit/auth_cubit.dart';
 import 'package:softstore_buyer_app/features/auth/cubit/auth_state.dart';
 import 'package:softstore_buyer_app/features/auth/models/user_model.dart';
+import 'package:softstore_buyer_app/features/auth/screens/register_screen.dart';
 import 'package:softstore_buyer_app/features/auth/widgets/email_verification_prompt_dialog.dart';
 import 'package:softstore_buyer_app/features/auth/widgets/otp_verification_dialog.dart';
 import 'package:softstore_buyer_app/features/cart/cubit/cart_cubit.dart';
@@ -20,11 +21,11 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  group('Scenario 1 & 2: Email Verification Prompt Dialog UI & Actions', () {
+  group('Test 1 & 2: Email Verification Choice Popup UI & Transition', () {
     testWidgets(
-        'Prompt dialog displays title, message, registered email, and action buttons',
+        'Prompt dialog displays title, message, registered email, and returns true on Verify Now and false on Later',
         (WidgetTester tester) async {
-      String? userChoice;
+      bool? userChoice;
 
       await tester.pumpWidget(
         MaterialApp(
@@ -59,53 +60,86 @@ void main() {
       expect(find.text('Verify Now'), findsOneWidget);
       expect(find.text('Later'), findsOneWidget);
 
-      // Tap Later
+      // Tap Later -> returns false
       await tester.tap(find.text('Later'));
       await tester.pumpAndSettle();
+      expect(userChoice, false);
 
-      expect(userChoice, 'later');
+      // Re-open and test Verify Now -> returns true
+      await tester.tap(find.text('Open Prompt'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Verify Now'));
+      await tester.pumpAndSettle();
+      expect(userChoice, true);
     });
 
     testWidgets(
-        'Verify Now calls Send OTP API; stays open and displays error on failure',
+        'Signup Flow: Clicking Verify Now closes choice popup and immediately opens the existing order OTP popup',
         (WidgetTester tester) async {
-      String? userChoice;
+      final authCubit = AuthCubit();
+
+      final router = GoRouter(
+        initialLocation: '/register',
+        routes: [
+          GoRoute(
+            path: '/register',
+            builder: (context, state) => const RegisterScreen(),
+          ),
+          GoRoute(
+            path: '/home',
+            builder: (context, state) => const Scaffold(body: Text('Home Screen')),
+          ),
+        ],
+      );
 
       await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: Builder(
-              builder: (context) => ElevatedButton(
-                onPressed: () async {
-                  userChoice = await EmailVerificationPromptDialog.show(
-                    context,
-                    email: 'test_unregistered@domain.pk',
-                  );
-                },
-                child: const Text('Open Prompt'),
-              ),
-            ),
+        BlocProvider<AuthCubit>.value(
+          value: authCubit,
+          child: MaterialApp.router(
+            routerConfig: router,
           ),
         ),
       );
-
-      await tester.tap(find.text('Open Prompt'));
       await tester.pumpAndSettle();
 
-      // Tap Verify Now (will fail without real backend server)
-      await tester.tap(find.text('Verify Now'));
-      await tester.pump(); // Start request
+      // Simulate successful registration
+      authCubit.emit(const AuthAuthenticated(User(
+        id: '123',
+        firstName: 'Farhan',
+        lastName: 'Ali',
+        email: 'farhan@test.pk',
+        isEmailVerified: false,
+      )));
 
-      // While sending, shows CircularProgressIndicator
+      // Trigger post registration handler on RegisterScreen
+      await tester.pump();
       await tester.pumpAndSettle();
 
-      // Dialog stays open and displays error message banner
+      // Choice popup is visible
       expect(find.text('Verify Your Email'), findsOneWidget);
-      expect(userChoice, isNull);
+      expect(find.text('farhan@test.pk'), findsOneWidget);
+      expect(find.text('Verify Now'), findsOneWidget);
+      expect(find.text('Later'), findsOneWidget);
+
+      // Tap Verify Now
+      await tester.tap(find.text('Verify Now'));
+      await tester.pump(); // Closes choice dialog
+      await tester.pumpAndSettle(); // Opens existing OTP popup
+
+      // The exact OTP verification popup is now open!
+      expect(find.byType(OtpVerificationDialog), findsOneWidget);
+      expect(find.text('Verify & Continue'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(OtpVerificationDialog),
+          matching: find.byType(TextFormField),
+        ),
+        findsOneWidget,
+      );
     });
   });
 
-  group('Scenario 3: OTP Input and Error Handling', () {
+  group('Scenario 3: OTP Input, Error Handling, and Resend', () {
     testWidgets('Button is disabled for 0-5 digits and enabled at 6 digits',
         (WidgetTester tester) async {
       final authCubit = AuthCubit();
@@ -198,31 +232,6 @@ void main() {
       expect(find.text('Invalid OTP. Please enter the correct verification code.'), findsNothing);
     });
 
-    testWidgets('OTP Dialog with autoSendOtp: false starts countdown and displays success banner',
-        (WidgetTester tester) async {
-      final authCubit = AuthCubit();
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: BlocProvider<AuthCubit>.value(
-            value: authCubit,
-            child: const Scaffold(
-              body: OtpVerificationDialog(
-                email: 'newuser@softstore.pk',
-                autoSendOtp: false,
-                primaryButtonText: 'Verify & Continue',
-              ),
-            ),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      // Displays email and success info
-      expect(find.text('Verification code sent to newuser@softstore.pk'), findsOneWidget);
-      expect(find.text('Resend code in 60s'), findsOneWidget);
-    });
-
     testWidgets('Resend OTP button re-invokes Send OTP API with isResend: true and resets countdown',
         (WidgetTester tester) async {
       final authCubit = AuthCubit();
@@ -255,13 +264,12 @@ void main() {
       await tester.pump(); // Start send request
       await tester.pumpAndSettle();
 
-      // It triggers the API call
       expect(find.text('Verify Your Email'), findsOneWidget);
     });
   });
 
-  group('Scenario 4 & 5: Checkout Verification Flow', () {
-    testWidgets('Unverified user triggers OTP verification dialog when clicking Place Order',
+  group('Scenario 4 & 5: Checkout Order Placement OTP Verification Flow', () {
+    testWidgets('Unverified user triggers the SAME OTP verification dialog when clicking Place Order',
         (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 2.0;
@@ -338,7 +346,8 @@ void main() {
       await tester.tap(placeOrderBtn);
       await tester.pumpAndSettle();
 
-      // OTP Verification dialog is triggered for unverified user
+      // Exactly the same OTP Verification dialog is triggered for unverified user
+      expect(find.byType(OtpVerificationDialog), findsOneWidget);
       expect(find.text('Email Verification'), findsOneWidget);
       expect(
         find.byWidgetPredicate((w) =>
@@ -348,7 +357,7 @@ void main() {
       );
       expect(find.text('Verify & Place Order'), findsOneWidget);
 
-      // Scenario 5: User closes OTP dialog
+      // User cancels OTP dialog
       final cancelBtn = find.text('Cancel');
       expect(cancelBtn, findsOneWidget);
       await tester.tap(cancelBtn);
