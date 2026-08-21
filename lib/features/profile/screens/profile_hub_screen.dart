@@ -56,7 +56,6 @@ class _ProfileHubScreenState extends State<ProfileHubScreen> {
         final recent = await RecentlyViewedRepository.instance.getRecentlyViewed();
         setState(() {
           _orders = localOrders;
-          _isLoading = false;
         });
       }
     }
