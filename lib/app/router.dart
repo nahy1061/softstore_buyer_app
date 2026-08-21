@@ -24,6 +24,8 @@ import '../features/checkout/screens/checkout_screen.dart';
 import '../features/deals/screens/deals_screen.dart';
 
 import '../features/home/screens/home_screen.dart';
+import '../features/messages/models/conversation_model.dart';
+import '../features/messages/presentation/screens/seller_chat_screen.dart';
 import '../features/messages/screens/messages_screen.dart';
 
 import '../features/orders/cubit/order_cubit.dart';
@@ -99,6 +101,7 @@ abstract final class AppRoutes {
   static const String register = '/register';
   static const String home = '/home';
   static const String messages = '/messages';
+  static const String sellerChat = '/messages/chat';
   static const String categories = '/categories';
   static const String categoryProducts = '/category-products/:slug';
   static const String productDetail = '/product/:slug';
@@ -152,6 +155,21 @@ final GoRouter goRouter = GoRouter(
     GoRoute(
       path: AppRoutes.messages,
       builder: (context, state) => const MessagesScreen(),
+    ),
+    GoRoute(
+      path: AppRoutes.sellerChat,
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>? ?? {};
+        return SellerChatScreen(
+          threadUrl: extra['threadUrl'] as String?,
+          threadInfo: extra['threadInfo'] as ConversationThread?,
+          productId: extra['productId'] as int?,
+          productName: extra['productName'] as String?,
+          productImage: extra['productImage'] as String?,
+          productPrice: extra['productPrice'] as double?,
+          sellerName: extra['sellerName'] as String?,
+        );
+      },
     ),
     GoRoute(
       path: AppRoutes.categories,
