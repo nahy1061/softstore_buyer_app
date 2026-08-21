@@ -39,9 +39,7 @@ dependencies:
   url_launcher: ^6.3.1
   # Push Notifications & Announcements
   onesignal_flutter: ^5.6.8
-  webview_flutter: ^4.14.1
-  webview_flutter_android: ^4.14.0
-  webview_flutter_wkwebview: ^3.26.0
+  webview_flutter: ^4.10.0
 
 dev_dependencies:
   flutter_test:
