@@ -10,6 +10,7 @@ import '../features/auth/screens/splash_screen.dart';
 
 import '../features/cart/screens/cart_screen.dart';
 
+import '../features/catalog/models/catalog_models.dart';
 import '../features/catalog/screens/categories_screen.dart';
 import '../features/catalog/screens/category_products_screen.dart';
 import '../features/catalog/screens/seller_screen.dart';
@@ -178,7 +179,14 @@ final GoRouter goRouter = GoRouter(
       path: AppRoutes.seller,
       builder: (context, state) {
         final slug = state.pathParameters['slug'] ?? '';
-        return SellerScreen(slug: slug);
+        final extra = state.extra is Map<String, dynamic>
+            ? (state.extra as Map<String, dynamic>)
+            : <String, dynamic>{};
+        return SellerScreen(
+          slug: slug,
+          sellerName: extra['sellerName'] as String?,
+          initialProduct: extra['product'] as Product?,
+        );
       },
     ),
 

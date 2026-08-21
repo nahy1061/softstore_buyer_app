@@ -271,14 +271,45 @@ class CatalogRepository {
       if (parsedPrice != null) displayPrice = parsedPrice.toDouble();
     }
 
-    final images = HtmlParserUtil.extractSchemaImages(jsonLd?['image']);
+    final images = <String>[];
+    final schemaImages = HtmlParserUtil.extractSchemaImages(jsonLd?['image']);
+    for (final img in schemaImages) {
+      if (!images.contains(img)) images.add(img);
+    }
 
-    // Add main image from HTML if JSON-LD images are empty
-    if (images.isEmpty) {
-      final mainImg = doc.querySelector('.product-image img, .mkt-card-im img, main img');
-      final src = mainImg?.attributes['src'] ?? mainImg?.attributes['data-src'];
-      if (src != null && src.isNotEmpty) {
-        images.add(HtmlParserUtil.toAbsoluteUrl(src));
+    // Scrape only images belonging strictly to THIS product's gallery / hero container
+    // (Never query general page / recommend cards / other products)
+    final productContainer = doc.querySelector(
+      '.product-gallery, .product-images, .product-detail-images, .product-media, #productGallery, .product-main-image, [data-product-gallery], .product-showcase'
+    );
+
+    if (productContainer != null) {
+      final imgElements = productContainer.querySelectorAll('img, [data-src], [data-full], [data-zoom], [data-image]');
+      for (final el in imgElements) {
+        final src = el.attributes['data-full'] ??
+            el.attributes['data-zoom'] ??
+            el.attributes['data-image'] ??
+            el.attributes['data-src'] ??
+            el.attributes['src'];
+        if (src != null && src.isNotEmpty && !src.contains('logo') && !src.contains('avatar') && !src.contains('icon')) {
+          final absUrl = HtmlParserUtil.toAbsoluteUrl(src);
+          if (!images.contains(absUrl)) {
+            images.add(absUrl);
+          }
+        }
+      }
+    } else {
+      // If no dedicated gallery container found, grab only the primary product hero image
+      final mainHeroImg = doc.querySelector('.product-image img, .mkt-card-im img, [itemprop="image"]');
+      final src = mainHeroImg?.attributes['data-full'] ??
+          mainHeroImg?.attributes['data-zoom'] ??
+          mainHeroImg?.attributes['data-src'] ??
+          mainHeroImg?.attributes['src'];
+      if (src != null && src.isNotEmpty && !src.contains('logo') && !src.contains('avatar') && !src.contains('icon')) {
+        final absUrl = HtmlParserUtil.toAbsoluteUrl(src);
+        if (!images.contains(absUrl)) {
+          images.add(absUrl);
+        }
       }
     }
 
@@ -309,11 +340,50 @@ class CatalogRepository {
 
     // ── Seller ──
     SellerStub? seller;
-    final storeLink = doc.querySelector('a[href*="/store/"]');
-    if (storeLink != null) {
-      final href = storeLink.attributes['href'] ?? '';
-      final storeSlug = href.replaceAll(RegExp(r'.*/store/'), '').split('/').first;
-      seller = SellerStub(name: storeLink.text.trim(), slug: storeSlug);
+    if (jsonLd != null) {
+      final brandOrSeller = jsonLd['brand'] ?? jsonLd['seller'] ?? jsonLd['offers']?['seller'];
+      if (brandOrSeller is Map) {
+        final sellerName = (brandOrSeller['name'] ?? '').toString().trim();
+        if (sellerName.isNotEmpty) {
+          final sellerSlug = (brandOrSeller['slug'] ??
+                  brandOrSeller['url']?.toString().split('/').last ??
+                  sellerName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-'))
+              .toString();
+          seller = SellerStub(name: sellerName, slug: sellerSlug);
+        }
+      } else if (brandOrSeller is String && brandOrSeller.isNotEmpty) {
+        final sellerName = brandOrSeller.trim();
+        final sellerSlug = sellerName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-');
+        seller = SellerStub(name: sellerName, slug: sellerSlug);
+      }
+    }
+
+    if (seller == null) {
+      final storeLink = doc.querySelector(
+          'a[href*="/store/"], a[href*="/seller/"], a[href*="/shop/"], a[href*="/vendor/"], .store-name a, .seller-name a, .seller-info a, [data-seller-slug], [data-store-slug]');
+      if (storeLink != null) {
+        final href = storeLink.attributes['href'] ?? '';
+        final dataSlug = storeLink.attributes['data-seller-slug'] ?? storeLink.attributes['data-store-slug'];
+        final storeSlug = dataSlug ??
+            href.replaceAll(RegExp(r'.*(/store/|/seller/|/shop/|/vendor/)'), '').split('/').first.split('?').first.trim();
+        final storeName = storeLink.text.trim();
+        if (storeSlug.isNotEmpty) {
+          seller = SellerStub(
+            name: storeName.isNotEmpty ? storeName : storeSlug,
+            slug: storeSlug,
+          );
+        }
+      }
+    }
+
+    if (seller == null) {
+      final sellerEl = doc.querySelector(
+          '.seller-name, .store-name, .vendor-name, .shop-name, [itemprop="seller"], [itemprop="brand"]');
+      if (sellerEl != null && sellerEl.text.trim().isNotEmpty) {
+        final name = sellerEl.text.trim();
+        final slug = name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-');
+        seller = SellerStub(name: name, slug: slug);
+      }
     }
 
     // ── Specifications ──
@@ -335,6 +405,139 @@ class CatalogRepository {
         '.product-description, [itemprop="description"], .description');
     final description = descEl?.innerHtml.trim();
 
+    // ── Ratings & Reviews ──
+    double ratingValue = 0.0;
+    int reviewCount = 0;
+    final reviews = <ProductReview>[];
+
+    if (jsonLd != null) {
+      final aggRating = jsonLd['aggregateRating'];
+      if (aggRating is Map) {
+        final val = double.tryParse(aggRating['ratingValue']?.toString() ?? '');
+        final count = int.tryParse(aggRating['reviewCount']?.toString() ??
+            aggRating['ratingCount']?.toString() ?? '');
+        if (val != null && val > 0) ratingValue = val;
+        if (count != null && count > 0) reviewCount = count;
+      }
+
+      final jsonReviews = jsonLd['review'];
+      if (jsonReviews is List) {
+        for (final r in jsonReviews) {
+          if (r is Map) {
+            final author = (r['author'] is Map ? r['author']['name'] : r['author'])?.toString() ?? 'Buyer';
+            final text = (r['reviewBody'] ?? r['description'])?.toString() ?? '';
+            final score = int.tryParse(r['reviewRating']?['ratingValue']?.toString() ?? '') ?? 5;
+            final date = r['datePublished']?.toString();
+            if (text.isNotEmpty) {
+              reviews.add(ProductReview(
+                reviewer: author,
+                rating: score,
+                text: text,
+                date: date,
+              ));
+            }
+          }
+        }
+      }
+    }
+
+    // HTML scraping for Ratings & Reviews from session response
+    if (ratingValue == 0.0) {
+      final ratingText = doc.querySelector('.rating-score, .average-rating, .rating-val, .mkt-rating, [data-rating], [itemprop="ratingValue"]')?.text ??
+          doc.querySelector('[data-rating]')?.attributes['data-rating'];
+      final parsedRating = HtmlParserUtil.parseNumberFromText(ratingText);
+      if (parsedRating != null && parsedRating > 0 && parsedRating <= 5) {
+        ratingValue = parsedRating.toDouble();
+      }
+    }
+
+    if (reviewCount == 0) {
+      final countText = doc.querySelector('.rating-count, .reviews-count, .total-reviews, [data-review-count], [itemprop="reviewCount"]')?.text ??
+          doc.querySelector('[data-review-count]')?.attributes['data-review-count'];
+      final parsedCount = HtmlParserUtil.parseNumberFromText(countText);
+      if (parsedCount != null) reviewCount = parsedCount;
+    }
+
+    if (reviews.isEmpty) {
+      final reviewElements = doc.querySelectorAll('.review-item, .customer-review, .comment-item, .review-card, [itemprop="review"]');
+      for (final el in reviewElements) {
+        final author = el.querySelector('.reviewer, .author, .name, [itemprop="author"], strong')?.text.trim() ?? 'Verified Buyer';
+        final text = el.querySelector('.review-text, .comment, .body, [itemprop="reviewBody"], p')?.text.trim() ?? '';
+        final starIcons = el.querySelectorAll('.fa-star, .star.filled, .star-active').length;
+        final rating = starIcons > 0 ? starIcons : 5;
+        final date = el.querySelector('.date, .review-date, time, [itemprop="datePublished"]')?.text.trim();
+        if (text.isNotEmpty) {
+          reviews.add(ProductReview(
+            reviewer: author,
+            rating: rating,
+            text: text,
+            date: date,
+          ));
+        }
+      }
+    }
+
+    if (reviewCount == 0 && reviews.isNotEmpty) {
+      reviewCount = reviews.length;
+    }
+
+    // ── Related / Recommended Products ──
+    final related = <Product>[];
+    final relatedCards = doc.querySelectorAll('.related-products article, .recommended-products article, .similar-products article, .product-recommendations .mkt-card');
+    for (final card in relatedCards) {
+      final linkEl = card.querySelector('a[href*="/product/"]');
+      final href = linkEl?.attributes['href'] ?? '';
+      final relSlug = href.contains('/product/')
+          ? href.split('/product/').last.split('?').first.trim()
+          : '';
+      final relName = card.querySelector('.mkt-name, .name, h3, h4')?.text.trim() ?? '';
+      final imgEl = card.querySelector('img');
+      final rawImg = imgEl?.attributes['src'] ?? imgEl?.attributes['data-src'] ?? '';
+      final relImg = rawImg.isNotEmpty ? HtmlParserUtil.toAbsoluteUrl(rawImg) : null;
+      final priceText = card.querySelector('.price, .mkt-price')?.text ?? '';
+      final relPrice = (HtmlParserUtil.parseNumberFromText(priceText) ?? 0).toDouble();
+
+      if (relName.isNotEmpty && relSlug.isNotEmpty && relSlug != slug) {
+        related.add(Product(
+          id: relSlug.hashCode.abs(),
+          name: relName,
+          slug: relSlug,
+          imageUrl: relImg,
+          displayPrice: relPrice,
+        ));
+      }
+    }
+
+    // ── Category / Breadcrumb ──
+    String? categoryName;
+    String? categorySlug;
+    if (jsonLd != null && jsonLd['category'] != null) {
+      categoryName = jsonLd['category'].toString().trim();
+      categorySlug = categoryName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-');
+    }
+    if (categoryName == null || categoryName.isEmpty) {
+      final breadcrumbEl = doc.querySelectorAll('.breadcrumb a, .breadcrumbs a, nav.breadcrumb a');
+      for (final b in breadcrumbEl.reversed) {
+        final href = b.attributes['href'] ?? '';
+        final text = b.text.trim();
+        if (text.isNotEmpty && !text.toLowerCase().contains('home') && href.contains('category')) {
+          categoryName = text;
+          categorySlug = href.split('category/').last.split('?').first.trim();
+          break;
+        }
+      }
+    }
+    if (categoryName == null || categoryName.isEmpty) {
+      final catLink = doc.querySelector('a[href*="/category/"], .product-category a, [data-category]');
+      if (catLink != null) {
+        categoryName = catLink.text.trim();
+        final href = catLink.attributes['href'] ?? '';
+        if (href.contains('/category/')) {
+          categorySlug = href.split('/category/').last.split('?').first.trim();
+        }
+      }
+    }
+
     return ProductDetail(
       id: productId,
       name: name,
@@ -349,6 +552,12 @@ class CatalogRepository {
       stockQuantity: stockQty,
       seller: seller,
       specifications: specs,
+      rating: ratingValue,
+      ratingCount: reviewCount,
+      reviews: reviews,
+      relatedProducts: related,
+      category: categoryName,
+      categorySlug: categorySlug,
     );
   }
 
@@ -435,14 +644,44 @@ class CatalogRepository {
 
   // ─── Seller Profile ───────────────────────────────────────────────────────
 
-  Future<SellerProfile> getSellerProfile(String slug) async {
+  Future<SellerProfile> getSellerProfile(String slug, {String? sellerName}) async {
     try {
       final response = await _client.get<String>(
         '${ApiEndpoints.sellerProfile}$slug',
         options: Options(responseType: ResponseType.plain, followRedirects: true),
       );
       final html = response.data ?? '';
-      return _parseSellerProfile(html, slug);
+      var profile = _parseSellerProfile(html, slug);
+
+      // If store profile has only 0 or 1 product parsed from static HTML, query the catalog search for this seller's products
+      if (profile.products.isEmpty || profile.products.length <= 1) {
+        final storeQuery = sellerName?.isNotEmpty == true ? sellerName! : (profile.name.isNotEmpty && profile.name != slug ? profile.name : slug);
+        try {
+          final searchRes = await searchProducts(query: storeQuery);
+          if (searchRes.products.isNotEmpty) {
+            final combined = <Product>[...profile.products];
+            for (final p in searchRes.products) {
+              if (!combined.any((item) => item.slug == p.slug || item.id == p.id)) {
+                combined.add(p);
+              }
+            }
+            profile = SellerProfile(
+              id: profile.id,
+              name: profile.name,
+              slug: profile.slug,
+              description: profile.description,
+              logoUrl: profile.logoUrl,
+              bannerUrl: profile.bannerUrl,
+              rating: profile.rating,
+              ratingCount: profile.ratingCount,
+              products: combined,
+              categories: profile.categories,
+            );
+          }
+        } catch (_) {}
+      }
+
+      return profile;
     } on DioException catch (e) {
       throw _mapError(e);
     }
@@ -451,20 +690,63 @@ class CatalogRepository {
   SellerProfile _parseSellerProfile(String html, String slug) {
     final doc = HtmlParserUtil.parse(html);
 
-    final name = doc.querySelector('h1, .store-name, .seller-name')?.text.trim() ?? slug;
+    final name = doc.querySelector('h1, .store-name, .seller-name, .vendor-name, .shop-name')?.text.trim() ?? slug;
     final description =
-        doc.querySelector('.store-description, .about, .seller-bio')?.text.trim();
+        doc.querySelector('.store-description, .about, .seller-bio, .vendor-bio')?.text.trim();
     final logoEl = doc.querySelector('.store-logo img, .seller-logo img, .mkt-seller-av img');
     final bannerEl = doc.querySelector('.store-banner img, .seller-banner img');
 
-    // Products on the seller store page
-    final jsonLdProducts = HtmlParserUtil.extractJsonLd(html)
+    // 1. Check if the page has a dedicated store products grid container
+    final storeGrid = doc.querySelector('.store-products, .seller-products, #storeProducts, .vendor-products, .store-catalog');
+    final productsHtml = storeGrid != null ? storeGrid.outerHtml : html;
+
+    // 2. Parse products strictly within store scope
+    final jsonLdProducts = HtmlParserUtil.extractJsonLd(productsHtml)
         .where((b) => b['@type'] == 'Product')
         .toList();
     List<Product> products = jsonLdProducts.map(_productFromJsonLd).toList();
 
     if (products.isEmpty) {
-      products = _parseProductsFromHtml(html);
+      // Parse HTML cards from store container if present
+      final cardEls = (storeGrid ?? doc).querySelectorAll(
+          'article.mkt-card, .mkt-card, .product-card, article.product-item, .product-item');
+      
+      for (final card in cardEls) {
+        // If no dedicated store grid, ensure card has seller/store matching attribute
+        if (storeGrid == null) {
+          final cardSeller = card.attributes['data-seller'] ??
+              card.attributes['data-store'] ??
+              card.querySelector('[data-seller]')?.attributes['data-seller'] ??
+              card.querySelector('a[href*="/store/"]')?.attributes['href']?.split('/store/').last.split('?').first;
+
+          if (cardSeller != null && cardSeller.isNotEmpty && cardSeller.toLowerCase() != slug.toLowerCase()) {
+            continue; // Skip products belonging to other stores
+          }
+        }
+
+        final linkEl = card.querySelector('a.mkt-name, a.mkt-card-im, a[href*="/product/"]');
+        final href = linkEl?.attributes['href'] ?? '';
+        final pSlug = href.contains('/product/')
+            ? href.split('/product/').last.split('?').first.trim()
+            : '';
+        final pName = card.querySelector('.mkt-name, .fc-name, h3, h4')?.text.trim() ?? '';
+        if (pName.isEmpty && pSlug.isEmpty) continue;
+
+        final imgEl = card.querySelector('img');
+        final rawImg = imgEl?.attributes['src'] ?? imgEl?.attributes['data-src'] ?? '';
+        final imageUrl = rawImg.isNotEmpty ? HtmlParserUtil.toAbsoluteUrl(rawImg) : null;
+
+        final priceText = card.querySelector('.mkt-price, .fc-price, .price')?.text ?? '';
+        final price = (HtmlParserUtil.parseNumberFromText(priceText) ?? 0).toDouble();
+
+        products.add(Product(
+          id: pSlug.isNotEmpty ? pSlug.hashCode.abs() : pName.hashCode.abs(),
+          name: pName.isNotEmpty ? pName : pSlug,
+          slug: pSlug.isNotEmpty ? pSlug : pName.toLowerCase().replaceAll(' ', '-'),
+          imageUrl: imageUrl,
+          displayPrice: price,
+        ));
+      }
     }
 
     return SellerProfile(
