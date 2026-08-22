@@ -5,6 +5,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_dimensions.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/utils/contact_filter_service.dart';
 import '../../models/chat_message_model.dart';
 
 class ChatBubble extends StatelessWidget {
@@ -24,8 +25,8 @@ class ChatBubble extends StatelessWidget {
     return '$hour:$minute $period';
   }
 
-  void _copyToClipboard(BuildContext context) {
-    Clipboard.setData(ClipboardData(text: message.text));
+  void _copyToClipboard(BuildContext context, String textToCopy) {
+    Clipboard.setData(ClipboardData(text: textToCopy));
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Message copied to clipboard'),
@@ -38,6 +39,11 @@ class ChatBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final isBuyer = message.isFromBuyer;
     final isSystem = message.sender == MessageSender.system;
+
+    // Contact filtering & display sanitization
+    final filterResult = ContactFilterService.instance.analyze(message.text);
+    final bool hasSensitiveContact = filterResult.hasViolation;
+    final String displayText = hasSensitiveContact ? filterResult.sanitizedText : message.text;
 
     if (isSystem) {
       return Center(
@@ -67,109 +73,143 @@ class ChatBubble extends StatelessWidget {
         horizontal: AppSpacing.md,
         vertical: AppSpacing.xs,
       ),
-      child: Row(
-        mainAxisAlignment: isBuyer ? MainAxisAlignment.end : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.end,
+      child: Column(
+        crossAxisAlignment: isBuyer ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
-          if (!isBuyer) ...[
-            Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              alignment: Alignment.center,
-              child: const Icon(
-                Icons.store_rounded,
-                size: 16,
-                color: AppColors.primary,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.xs),
-          ],
-          Flexible(
-            child: GestureDetector(
-              onLongPress: () => _copyToClipboard(context),
-              child: Container(
-                constraints: BoxConstraints(
-                  maxWidth: MediaQuery.of(context).size.width * 0.75,
-                ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md,
-                  vertical: AppSpacing.sm,
-                ),
-                decoration: BoxDecoration(
-                  color: isBuyer ? AppColors.primary : Colors.white,
-                  borderRadius: BorderRadius.only(
-                    topLeft: AppDimensions.radiusMd.topLeft,
-                    topRight: AppDimensions.radiusMd.topRight,
-                    bottomLeft: isBuyer
-                        ? AppDimensions.radiusMd.bottomLeft
-                        : Radius.zero,
-                    bottomRight: isBuyer
-                        ? Radius.zero
-                        : AppDimensions.radiusMd.bottomRight,
+          Row(
+            mainAxisAlignment: isBuyer ? MainAxisAlignment.end : MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              if (!isBuyer) ...[
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
                   ),
-                  border: isBuyer
-                      ? null
-                      : Border.all(color: AppColors.border, width: 1),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.04),
-                      blurRadius: 3,
-                      offset: const Offset(0, 1),
-                    ),
-                  ],
+                  alignment: Alignment.center,
+                  child: const Icon(
+                    Icons.store_rounded,
+                    size: 16,
+                    color: AppColors.primary,
+                  ),
                 ),
-                child: Column(
-                  crossAxisAlignment: isBuyer
-                      ? CrossAxisAlignment.end
-                      : CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      message.text,
-                      style: AppTypography.bodyMedium.copyWith(
-                        color: isBuyer ? Colors.white : AppColors.textPrimary,
-                        height: 1.35,
-                      ),
+                const SizedBox(width: AppSpacing.xs),
+              ],
+              Flexible(
+                child: GestureDetector(
+                  onLongPress: () => _copyToClipboard(context, displayText),
+                  child: Container(
+                    constraints: BoxConstraints(
+                      maxWidth: MediaQuery.of(context).size.width * 0.75,
                     ),
-                    const SizedBox(height: 3),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          _formatTime(message.sentAt),
-                          style: AppTypography.labelSmall.copyWith(
-                            fontSize: 10,
-                            color: isBuyer
-                                ? Colors.white.withValues(alpha: 0.75)
-                                : AppColors.textDisabled,
-                          ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.md,
+                      vertical: AppSpacing.sm,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isBuyer ? AppColors.primary : Colors.white,
+                      borderRadius: BorderRadius.only(
+                        topLeft: AppDimensions.radiusMd.topLeft,
+                        topRight: AppDimensions.radiusMd.topRight,
+                        bottomLeft: isBuyer
+                            ? AppDimensions.radiusMd.bottomLeft
+                            : Radius.zero,
+                        bottomRight: isBuyer
+                            ? Radius.zero
+                            : AppDimensions.radiusMd.bottomRight,
+                      ),
+                      border: isBuyer
+                          ? null
+                          : Border.all(color: AppColors.border, width: 1),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.04),
+                          blurRadius: 3,
+                          offset: const Offset(0, 1),
                         ),
-                        if (isBuyer) ...[
-                          const SizedBox(width: 4),
-                          _buildStatusIcon(),
-                        ],
                       ],
                     ),
+                    child: Column(
+                      crossAxisAlignment: isBuyer
+                          ? CrossAxisAlignment.end
+                          : CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          displayText,
+                          style: AppTypography.bodyMedium.copyWith(
+                            color: isBuyer ? Colors.white : AppColors.textPrimary,
+                            height: 1.35,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _formatTime(message.sentAt),
+                              style: AppTypography.labelSmall.copyWith(
+                                fontSize: 10,
+                                color: isBuyer
+                                    ? Colors.white.withValues(alpha: 0.75)
+                                    : AppColors.textDisabled,
+                              ),
+                            ),
+                            if (isBuyer) ...[
+                              const SizedBox(width: 4),
+                              _buildStatusIcon(),
+                            ],
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              if (message.isFailed && onRetry != null) ...[
+                const SizedBox(width: 4),
+                IconButton(
+                  icon: const Icon(
+                    Icons.refresh_rounded,
+                    color: AppColors.error,
+                    size: 20,
+                  ),
+                  onPressed: onRetry,
+                  tooltip: 'Retry message',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ],
+          ),
+          if (hasSensitiveContact) ...[
+            const SizedBox(height: 3),
+            Padding(
+              padding: EdgeInsets.only(left: isBuyer ? 0 : 34),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.warning.withValues(alpha: 0.12),
+                  borderRadius: AppDimensions.radiusSm,
+                  border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.shield_outlined, size: 11, color: AppColors.warning),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Contact details hidden for safety',
+                      style: AppTypography.labelSmall.copyWith(
+                        color: AppColors.warning,
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ],
                 ),
               ),
-            ),
-          ),
-          if (message.isFailed && onRetry != null) ...[
-            const SizedBox(width: 4),
-            IconButton(
-              icon: const Icon(
-                Icons.refresh_rounded,
-                color: AppColors.error,
-                size: 20,
-              ),
-              onPressed: onRetry,
-              tooltip: 'Retry message',
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
             ),
           ],
         ],

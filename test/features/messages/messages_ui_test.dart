@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:softstore_buyer_app/core/theme/app_colors.dart';
 import 'package:softstore_buyer_app/features/messages/models/chat_message_model.dart';
 import 'package:softstore_buyer_app/features/messages/models/conversation_model.dart';
 import 'package:softstore_buyer_app/features/messages/presentation/widgets/chat_bubble.dart';
@@ -86,6 +85,30 @@ void main() {
 
       expect(find.text('Yes, 1 year official local warranty included.'), findsOneWidget);
       expect(find.byIcon(Icons.store_rounded), findsOneWidget);
+    });
+
+    testWidgets('redacts sensitive contact info and displays safety warning chip', (tester) async {
+      final msg = ChatMessage(
+        id: 3,
+        sender: MessageSender.seller,
+        text: 'Contact me on 03001234567 or email me at shop@gmail.com',
+        sentAt: DateTime(2026, 8, 21, 14, 35),
+        status: MessageStatus.sent,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ChatBubble(message: msg),
+          ),
+        ),
+      );
+
+      expect(find.textContaining('03001234567'), findsNothing);
+      expect(find.textContaining('shop@gmail.com'), findsNothing);
+      expect(find.textContaining('[Phone Number Hidden]'), findsOneWidget);
+      expect(find.textContaining('[Email Address Hidden]'), findsOneWidget);
+      expect(find.text('Contact details hidden for safety'), findsOneWidget);
     });
   });
 

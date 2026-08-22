@@ -8,7 +8,7 @@ import '../../../../core/theme/app_dimensions.dart';
 import '../../../../core/theme/app_durations.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
-import '../../models/chat_message_model.dart';
+import '../../../../core/utils/contact_filter_service.dart';
 import '../../models/conversation_model.dart';
 import '../cubits/seller_chat_cubit.dart';
 import '../cubits/seller_chat_state.dart';
@@ -129,9 +129,94 @@ class _SellerChatScreenContentState extends State<_SellerChatScreenContent> {
     });
   }
 
+  void _showContactWarningDialog(BuildContext context, ContactFilterResult result) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: AppDimensions.radiusLg,
+        ),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.xs),
+              decoration: BoxDecoration(
+                color: AppColors.warning.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.shield_outlined,
+                color: AppColors.warning,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            const Expanded(
+              child: Text(
+                'Policy Warning',
+                style: AppTypography.titleMedium,
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              result.warningMessage ??
+                  'Sharing personal contact information (phone numbers, WhatsApp, emails, external payments) is prohibited to ensure buyer safety and order protection.',
+              style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.sm),
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: AppDimensions.radiusMd,
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline, size: 16, color: AppColors.textSecondary),
+                  const SizedBox(width: AppSpacing.xs),
+                  Expanded(
+                    child: Text(
+                      'Detected: ${result.detectedTypes.join(", ")}',
+                      style: AppTypography.labelSmall.copyWith(
+                        color: AppColors.error,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(
+              'Edit Message',
+              style: AppTypography.labelLarge.copyWith(color: AppColors.primary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _sendMessage([String? customText]) {
     final text = (customText ?? _messageController.text).trim();
     if (text.isEmpty) return;
+
+    // Contact Policy Filter Check
+    final filterResult = ContactFilterService.instance.analyze(text);
+    if (filterResult.hasViolation) {
+      _showContactWarningDialog(context, filterResult);
+      return;
+    }
 
     context.read<SellerChatCubit>().sendMessage(text);
     _messageController.clear();
