@@ -28,8 +28,29 @@ class SellerStub extends Equatable {
 
   const SellerStub({this.id, required this.name, required this.slug});
 
+  Map<String, dynamic> toJson() => {
+    if (id != null) 'id': id,
+    'name': name,
+    'slug': slug,
+  };
+
+  factory SellerStub.fromJson(Map<String, dynamic> json) => SellerStub(
+    id: (json['id'] as num?)?.toInt() ??
+        (json['seller_id'] as num?)?.toInt() ??
+        (json['store_id'] as num?)?.toInt() ??
+        (json['tenant_id'] as num?)?.toInt(),
+    name: json['name'] as String? ??
+        json['seller_name'] as String? ??
+        json['store_name'] as String? ??
+        '',
+    slug: json['slug'] as String? ??
+        json['seller_slug'] as String? ??
+        json['store_slug'] as String? ??
+        '',
+  );
+
   @override
-  List<Object?> get props => [id, slug];
+  List<Object?> get props => [id, slug, name];
 }
 
 // ─── Product (list item) ─────────────────────────────────────────────────────
@@ -57,6 +78,14 @@ class Product extends Equatable {
     this.seller,
   });
 
+  /// Store/Seller convenience getters
+  int? get storeId => seller?.id;
+  int? get sellerId => seller?.id;
+  String? get storeSlug => seller?.slug;
+  String? get sellerSlug => seller?.slug;
+  String? get storeName => seller?.name;
+  String? get sellerName => seller?.name;
+
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,
@@ -66,21 +95,118 @@ class Product extends Equatable {
     'listPrice': listPrice,
     'discountPercent': discountPercent,
     'inStock': inStock,
+    if (seller != null) ...{
+      'seller_id': seller!.id,
+      'seller_name': seller!.name,
+      'seller_slug': seller!.slug,
+      'seller': seller!.toJson(),
+    },
   };
 
-  factory Product.fromJson(Map<String, dynamic> json) => Product(
-    id: (json['id'] as num?)?.toInt() ?? 0,
-    name: json['name'] as String? ?? '',
-    slug: json['slug'] as String? ?? '',
-    imageUrl: json['imageUrl'] as String?,
-    displayPrice: (json['displayPrice'] as num?)?.toDouble() ?? 0.0,
-    listPrice: (json['listPrice'] as num?)?.toDouble(),
-    discountPercent: (json['discountPercent'] as num?)?.toDouble(),
-    inStock: json['inStock'] as bool? ?? true,
-  );
+  factory Product.fromJson(Map<String, dynamic> json) {
+    SellerStub? parsedSeller;
+    if (json['seller'] is Map<String, dynamic>) {
+      parsedSeller =
+          SellerStub.fromJson(json['seller'] as Map<String, dynamic>);
+    } else if (json['seller'] is String &&
+        (json['seller'] as String).isNotEmpty) {
+      final sName = json['seller'] as String;
+      parsedSeller = SellerStub(
+        name: sName,
+        slug: sName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-'),
+      );
+    } else if (json['seller_name'] != null ||
+        json['seller_slug'] != null ||
+        json['store_name'] != null ||
+        json['store_slug'] != null ||
+        json['seller_id'] != null ||
+        json['store_id'] != null ||
+        json['tenant_id'] != null) {
+      final sName = json['seller_name']?.toString() ??
+          json['store_name']?.toString() ??
+          json['vendor_name']?.toString() ??
+          '';
+      final sSlug = json['seller_slug']?.toString() ??
+          json['store_slug']?.toString() ??
+          (sName.isNotEmpty
+              ? sName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+              : '');
+      final sId = (json['seller_id'] as num?)?.toInt() ??
+          (json['store_id'] as num?)?.toInt() ??
+          (json['tenant_id'] as num?)?.toInt();
+      if (sName.isNotEmpty || sSlug.isNotEmpty || sId != null) {
+        parsedSeller = SellerStub(
+          id: sId,
+          name: sName.isNotEmpty
+              ? sName
+              : (sSlug.isNotEmpty ? sSlug : 'Store'),
+          slug: sSlug.isNotEmpty
+              ? sSlug
+              : (sId != null ? 'store-$sId' : 'store'),
+        );
+      }
+    }
+
+    final rawId = json['id'];
+    final id = rawId is num
+        ? rawId.toInt()
+        : (int.tryParse(rawId?.toString() ?? '') ?? 0);
+
+    final rawDisplayPrice =
+        json['displayPrice'] ?? json['selling_price'] ?? json['price'];
+    final displayPrice = rawDisplayPrice is num
+        ? rawDisplayPrice.toDouble()
+        : (double.tryParse(rawDisplayPrice?.toString() ?? '') ?? 0.0);
+
+    final rawListPrice = json['listPrice'] ?? json['original_price'];
+    final listPrice = rawListPrice is num
+        ? rawListPrice.toDouble()
+        : double.tryParse(rawListPrice?.toString() ?? '');
+
+    final rawDiscount = json['discountPercent'];
+    final discountPercent = rawDiscount is num
+        ? rawDiscount.toDouble()
+        : double.tryParse(rawDiscount?.toString() ?? '');
+
+    return Product(
+      id: id,
+      name: json['name'] as String? ?? json['product_name'] as String? ?? '',
+      slug: json['slug'] as String? ?? '',
+      imageUrl: json['imageUrl'] as String? ?? json['image_url'] as String?,
+      displayPrice: displayPrice,
+      listPrice: listPrice,
+      discountPercent: discountPercent,
+      inStock: json['inStock'] as bool? ?? true,
+      seller: parsedSeller,
+    );
+  }
+
+  Product copyWith({
+    int? id,
+    String? name,
+    String? slug,
+    String? imageUrl,
+    double? displayPrice,
+    double? listPrice,
+    double? discountPercent,
+    bool? inStock,
+    SellerStub? seller,
+  }) {
+    return Product(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      slug: slug ?? this.slug,
+      imageUrl: imageUrl ?? this.imageUrl,
+      displayPrice: displayPrice ?? this.displayPrice,
+      listPrice: listPrice ?? this.listPrice,
+      discountPercent: discountPercent ?? this.discountPercent,
+      inStock: inStock ?? this.inStock,
+      seller: seller ?? this.seller,
+    );
+  }
 
   @override
-  List<Object?> get props => [id, slug];
+  List<Object?> get props => [id, slug, seller];
 }
 
 // ─── Variant ─────────────────────────────────────────────────────────────────
@@ -181,6 +307,14 @@ class ProductDetail extends Equatable {
   /// True if stock is known and limited
   bool get hasKnownStock =>
       stockQuantity != null && stockQuantity != 9999;
+
+  /// Store/Seller convenience getters
+  int? get storeId => seller?.id;
+  int? get sellerId => seller?.id;
+  String? get storeSlug => seller?.slug;
+  String? get sellerSlug => seller?.slug;
+  String? get storeName => seller?.name;
+  String? get sellerName => seller?.name;
 
   @override
   List<Object?> get props => [id, slug];

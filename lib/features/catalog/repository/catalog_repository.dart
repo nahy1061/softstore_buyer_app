@@ -341,36 +341,64 @@ class CatalogRepository {
     // ── Seller ──
     SellerStub? seller;
     if (jsonLd != null) {
-      final brandOrSeller = jsonLd['brand'] ?? jsonLd['seller'] ?? jsonLd['offers']?['seller'];
+      final brandOrSeller = jsonLd['brand'] ??
+          jsonLd['seller'] ??
+          jsonLd['offers']?['seller'] ??
+          jsonLd['offers']?['offeredBy'];
       if (brandOrSeller is Map) {
         final sellerName = (brandOrSeller['name'] ?? '').toString().trim();
+        final sellerId = int.tryParse(brandOrSeller['id']?.toString() ??
+            brandOrSeller['seller_id']?.toString() ??
+            brandOrSeller['store_id']?.toString() ??
+            brandOrSeller['tenant_id']?.toString() ??
+            '');
         if (sellerName.isNotEmpty) {
           final sellerSlug = (brandOrSeller['slug'] ??
                   brandOrSeller['url']?.toString().split('/').last ??
-                  sellerName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-'))
+                  sellerName
+                      .toLowerCase()
+                      .replaceAll(RegExp(r'[^a-z0-9]+'), '-'))
               .toString();
-          seller = SellerStub(name: sellerName, slug: sellerSlug);
+          seller = SellerStub(id: sellerId, name: sellerName, slug: sellerSlug);
         }
       } else if (brandOrSeller is String && brandOrSeller.isNotEmpty) {
         final sellerName = brandOrSeller.trim();
-        final sellerSlug = sellerName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-');
+        final sellerSlug =
+            sellerName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-');
         seller = SellerStub(name: sellerName, slug: sellerSlug);
       }
     }
 
     if (seller == null) {
       final storeLink = doc.querySelector(
-          'a[href*="/store/"], a[href*="/seller/"], a[href*="/shop/"], a[href*="/vendor/"], .store-name a, .seller-name a, .seller-info a, [data-seller-slug], [data-store-slug]');
+          'a[href*="/store/"], a[href*="/seller/"], a[href*="/shop/"], a[href*="/vendor/"], .store-name a, .seller-name a, .seller-info a, .mkt-seller a, [data-seller-slug], [data-store-slug], [data-seller-id], [data-store-id], [data-tenant-id]');
       if (storeLink != null) {
         final href = storeLink.attributes['href'] ?? '';
-        final dataSlug = storeLink.attributes['data-seller-slug'] ?? storeLink.attributes['data-store-slug'];
+        final dataSlug = storeLink.attributes['data-seller-slug'] ??
+            storeLink.attributes['data-store-slug'];
+        final dataId = storeLink.attributes['data-seller-id'] ??
+            storeLink.attributes['data-store-id'] ??
+            storeLink.attributes['data-tenant-id'];
+        final sellerId = int.tryParse(dataId ?? '');
         final storeSlug = dataSlug ??
-            href.replaceAll(RegExp(r'.*(/store/|/seller/|/shop/|/vendor/)'), '').split('/').first.split('?').first.trim();
+            href
+                .replaceAll(
+                    RegExp(r'.*(/store/|/seller/|/shop/|/vendor/)'), '')
+                .split('/')
+                .first
+                .split('?')
+                .first
+                .trim();
         final storeName = storeLink.text.trim();
-        if (storeSlug.isNotEmpty) {
+        if (storeSlug.isNotEmpty || storeName.isNotEmpty) {
           seller = SellerStub(
+            id: sellerId,
             name: storeName.isNotEmpty ? storeName : storeSlug,
-            slug: storeSlug,
+            slug: storeSlug.isNotEmpty
+                ? storeSlug
+                : storeName
+                    .toLowerCase()
+                    .replaceAll(RegExp(r'[^a-z0-9]+'), '-'),
           );
         }
       }
@@ -378,11 +406,31 @@ class CatalogRepository {
 
     if (seller == null) {
       final sellerEl = doc.querySelector(
-          '.seller-name, .store-name, .vendor-name, .shop-name, [itemprop="seller"], [itemprop="brand"]');
+          '.seller-name, .store-name, .vendor-name, .shop-name, .seller-info, .store-info, .mkt-seller, [itemprop="seller"], [itemprop="brand"]');
       if (sellerEl != null && sellerEl.text.trim().isNotEmpty) {
         final name = sellerEl.text.trim();
-        final slug = name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-');
-        seller = SellerStub(name: name, slug: slug);
+        final dataId = sellerEl.attributes['data-seller-id'] ??
+            sellerEl.attributes['data-store-id'] ??
+            sellerEl.attributes['data-tenant-id'];
+        final dataSlug = sellerEl.attributes['data-seller-slug'] ??
+            sellerEl.attributes['data-store-slug'];
+        final slug =
+            dataSlug ?? name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-');
+        final sellerId = int.tryParse(dataId ?? '');
+        seller = SellerStub(id: sellerId, name: name, slug: slug);
+      }
+    }
+
+    if (seller == null) {
+      final tenantInput = doc.querySelector(
+          'input[name="tenant_id"], input[name="seller_id"], input[name="store_id"], [data-tenant-id], [data-seller-id]');
+      final idStr = tenantInput?.attributes['value'] ??
+          tenantInput?.attributes['data-tenant-id'] ??
+          tenantInput?.attributes['data-seller-id'];
+      final sellerId = int.tryParse(idStr ?? '');
+      if (sellerId != null && sellerId > 0) {
+        seller = SellerStub(
+            id: sellerId, name: 'Store #$sellerId', slug: 'store-$sellerId');
       }
     }
 
@@ -856,6 +904,40 @@ class CatalogRepository {
       final id = int.tryParse(dataId ?? '') ??
           (slug.isNotEmpty ? slug.hashCode.abs() : name.hashCode.abs());
 
+      // 8. Seller / Store
+      SellerStub? seller;
+      final sellerEl = card.querySelector(
+          'a[href*="/store/"], a[href*="/seller/"], .seller-name, .store-name, [data-seller], [data-store-name], [data-seller-name]');
+      if (sellerEl != null) {
+        final sellerHref = sellerEl.attributes['href'] ?? '';
+        final sSlug = sellerEl.attributes['data-seller-slug'] ??
+            sellerEl.attributes['data-store-slug'] ??
+            sellerEl.attributes['data-seller'] ??
+            (sellerHref.contains('/store/')
+                ? sellerHref.split('/store/').last.split('?').first.trim()
+                : (sellerHref.contains('/seller/')
+                    ? sellerHref.split('/seller/').last.split('?').first.trim()
+                    : ''));
+        final sName = sellerEl.attributes['data-seller-name'] ??
+            sellerEl.attributes['data-store-name'] ??
+            sellerEl.text.trim();
+        final sId = int.tryParse(sellerEl.attributes['data-seller-id'] ??
+            sellerEl.attributes['data-store-id'] ??
+            sellerEl.attributes['data-tenant-id'] ??
+            '');
+        if (sName.isNotEmpty || sSlug.isNotEmpty || sId != null) {
+          seller = SellerStub(
+            id: sId,
+            name: sName.isNotEmpty ? sName : (sSlug.isNotEmpty ? sSlug : 'Store'),
+            slug: sSlug.isNotEmpty
+                ? sSlug
+                : (sName.isNotEmpty
+                    ? sName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+                    : (sId != null ? 'store-$sId' : 'store')),
+          );
+        }
+      }
+
       products.add(Product(
         id: id,
         name: name.isNotEmpty ? name : slug,
@@ -863,6 +945,7 @@ class CatalogRepository {
         imageUrl: imageUrl,
         displayPrice: price,
         listPrice: listPrice,
+        seller: seller,
       ));
     }
 
@@ -889,12 +972,39 @@ class CatalogRepository {
         int.tryParse(jsonLd['sku']?.toString() ?? '') ??
         url.hashCode.abs();
 
+    SellerStub? seller;
+    final brandOrSeller = jsonLd['brand'] ??
+        jsonLd['seller'] ??
+        jsonLd['offers']?['seller'] ??
+        jsonLd['offers']?['offeredBy'];
+    if (brandOrSeller is Map) {
+      final sName = (brandOrSeller['name'] ?? '').toString().trim();
+      final sId = int.tryParse(brandOrSeller['id']?.toString() ??
+          brandOrSeller['seller_id']?.toString() ??
+          brandOrSeller['store_id']?.toString() ??
+          brandOrSeller['tenant_id']?.toString() ??
+          '');
+      if (sName.isNotEmpty) {
+        final sSlug = (brandOrSeller['slug'] ??
+                brandOrSeller['url']?.toString().split('/').last ??
+                sName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-'))
+            .toString();
+        seller = SellerStub(id: sId, name: sName, slug: sSlug);
+      }
+    } else if (brandOrSeller is String && brandOrSeller.isNotEmpty) {
+      final sName = brandOrSeller.trim();
+      final sSlug =
+          sName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-');
+      seller = SellerStub(name: sName, slug: sSlug);
+    }
+
     return Product(
       id: id,
       name: name,
       slug: slug,
       imageUrl: images.isNotEmpty ? images.first : null,
       displayPrice: price,
+      seller: seller,
     );
   }
 

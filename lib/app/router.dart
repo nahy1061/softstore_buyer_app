@@ -205,6 +205,11 @@ final GoRouter goRouter = GoRouter(
           colors: (extra['colors'] as List?)
                   ?.cast<Map<String, dynamic>>() ??
               const [],
+          sellerSlug: extra['sellerSlug'] as String?,
+          sellerName: extra['sellerName'] as String?,
+          sellerId: (extra['sellerId'] as num?)?.toInt() ??
+              (extra['storeId'] as num?)?.toInt(),
+          product: extra['product'] as Product?,
         );
       },
     ),

@@ -26,6 +26,10 @@ class ProductDetailScreen extends StatefulWidget {
   final List<String> images;
   final int iconCodePoint;
   final List<Map<String, dynamic>> colors;
+  final String? sellerSlug;
+  final String? sellerName;
+  final int? sellerId;
+  final Product? product;
 
   const ProductDetailScreen({
     super.key,
@@ -37,6 +41,10 @@ class ProductDetailScreen extends StatefulWidget {
     this.images = const [],
     required this.iconCodePoint,
     this.colors = const [],
+    this.sellerSlug,
+    this.sellerName,
+    this.sellerId,
+    this.product,
   });
 
   @override
@@ -49,37 +57,59 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   List<String> _allImages = [];
   String? _sellerSlug;
   String? _sellerName;
+  int? _sellerId;
   Product? _currentProduct;
   ProductDetail? _detail;
 
   @override
   void initState() {
     super.initState();
-    _recordView();
     _isWishlisted = WishlistRepository.instance.isProductWishlisted(widget.slug);
     _allImages = [
       if (widget.imageUrl != null && widget.imageUrl!.isNotEmpty) widget.imageUrl!,
       ...widget.images,
     ];
-    _currentProduct = Product(
-      id: widget.id ?? widget.slug.hashCode.abs(),
-      name: widget.name,
-      slug: widget.slug,
-      imageUrl: widget.imageUrl,
-      displayPrice: widget.price.toDouble(),
-    );
+    _sellerSlug = widget.sellerSlug ?? widget.product?.sellerSlug;
+    _sellerName = widget.sellerName ?? widget.product?.sellerName;
+    _sellerId = widget.sellerId ?? widget.product?.sellerId;
+    _currentProduct = widget.product ??
+        Product(
+          id: widget.id ?? widget.slug.hashCode.abs(),
+          name: widget.name,
+          slug: widget.slug,
+          imageUrl: widget.imageUrl,
+          displayPrice: widget.price.toDouble(),
+          seller: (_sellerName != null || _sellerSlug != null || _sellerId != null)
+              ? SellerStub(
+                  id: _sellerId,
+                  name: _sellerName ?? _sellerSlug ?? '',
+                  slug: _sellerSlug ??
+                      _sellerName?.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-') ??
+                      '',
+                )
+              : null,
+        );
+    _recordView();
     _fetchFullProductDetails();
   }
 
   void _recordView() {
     RecentlyViewedRepository.instance.recordProductView(
-      Product(
-        id: widget.id ?? 0,
-        name: widget.name,
-        slug: widget.slug,
-        imageUrl: widget.imageUrl,
-        displayPrice: widget.price.toDouble(),
-      ),
+      _currentProduct ??
+          Product(
+            id: widget.id ?? 0,
+            name: widget.name,
+            slug: widget.slug,
+            imageUrl: widget.imageUrl,
+            displayPrice: widget.price.toDouble(),
+            seller: (_sellerName != null || _sellerSlug != null || _sellerId != null)
+                ? SellerStub(
+                    id: _sellerId,
+                    name: _sellerName ?? _sellerSlug ?? '',
+                    slug: _sellerSlug ?? '',
+                  )
+                : null,
+          ),
     );
   }
 
@@ -93,16 +123,17 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         if (detail.seller != null) {
           if (detail.seller!.slug.isNotEmpty) _sellerSlug = detail.seller!.slug;
           if (detail.seller!.name.isNotEmpty) _sellerName = detail.seller!.name;
+          if (detail.seller!.id != null) _sellerId = detail.seller!.id;
         }
         _currentProduct = Product(
-          id: detail.id,
-          name: detail.name,
-          slug: detail.slug,
+          id: detail.id != 0 ? detail.id : (widget.id ?? detail.slug.hashCode.abs()),
+          name: detail.name.isNotEmpty ? detail.name : widget.name,
+          slug: detail.slug.isNotEmpty ? detail.slug : widget.slug,
           imageUrl: detail.images.isNotEmpty ? detail.images.first : widget.imageUrl,
-          displayPrice: detail.displayPrice,
+          displayPrice: detail.displayPrice > 0 ? detail.displayPrice : widget.price.toDouble(),
           listPrice: detail.listPrice,
           discountPercent: detail.discountPercent,
-          seller: detail.seller,
+          seller: detail.seller ?? _currentProduct?.seller,
         );
         if (detail.images.isNotEmpty) {
           final set = <String>{};
@@ -395,6 +426,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     reviews: _detail?.reviews ?? const [],
                     sellerSlug: _sellerSlug,
                     sellerName: _sellerName,
+                    product: _currentProduct,
                   ),
                   _ProductDetailsTab(
                     name: widget.name,
@@ -861,14 +893,17 @@ class _ProductImageGalleryState extends State<_ProductImageGallery> {
                         onTap: () {
                           final seller = widget.sellerSlug?.isNotEmpty == true
                               ? widget.sellerSlug!
-                              : (widget.sellerName?.isNotEmpty == true
-                                  ? widget.sellerName!.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-')
-                                  : 'softstore-official');
+                              : (widget.product?.sellerSlug?.isNotEmpty == true
+                                  ? widget.product!.sellerSlug!
+                                  : (widget.sellerName?.isNotEmpty == true
+                                      ? widget.sellerName!.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+                                      : 'softstore-official'));
                           context.push(
                             '/seller/$seller',
                             extra: {
-                              'sellerName': widget.sellerName,
+                              'sellerName': widget.sellerName ?? widget.product?.sellerName,
                               'product': widget.product,
+                              'sellerId': widget.product?.sellerId,
                             },
                           );
                         },
@@ -992,6 +1027,7 @@ class _RatingsTab extends StatelessWidget {
   final List<ProductReview> reviews;
   final String? sellerSlug;
   final String? sellerName;
+  final Product? product;
 
   const _RatingsTab({
     this.rating = 0.0,
@@ -999,6 +1035,7 @@ class _RatingsTab extends StatelessWidget {
     this.reviews = const [],
     this.sellerSlug,
     this.sellerName,
+    this.product,
   });
 
   @override
@@ -1132,8 +1169,18 @@ class _RatingsTab extends StatelessWidget {
                       onPressed: () {
                         final store = sellerSlug?.isNotEmpty == true
                             ? sellerSlug!
-                            : 'softstore-official';
-                        context.push('/seller/$store');
+                            : (product?.sellerSlug?.isNotEmpty == true
+                                ? product!.sellerSlug!
+                                : (sellerName?.isNotEmpty == true
+                                    ? sellerName!.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+                                    : 'softstore-official'));
+                        context.push(
+                          '/seller/$store',
+                          extra: {
+                            'sellerName': sellerName ?? product?.sellerName,
+                            'product': product,
+                          },
+                        );
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
@@ -1684,6 +1731,36 @@ class _BottomBar extends StatelessWidget {
     );
   }
 
+  void _handleStoreTap(BuildContext context) {
+    // 1. Identify the store/seller associated with the CURRENT product
+    final String storeSlug;
+    if (sellerSlug != null && sellerSlug!.isNotEmpty) {
+      storeSlug = sellerSlug!;
+    } else if (product?.sellerSlug != null && product!.sellerSlug!.isNotEmpty) {
+      storeSlug = product!.sellerSlug!;
+    } else if (sellerName != null && sellerName!.isNotEmpty) {
+      storeSlug = sellerName!.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-');
+    } else if (product?.sellerName != null && product!.sellerName!.isNotEmpty) {
+      storeSlug = product!.sellerName!.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-');
+    } else {
+      storeSlug = 'softstore-official';
+    }
+
+    final String? displayName = sellerName?.isNotEmpty == true
+        ? sellerName
+        : (product?.sellerName?.isNotEmpty == true ? product!.sellerName : null);
+
+    // 2. Navigate to the store's detail page
+    context.push(
+      '/seller/$storeSlug',
+      extra: {
+        'sellerName': displayName,
+        'product': product,
+        'sellerId': product?.sellerId,
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -1700,20 +1777,7 @@ class _BottomBar extends StatelessWidget {
           _IconAction(
             icon: Icons.store_outlined,
             label: 'Store',
-            onTap: () {
-              final seller = sellerSlug?.isNotEmpty == true
-                  ? sellerSlug!
-                  : (sellerName?.isNotEmpty == true
-                      ? sellerName!.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-')
-                      : 'softstore-official');
-              context.push(
-                '/seller/$seller',
-                extra: {
-                  'sellerName': sellerName,
-                  'product': product,
-                },
-              );
-            },
+            onTap: () => _handleStoreTap(context),
           ),
           const SizedBox(width: 8),
           // Chat

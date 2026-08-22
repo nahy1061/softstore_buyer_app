@@ -478,7 +478,11 @@ class _SellerScreenState extends State<SellerScreen> with SingleTickerProviderSt
       itemCount: products.length,
       itemBuilder: (context, index) {
         final product = products[index];
-        return _SellerProductCard(product: product);
+        return _SellerProductCard(
+          product: product,
+          sellerSlug: widget.slug,
+          sellerName: _seller?.name ?? widget.sellerName,
+        );
       },
     );
   }
@@ -530,7 +534,27 @@ class _SellerScreenState extends State<SellerScreen> with SingleTickerProviderSt
           ),
           const SizedBox(height: 20),
           ElevatedButton.icon(
-            onPressed: () => context.push(AppRoutes.messages),
+            onPressed: () {
+              if (widget.initialProduct != null) {
+                context.push(
+                  AppRoutes.sellerChat,
+                  extra: {
+                    'productId': widget.initialProduct!.id,
+                    'productName': widget.initialProduct!.name,
+                    'productImage': widget.initialProduct!.imageUrl,
+                    'productPrice': widget.initialProduct!.displayPrice,
+                    'sellerName': _seller?.name ?? widget.sellerName ?? 'Seller',
+                  },
+                );
+              } else {
+                context.push(
+                  AppRoutes.sellerChat,
+                  extra: {
+                    'sellerName': _seller?.name ?? widget.sellerName ?? 'Seller',
+                  },
+                );
+              }
+            },
             icon: const Icon(Icons.message_outlined, size: 18),
             label: const Text('Start Conversation'),
             style: ElevatedButton.styleFrom(
@@ -554,8 +578,14 @@ class _SellerScreenState extends State<SellerScreen> with SingleTickerProviderSt
 // ─────────────────────────────────────────────────────────────────────────────
 class _SellerProductCard extends StatefulWidget {
   final Product product;
+  final String? sellerSlug;
+  final String? sellerName;
 
-  const _SellerProductCard({required this.product});
+  const _SellerProductCard({
+    required this.product,
+    this.sellerSlug,
+    this.sellerName,
+  });
 
   @override
   State<_SellerProductCard> createState() => _SellerProductCardState();
@@ -582,6 +612,10 @@ class _SellerProductCardState extends State<_SellerProductCard> {
           'name': p.name,
           'price': p.displayPrice.toInt(),
           'imageUrl': p.imageUrl,
+          'sellerSlug': widget.sellerSlug ?? p.sellerSlug,
+          'sellerName': widget.sellerName ?? p.sellerName,
+          'sellerId': p.sellerId,
+          'product': p,
         },
       ),
       child: Container(
