@@ -5,6 +5,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_dimensions.dart';
+import '../models/notification_settings_model.dart';
+import '../services/profile_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -14,9 +16,86 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  final ProfileService _profileService = ProfileService();
   bool _orderNotifications = true;
   bool _promotionalNotifications = false;
   bool _emailNotifications = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    try {
+      final settings = await _profileService.getNotificationSettings();
+      if (mounted) {
+        setState(() {
+          _orderNotifications = settings.orderUpdates;
+          _promotionalNotifications = settings.promotions;
+          _emailNotifications = settings.emailNotifications;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _updateSetting({
+    bool? orderUpdates,
+    bool? promotions,
+    bool? emailNotifications,
+  }) async {
+    final newOrder = orderUpdates ?? _orderNotifications;
+    final newPromos = promotions ?? _promotionalNotifications;
+    final newEmail = emailNotifications ?? _emailNotifications;
+
+    setState(() {
+      _orderNotifications = newOrder;
+      _promotionalNotifications = newPromos;
+      _emailNotifications = newEmail;
+    });
+
+    final settings = NotificationSettings(
+      orderUpdates: newOrder,
+      promotions: newPromos,
+      emailNotifications: newEmail,
+    );
+
+    try {
+      await _profileService.updateNotificationSettings(settings);
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Notification preferences updated',
+              style: AppTypography.bodySmall.copyWith(color: Colors.white),
+            ),
+            backgroundColor: AppColors.primary,
+            duration: const Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Preferences saved locally',
+              style: AppTypography.bodySmall.copyWith(color: Colors.white),
+            ),
+            backgroundColor: AppColors.textSecondary,
+            duration: const Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -66,24 +145,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   label: 'Order Updates',
                   subtitle: 'Get notified about your order status',
                   value: _orderNotifications,
-                  onChanged: (val) =>
-                      setState(() => _orderNotifications = val),
+                  onChanged: (val) => _updateSetting(orderUpdates: val),
                 ),
                 _ToggleTile(
                   icon: Icons.campaign_outlined,
                   label: 'Promotions & Offers',
                   subtitle: 'Deals, discounts and new arrivals',
                   value: _promotionalNotifications,
-                  onChanged: (val) =>
-                      setState(() => _promotionalNotifications = val),
+                  onChanged: (val) => _updateSetting(promotions: val),
                 ),
                 _ToggleTile(
                   icon: Icons.email_outlined,
                   label: 'Email Notifications',
                   subtitle: 'Receive updates via email',
                   value: _emailNotifications,
-                  onChanged: (val) =>
-                      setState(() => _emailNotifications = val),
+                  onChanged: (val) => _updateSetting(emailNotifications: val),
                 ),
               ],
             ),
@@ -99,12 +175,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _ActionTile(
                   icon: Icons.privacy_tip_outlined,
                   label: 'Privacy Policy',
-                  onTap: () {},
+                  onTap: () => context.push(AppRoutes.privacyPolicy),
                 ),
                 _ActionTile(
                   icon: Icons.description_outlined,
                   label: 'Terms of Service',
-                  onTap: () {},
+                  onTap: () => context.push(AppRoutes.termsAndConditions),
                 ),
               ],
             ),

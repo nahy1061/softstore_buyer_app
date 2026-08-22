@@ -4,19 +4,24 @@ import 'package:dio/dio.dart';
 
 import '../../../core/config/env_config.dart';
 import '../../../core/constants/api_endpoints.dart';
+import '../../../core/constants/storage_keys.dart';
 import '../../../core/errors/failures.dart';
 import '../../../core/network/dio_client.dart';
+import '../../../core/services/notification_service.dart';
+import '../../../core/storage/local_storage.dart';
 import '../../../core/utils/csrf_service.dart';
 import '../../../core/utils/html_parser_util.dart';
 import '../models/dashboard_stats_model.dart';
+import '../models/notification_settings_model.dart';
 import '../models/user_model.dart';
 
 class ProfileService {
   final DioClient _dio = DioClient();
   final CsrfService _csrf = CsrfService.instance;
+  final LocalStorageService _localStorage = LocalStorageService.instance;
 
   /// Get current user profile (API Mapping #22)
-  /// GET /marketplace/account/profile
+  /// GET /store/account/profile
   Future<User> getProfile() async {
     try {
       final response = await _dio.get<String>(
@@ -42,7 +47,7 @@ class ProfileService {
   }
 
   /// Update user profile (API Mapping #23)
-  /// POST /marketplace/account/profile
+  /// POST /store/account/profile
   Future<void> updateProfile({
     required String firstName,
     required String lastName,
@@ -124,7 +129,7 @@ class ProfileService {
   }
 
   /// Change password (API Mapping #24)
-  /// POST /marketplace/account/profile
+  /// POST /store/account/password
   Future<void> changePassword({
     required String currentPassword,
     required String newPassword,
@@ -227,7 +232,7 @@ class ProfileService {
   }
 
   /// Get dashboard stats (API Mapping #25)
-  /// GET /marketplace/account
+  /// GET /store/account/dashboard
   Future<DashboardStats> getDashboard() async {
     try {
       final response = await _dio.get<String>(
@@ -247,6 +252,85 @@ class ProfileService {
       return const DashboardStats();
     } catch (_) {
       return const DashboardStats();
+    }
+  }
+
+  /// Get notification preferences
+  Future<NotificationSettings> getNotificationSettings() async {
+    final localOrder = _localStorage.getBool(StorageKeys.notifOrderUpdates) ?? true;
+    final localPromos = _localStorage.getBool(StorageKeys.notifPromotions) ?? false;
+    final localEmail = _localStorage.getBool(StorageKeys.notifEmail) ?? true;
+
+    var currentSettings = NotificationSettings(
+      orderUpdates: localOrder,
+      promotions: localPromos,
+      emailNotifications: localEmail,
+    );
+
+    try {
+      final response = await _dio.get<dynamic>(
+        ApiEndpoints.notificationSettings,
+        options: Options(
+          validateStatus: (s) => s != null && s < 500,
+          headers: {'Accept': 'application/json'},
+        ),
+      );
+
+      if (response.statusCode == 200 && response.data is Map<String, dynamic>) {
+        final serverSettings = NotificationSettings.fromJson(
+          response.data as Map<String, dynamic>,
+        );
+        currentSettings = serverSettings;
+        await _localStorage.setBool(StorageKeys.notifOrderUpdates, serverSettings.orderUpdates);
+        await _localStorage.setBool(StorageKeys.notifPromotions, serverSettings.promotions);
+        await _localStorage.setBool(StorageKeys.notifEmail, serverSettings.emailNotifications);
+      }
+    } catch (e) {
+      developer.log('[ProfileService] getNotificationSettings fallback to cache: $e', name: 'profile');
+    }
+
+    return currentSettings;
+  }
+
+  /// Update notification preferences (API & Local Storage & OneSignal)
+  Future<void> updateNotificationSettings(NotificationSettings settings) async {
+    // 1. Immediately cache locally
+    await _localStorage.setBool(StorageKeys.notifOrderUpdates, settings.orderUpdates);
+    await _localStorage.setBool(StorageKeys.notifPromotions, settings.promotions);
+    await _localStorage.setBool(StorageKeys.notifEmail, settings.emailNotifications);
+
+    // 2. Update OneSignal push tags
+    await NotificationService.instance.updateNotificationPreferences(
+      orderUpdates: settings.orderUpdates,
+      promotions: settings.promotions,
+      emailNotifications: settings.emailNotifications,
+    );
+
+    // 3. Send to backend endpoints
+    try {
+      final pushToken = NotificationService.instance.pushToken;
+      final csrfToken = await _csrf.fetchToken(ApiEndpoints.profilePage) ?? '';
+
+      final payload = {
+        ...settings.toJson(),
+        ...settings.toFormData(),
+        if (pushToken != null && pushToken.isNotEmpty) 'push_token': pushToken,
+        if (csrfToken.isNotEmpty) ...{
+          '_csrf_token': csrfToken,
+          'csrf_token': csrfToken,
+        },
+      };
+
+      await _dio.post<dynamic>(
+        ApiEndpoints.notificationSettings,
+        data: payload,
+        options: Options(
+          contentType: 'application/json',
+          validateStatus: (s) => s != null && s < 500,
+        ),
+      );
+    } catch (e) {
+      developer.log('[ProfileService] updateNotificationSettings sync warning: $e', name: 'profile');
     }
   }
 }

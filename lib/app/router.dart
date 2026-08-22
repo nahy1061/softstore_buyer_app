@@ -41,8 +41,10 @@ import '../features/profile/screens/address_form_screen.dart';
 import '../features/profile/screens/addresses_screen.dart';
 import '../features/profile/screens/change_password_screen.dart';
 import '../features/profile/screens/edit_profile_screen.dart';
+import '../features/profile/screens/privacy_policy_screen.dart';
 import '../features/profile/screens/profile_hub_screen.dart';
 import '../features/profile/screens/settings_screen.dart';
+import '../features/profile/screens/terms_and_conditions_screen.dart';
 
 import '../features/support/models/ticket_model.dart';
 import '../features/support/presentation/cubits/support_cubit.dart';
@@ -129,6 +131,8 @@ abstract final class AppRoutes {
   static const String supportContact = '/support/contact';
   static const String supportTickets = '/support/tickets';
   static const String supportTicketChat = '/support/tickets/:id';
+  static const String privacyPolicy = '/privacy-policy';
+  static const String termsAndConditions = '/terms-and-conditions';
 }
 
 final GoRouter goRouter = GoRouter(
@@ -349,6 +353,14 @@ final GoRouter goRouter = GoRouter(
           builder: (context, state) => const SettingsScreen(),
         ),
       ],
+    ),
+    GoRoute(
+      path: AppRoutes.privacyPolicy,
+      builder: (context, state) => const PrivacyPolicyScreen(),
+    ),
+    GoRoute(
+      path: AppRoutes.termsAndConditions,
+      builder: (context, state) => const TermsAndConditionsScreen(),
     ),
     GoRoute(
       path: AppRoutes.addresses,

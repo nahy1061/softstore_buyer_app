@@ -23,6 +23,9 @@ class StorageKeys {
   // Preferences - SharedPreferences
   static const String themeMode = 'theme_mode';
   static const String notificationsEnabled = 'notifications_enabled';
+  static const String notifOrderUpdates = 'notif_order_updates';
+  static const String notifPromotions = 'notif_promotions';
+  static const String notifEmail = 'notif_email';
   static const String lastAppVersion = 'last_app_version';
 
   // Search - SharedPreferences
