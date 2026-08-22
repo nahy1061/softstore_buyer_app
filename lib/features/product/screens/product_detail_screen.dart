@@ -6,7 +6,6 @@ import 'package:share_plus/share_plus.dart';
 import '../../../app/router.dart';
 import '../../../core/config/env_config.dart';
 import '../../../core/constants/app_config.dart';
-import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -181,10 +180,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   double? get _effectiveDiscountPercent {
-    final d = _detail?.discountPercent;
+    final d = _detail?.discountPercent ?? _currentProduct?.discountPercent;
     if (d != null && d > 0) return d;
-    final list = _detail?.listPrice;
-    final price = _detail?.displayPrice ?? 0;
+    final list = _detail?.listPrice ?? _currentProduct?.listPrice;
+    final price = _detail?.displayPrice ?? _currentProduct?.displayPrice ?? 0;
     if (list != null && list > price && price > 0) {
       return ((1 - price / list) * 100).roundToDouble();
     }
@@ -251,9 +250,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   Future<void> _shareProduct() async {
     final url = '${EnvConfig.baseUrl}/product/${widget.slug}';
     try {
-      await Share.share(
-        '${widget.name}\n$url',
-        subject: widget.name,
+      await SharePlus.instance.share(
+        ShareParams(text: '${widget.name}\n$url', title: widget.name),
       );
     } catch (_) {}
   }
@@ -316,8 +314,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       return;
     }
 
-    final reviewerName = authState is AuthAuthenticated
-        ? authState.user.fullName
+    final reviewerState = context.read<AuthCubit>().state;
+    final reviewerName = reviewerState is AuthAuthenticated
+        ? reviewerState.user.fullName
         : 'You';
     final newReview = ProductReview(
       reviewer: reviewerName.isNotEmpty ? reviewerName : 'You',
@@ -388,10 +387,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
     try {
       final added = await WishlistRepository.instance.toggleWishlist(
-        productId: widget.id ?? widget.slug.hashCode.abs(),
+        productId: _currentProductId,
         productSlug: widget.slug,
         product: Product(
-          id: widget.id ?? widget.slug.hashCode.abs(),
+          id: _currentProductId,
           name: widget.name,
           slug: widget.slug,
           displayPrice: widget.price.toDouble(),
@@ -408,7 +407,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       if (!mounted) return;
       if (targetState) {
         WishlistRepository.instance.addLocalProduct(Product(
-          id: widget.id ?? widget.slug.hashCode.abs(),
+          id: _currentProductId,
           name: widget.name,
           slug: widget.slug,
           displayPrice: widget.price.toDouble(),
@@ -688,7 +687,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           ],
         ),
         bottomNavigationBar: _BottomBar(
-          id: widget.id,
+          id: _currentProductId,
           name: widget.name,
           price: _effectivePrice,
           imageUrl: widget.imageUrl,
@@ -1258,7 +1257,7 @@ class _StoreSectionCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(10),
               border: Border.all(color: AppColors.divider),
             ),
-            child: const Icon(Icons.storefront_outlined,
+            child: const Icon(Icons.shop_outlined,
                 color: AppColors.primary, size: 26),
           ),
           const SizedBox(width: 12),
@@ -2255,88 +2254,85 @@ class _RatingsTab extends StatelessWidget {
                 ],
               ),
             )
-          else ...[
-            // Real review cards
-            if (effectiveReviews.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-                child: Column(
-                  children: effectiveReviews
-                      .map((r) => _ReviewCard(
-                            text: r.text,
-                            reviewer: r.reviewer,
-                            stars: r.rating,
-                            date: r.date,
-                          ))
-                      .toList(),
-                ),
-              )
-            else if (totalCount == 0)
-              Container(
-                color: Colors.white,
-                padding: const EdgeInsets.all(24),
-                margin: const EdgeInsets.symmetric(vertical: 4),
-                width: double.infinity,
-                child: Column(
-                  children: [
-                    const Icon(Icons.rate_review_outlined,
-                        size: 40, color: AppColors.textDisabled),
-                    const SizedBox(height: 8),
-                    Text(
-                      'No reviews yet for this product',
-                      style: AppTypography.bodyMedium
-                          .copyWith(color: AppColors.textSecondary),
-                    ),
-                  ],
-                ),
+          else if (effectiveReviews.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+              child: Column(
+                children: effectiveReviews
+                    .map((r) => _ReviewCard(
+                          text: r.text,
+                          reviewer: r.reviewer,
+                          stars: r.rating,
+                          date: r.date,
+                        ))
+                    .toList(),
               ),
-
-            const SizedBox(height: 8),
-
-            // Store info
+            )
+          else if (totalCount == 0)
             Container(
               color: Colors.white,
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              child: Row(
+              padding: const EdgeInsets.all(24),
+              margin: const EdgeInsets.symmetric(vertical: 4),
+              width: double.infinity,
+              child: Column(
                 children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: AppColors.background,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppColors.divider),
-                    ),
-                    child: const Icon(Icons.store,
-                        color: AppColors.primary, size: 28),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(storeTitle,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 15)),
-                  ),
-                  ElevatedButton(
-                    onPressed: onOpenStore != null
-                        ? () => onOpenStore!(context)
-                        : null,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 8),
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: const Text('Visit Store',
-                        style: TextStyle(fontSize: 13)),
+                  const Icon(Icons.rate_review_outlined,
+                      size: 40, color: AppColors.textDisabled),
+                  const SizedBox(height: 8),
+                  Text(
+                    'No reviews yet for this product',
+                    style: AppTypography.bodyMedium
+                        .copyWith(color: AppColors.textSecondary),
                   ),
                 ],
               ),
             ),
-          ],
+
+          const SizedBox(height: 8),
+
+          // Store info (always available for the CURRENT product)
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: AppColors.background,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.divider),
+                  ),
+                  child: const Icon(Icons.store,
+                      color: AppColors.primary, size: 28),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(storeTitle,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 15)),
+                ),
+                ElevatedButton(
+                  onPressed: onOpenStore != null
+                      ? () => onOpenStore!(context)
+                      : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 8),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text('Visit Store',
+                      style: TextStyle(fontSize: 13)),
+                ),
+              ],
+            ),
+          ),
 
           const SizedBox(height: 16),
         ],
@@ -2649,7 +2645,7 @@ class _RecommendedTabState extends State<_RecommendedTab> {
 // ── Bottom bar ───────────────────────────────────────────────────────────────
 
 class _BottomBar extends StatelessWidget {
-  final int? id;
+  final int id;
   final String name;
   final int price;
   final String? imageUrl;
@@ -2665,7 +2661,7 @@ class _BottomBar extends StatelessWidget {
   final String storeSlug;
 
   const _BottomBar({
-    this.id,
+    required this.id,
     required this.name,
     required this.price,
     this.imageUrl,
@@ -2703,7 +2699,7 @@ class _BottomBar extends StatelessWidget {
       context.read<CartCubit>().clearSelection();
       final item = CartItem(
         uuid: slug,
-        productId: id ?? slug.hashCode.abs(),
+        productId: id,
         productName: name,
         productSlug: slug,
         quantity: quantity.clamp(1, maxQuantity),
@@ -2750,7 +2746,7 @@ class _BottomBar extends StatelessWidget {
         uuid: (colorName != null && colorName.isNotEmpty)
             ? '${slug}_$colorName'
             : slug,
-        productId: id ?? slug.hashCode.abs(),
+        productId: id,
         productName: (colorName != null && colorName.isNotEmpty)
             ? '$name ($colorName)'
             : name,
@@ -2782,7 +2778,7 @@ class _BottomBar extends StatelessWidget {
     context.push(
       AppRoutes.sellerChat,
       extra: {
-        'productId': id ?? slug.hashCode.abs(),
+        'productId': id,
         'productName': name,
         'productImage': imageUrl,
         'productPrice': price.toDouble(),
@@ -2862,7 +2858,7 @@ class _BottomBar extends StatelessWidget {
                         context.read<CartCubit>().addItem(
                               CartItem(
                                 uuid: slug,
-                                productId: id ?? slug.hashCode.abs(),
+                                productId: id,
                                 productName: name,
                                 productSlug: slug,
                                 quantity: quantity.clamp(1, maxQuantity),
