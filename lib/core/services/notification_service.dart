@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:developer' as developer;
 import 'package:flutter/foundation.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
@@ -234,11 +234,38 @@ class NotificationService {
     }
   }
 
+  /// Updates buyer notification channel preferences and segment tags in OneSignal.
+  Future<void> updateNotificationPreferences({
+    required bool orderUpdates,
+    required bool promotions,
+    required bool emailNotifications,
+  }) async {
+    try {
+      await OneSignal.User.addTags({
+        'order_updates_enabled': orderUpdates ? 'true' : 'false',
+        'promotions_enabled': promotions ? 'true' : 'false',
+        'announcements_enabled': promotions ? 'true' : 'false',
+        'email_notifications_enabled': emailNotifications ? 'true' : 'false',
+      });
+      developer.log(
+        '[NotificationService] Notification preferences updated in OneSignal: '
+        'orderUpdates=$orderUpdates, promotions=$promotions, email=$emailNotifications',
+        name: 'notifications',
+      );
+    } catch (e) {
+      developer.log(
+        '[NotificationService] Failed to update notification preferences: $e',
+        name: 'notifications',
+      );
+    }
+  }
+
   /// Toggles general broadcast announcements channel.
   Future<void> setAnnouncementsEnabled(bool enabled) async {
     try {
       await OneSignal.User.addTags({
         'announcements_enabled': enabled ? 'true' : 'false',
+        'promotions_enabled': enabled ? 'true' : 'false',
       });
     } catch (_) {}
   }

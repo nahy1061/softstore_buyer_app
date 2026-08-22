@@ -34,7 +34,7 @@ class ApiEndpoints {
 
   // ─── Session Restoration ────────────────────────────────────────────────────
   /// GET — parse user profile from HTML form inputs; 302→/login means expired
-  /// NOTE: must match iOS AuthService.fetchProfile() path: /marketplace/account/profile
+  /// NOTE: matches live server path: /marketplace/account/profile
   static const String profilePage = '/marketplace/account/profile';
   static const String checkSession = '/marketplace/account/profile';
 
@@ -68,7 +68,7 @@ class ApiEndpoints {
   static const String sellerStore = '/store';
 
   /// POST form {_csrf_token, product_id, rating, review_text}
-  static const String submitReview = '/store/account/reviews';
+  static const String submitReview = '/marketplace/account/reviews';
 
   // ─── Cart / Checkout ────────────────────────────────────────────────────────
   /// POST JSON {items:[{id,qty}]} → {delivery_fee, free, currency}
@@ -171,4 +171,20 @@ class ApiEndpoints {
 
   /// JSON API: POST /store/support/tickets/{id} with JSON {message} and X-CSRF-TOKEN header
   static const String ticketReplyApi = '/store/support/tickets';
+
+  // ─── Notifications & Settings ──────────────────────────────────────────────
+  /// POST /api/buyer/notifications/settings — notification preferences
+  static const String notificationSettings = '/api/buyer/notifications/settings';
+  static const String getNotificationSettings = '/api/buyer/notifications/settings';
+  static const String updateNotificationSettings = '/api/buyer/notifications/settings';
+
+  /// POST /api/buyer/notifications/register-device — register push token
+  static const String registerDevice = '/api/buyer/notifications/register-device';
+
+  /// POST /api/buyer/notifications/unregister-device — unregister push token
+  static const String unregisterDevice = '/api/buyer/notifications/unregister-device';
+
+  /// GET /api/buyer/notifications — list notifications
+  static const String getNotifications = '/api/buyer/notifications';
+  static const String notifications = '/api/buyer/notifications';
 }

@@ -40,30 +40,32 @@ class AddressCubit extends Cubit<AddressState> {
     final currentAddresses = _currentAddresses;
     emit(AddressAdding(addresses: currentAddresses));
 
-    // Ensure non-null unique id
-    final newId = address.id ?? (DateTime.now().millisecondsSinceEpoch % 1000000);
-    final cleanAddress = address.copyWith(id: newId);
-
-    List<Address> updatedAddresses = List<Address>.from(currentAddresses);
-    if (cleanAddress.isDefault) {
-      updatedAddresses = updatedAddresses.map((a) => a.copyWith(isDefault: false)).toList();
-    }
-    updatedAddresses.add(cleanAddress);
-
     try {
-      await _addressService.addAddress(address: cleanAddress);
+      await _addressService.addAddress(address: address);
+      
+      // Fetch fresh verified list from server DB
+      List<Address> freshAddresses;
+      try {
+        freshAddresses = await _addressService.getAddresses();
+      } catch (_) {
+        final newId = address.id ?? (DateTime.now().millisecondsSinceEpoch % 1000000);
+        final cleanAddress = address.copyWith(id: newId);
+        freshAddresses = List<Address>.from(currentAddresses);
+        if (cleanAddress.isDefault) {
+          freshAddresses = freshAddresses.map((a) => a.copyWith(isDefault: false)).toList();
+        }
+        freshAddresses.add(cleanAddress);
+      }
+
       emit(AddressAddSuccess(
-        addresses: updatedAddresses,
+        addresses: freshAddresses,
         message: 'Address added successfully',
       ));
-      emit(AddressLoaded(addresses: updatedAddresses));
+      emit(AddressLoaded(addresses: freshAddresses));
     } catch (e) {
-      // Local fallback for offline/demo environment
-      emit(AddressAddSuccess(
-        addresses: updatedAddresses,
-        message: 'Address saved successfully',
-      ));
-      emit(AddressLoaded(addresses: updatedAddresses));
+      final cleanMsg = e.toString().replaceFirst('Exception: ', '');
+      emit(AddressError(message: cleanMsg));
+      emit(AddressLoaded(addresses: currentAddresses));
     }
   }
 
@@ -72,35 +74,37 @@ class AddressCubit extends Cubit<AddressState> {
     final currentAddresses = _currentAddresses;
     emit(AddressUpdating(addresses: currentAddresses));
 
-    List<Address> updatedAddresses = List<Address>.from(currentAddresses);
-    if (address.isDefault) {
-      updatedAddresses = updatedAddresses.map((a) => a.copyWith(isDefault: false)).toList();
-    }
-
-    final index = updatedAddresses.indexWhere((a) =>
-        (address.id != null && a.id == address.id) ||
-        (a.name == address.name && a.address == address.address));
-
-    if (index != -1) {
-      updatedAddresses[index] = address;
-    } else {
-      updatedAddresses.add(address);
-    }
-
     try {
       await _addressService.updateAddress(address: address);
+
+      // Fetch fresh verified list from server DB
+      List<Address> freshAddresses;
+      try {
+        freshAddresses = await _addressService.getAddresses();
+      } catch (_) {
+        freshAddresses = List<Address>.from(currentAddresses);
+        if (address.isDefault) {
+          freshAddresses = freshAddresses.map((a) => a.copyWith(isDefault: false)).toList();
+        }
+        final index = freshAddresses.indexWhere((a) =>
+            (address.id != null && a.id == address.id) ||
+            (a.name == address.name && a.address == address.address));
+        if (index != -1) {
+          freshAddresses[index] = address;
+        } else {
+          freshAddresses.add(address);
+        }
+      }
+
       emit(AddressUpdateSuccess(
-        addresses: updatedAddresses,
+        addresses: freshAddresses,
         message: 'Address updated successfully',
       ));
-      emit(AddressLoaded(addresses: updatedAddresses));
+      emit(AddressLoaded(addresses: freshAddresses));
     } catch (e) {
-      // Local fallback for offline/demo environment
-      emit(AddressUpdateSuccess(
-        addresses: updatedAddresses,
-        message: 'Address updated successfully',
-      ));
-      emit(AddressLoaded(addresses: updatedAddresses));
+      final cleanMsg = e.toString().replaceFirst('Exception: ', '');
+      emit(AddressError(message: cleanMsg));
+      emit(AddressLoaded(addresses: currentAddresses));
     }
   }
 
@@ -109,23 +113,26 @@ class AddressCubit extends Cubit<AddressState> {
     final currentAddresses = _currentAddresses;
     emit(AddressDeleting(addresses: currentAddresses));
 
-    final updatedAddresses =
-        currentAddresses.where((a) => a.id != addressId).toList();
-
     try {
       await _addressService.deleteAddress(addressId);
+
+      // Fetch fresh verified list from server DB
+      List<Address> freshAddresses;
+      try {
+        freshAddresses = await _addressService.getAddresses();
+      } catch (_) {
+        freshAddresses = currentAddresses.where((a) => a.id != addressId).toList();
+      }
+
       emit(AddressDeleteSuccess(
-        addresses: updatedAddresses,
+        addresses: freshAddresses,
         message: 'Address deleted successfully',
       ));
-      emit(AddressLoaded(addresses: updatedAddresses));
+      emit(AddressLoaded(addresses: freshAddresses));
     } catch (e) {
-      // Local fallback for offline/demo environment
-      emit(AddressDeleteSuccess(
-        addresses: updatedAddresses,
-        message: 'Address deleted successfully',
-      ));
-      emit(AddressLoaded(addresses: updatedAddresses));
+      final cleanMsg = e.toString().replaceFirst('Exception: ', '');
+      emit(AddressError(message: cleanMsg));
+      emit(AddressLoaded(addresses: currentAddresses));
     }
   }
 
@@ -148,12 +155,17 @@ class AddressCubit extends Cubit<AddressState> {
   }
 
   /// Set default address
-  void setDefault(int addressId) {
+  Future<void> setDefault(int addressId) async {
     final currentAddresses = _currentAddresses;
-    final updated = currentAddresses.map((a) {
-      return a.copyWith(isDefault: a.id == addressId);
-    }).toList();
-    emit(AddressLoaded(addresses: updated));
+    try {
+      final target = currentAddresses.firstWhere((a) => a.id == addressId);
+      await updateAddress(target.copyWith(isDefault: true));
+    } catch (e) {
+      final updated = currentAddresses.map((a) {
+        return a.copyWith(isDefault: a.id == addressId);
+      }).toList();
+      emit(AddressLoaded(addresses: updated));
+    }
   }
 
   void reset() => emit(const AddressInitial());

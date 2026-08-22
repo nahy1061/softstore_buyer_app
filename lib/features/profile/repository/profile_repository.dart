@@ -8,6 +8,8 @@ import '../../../core/network/dio_client.dart';
 import '../../../core/utils/csrf_service.dart';
 import '../../../core/utils/html_parser_util.dart';
 import '../../auth/models/user_model.dart';
+import '../models/notification_settings_model.dart';
+import '../services/profile_service.dart';
 
 // ─── Address Model ─────────────────────────────────────────────────────────────
 
@@ -266,6 +268,16 @@ class ProfileRepository {
       developer.log('[ProfileRepository] submitReview error: $e', name: 'profile');
       return false;
     }
+  }
+
+  // ─── Notification Settings ───────────────────────────────────────────────
+
+  Future<NotificationSettings> getNotificationSettings() {
+    return ProfileService().getNotificationSettings();
+  }
+
+  Future<void> updateNotificationSettings(NotificationSettings settings) {
+    return ProfileService().updateNotificationSettings(settings);
   }
 
   // ─── Parsers ───────────────────────────────────────────────────────────────

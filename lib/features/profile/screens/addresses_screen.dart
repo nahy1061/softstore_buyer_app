@@ -133,28 +133,41 @@ class _AddressesScreenState extends State<AddressesScreen> {
                                       : <Address>[];
 
           if (addresses.isEmpty) {
-            return _EmptyAddresses(onAdd: () => context.push(AppRoutes.addressAdd));
+            return RefreshIndicator(
+              onRefresh: () => context.read<AddressCubit>().loadAddresses(),
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: SizedBox(
+                  height: MediaQuery.of(context).size.height * 0.7,
+                  child: _EmptyAddresses(onAdd: () => context.push(AppRoutes.addressAdd)),
+                ),
+              ),
+            );
           }
 
-          return ListView.separated(
-            padding: AppSpacing.paddingLg,
-            itemCount: addresses.length,
-            separatorBuilder: (context, index) =>
-                const SizedBox(height: AppSpacing.md),
-            itemBuilder: (context, index) {
-              final address = addresses[index];
-              return _AddressCard(
-                address: address,
-                onSetDefault: () {
-                  if (address.id != null) {
-                    context.read<AddressCubit>().setDefault(address.id!);
-                  }
-                },
-                onEdit: () =>
-                    context.push('/addresses/edit/${address.id}', extra: address),
-                onDelete: () => _delete(address),
-              );
-            },
+          return RefreshIndicator(
+            onRefresh: () => context.read<AddressCubit>().loadAddresses(),
+            child: ListView.separated(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: AppSpacing.paddingLg,
+              itemCount: addresses.length,
+              separatorBuilder: (context, index) =>
+                  const SizedBox(height: AppSpacing.md),
+              itemBuilder: (context, index) {
+                final address = addresses[index];
+                return _AddressCard(
+                  address: address,
+                  onSetDefault: () {
+                    if (address.id != null) {
+                      context.read<AddressCubit>().setDefault(address.id!);
+                    }
+                  },
+                  onEdit: () =>
+                      context.push('/addresses/edit/${address.id}', extra: address),
+                  onDelete: () => _delete(address),
+                );
+              },
+            ),
           );
         },
       ),

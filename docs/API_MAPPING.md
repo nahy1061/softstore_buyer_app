@@ -13,7 +13,7 @@
 1. [Architecture Overview](#architecture-overview)
 2. [Authentication & Session Management](#authentication--session-management)
 3. [Catalog & Marketplace APIs](#catalog--marketplace-apis)
-4. [Cart & Checkout APIs](#cart--checkout-apis)
+4. [Cart & Checkout APIs](#cart--checkout-apis) 
 5. [Order Management APIs](#order-management-apis)
 6. [User Profile & Account APIs](#user-profile--account-apis)
 7. [Messaging & Chat APIs](#messaging--chat-apis)
