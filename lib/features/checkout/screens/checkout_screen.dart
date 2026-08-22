@@ -18,6 +18,9 @@ import '../../cart/models/cart_models.dart';
 import '../../cart/repository/cart_repository.dart';
 import '../../orders/models/order_model.dart' as order_models;
 import '../../orders/repository/order_repository.dart';
+import '../../profile/cubit/address_cubit.dart';
+import '../../profile/cubit/address_state.dart';
+import '../../profile/models/address_model.dart';
 import '../widgets/coupon_code_section.dart';
 import '../widgets/delivery_address_section.dart';
 import '../widgets/order_notes_section.dart';
@@ -51,6 +54,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   /// Whether the user's email has been verified in this checkout session.
   bool _emailVerifiedInSession = false;
 
+  /// Whether the saved default delivery address has been applied to the form.
+  bool _defaultAddressApplied = false;
+
   List<CartItem> _selectedItems(CartState cartState) {
     if (cartState.hasSelection && cartState.selectedItems.isNotEmpty) {
       return cartState.selectedItems;
@@ -62,6 +68,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   void initState() {
     super.initState();
     _fillUserData();
+    _initDefaultAddressFetch();
     _fetchShippingQuote();
   }
 
@@ -72,6 +79,68 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       if (user.fullName.isNotEmpty) _nameCtrl.text = user.fullName;
       if (user.phone != null && user.phone!.isNotEmpty) {
         _phoneCtrl.text = user.phone!;
+      }
+    }
+  }
+
+  // ─── Default Delivery Address Autofill ───────────────────────────────────
+
+  void _initDefaultAddressFetch() {
+    final authState = context.read<AuthCubit>().state;
+    if (authState is! AuthAuthenticated) return;
+
+    final addressCubit = context.read<AddressCubit>();
+    final cached = _addressesFromState(addressCubit.state);
+    if (cached != null && cached.isNotEmpty) {
+      _applyDefaultAddress(cached);
+      return;
+    }
+    addressCubit.loadAddresses();
+  }
+
+  List<Address>? _addressesFromState(AddressState state) {
+    if (state is AddressLoaded) return state.addresses;
+    if (state is AddressAddSuccess) return state.addresses;
+    if (state is AddressUpdateSuccess) return state.addresses;
+    if (state is AddressDeleteSuccess) return state.addresses;
+    return null;
+  }
+
+  Address? _pickDefaultAddress(List<Address> addresses) {
+    bool hasContent(Address a) =>
+        a.address.trim().isNotEmpty ||
+        a.phone.trim().isNotEmpty ||
+        a.name.trim().isNotEmpty;
+    for (final a in addresses) {
+      if (a.isDefault && hasContent(a)) return a;
+    }
+    for (final a in addresses) {
+      if (hasContent(a)) return a;
+    }
+    return null;
+  }
+
+  void _applyDefaultAddress(List<Address> addresses) {
+    if (_defaultAddressApplied) return;
+    final savedAddress = _pickDefaultAddress(addresses);
+    if (savedAddress == null) return;
+    _defaultAddressApplied = true;
+
+    final fullAddress = savedAddress.city.trim().isNotEmpty
+        ? '${savedAddress.address.trim()}, ${savedAddress.city.trim()}'
+        : savedAddress.address.trim();
+    final savedName = savedAddress.name.trim();
+    final savedPhone = savedAddress.phone.trim();
+
+    if (fullAddress.isNotEmpty) _addressCtrl.text = fullAddress;
+    if (savedName.isNotEmpty) _nameCtrl.text = savedName;
+    if (savedPhone.isNotEmpty) {
+      _phoneCtrl.text = savedPhone;
+    } else if (_phoneCtrl.text.trim().isEmpty) {
+      final authState = context.read<AuthCubit>().state;
+      if (authState is AuthAuthenticated) {
+        final userPhone = authState.user.phone?.trim() ?? '';
+        if (userPhone.isNotEmpty) _phoneCtrl.text = userPhone;
       }
     }
   }
@@ -111,13 +180,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     final cartState = context.read<CartCubit>().state;
     final items = _selectedItems(cartState);
-    final subtotal =
-        items.fold(0.0, (sum, i) => sum + (i.price * i.quantity));
+    final subtotal = items.fold(0.0, (sum, i) => sum + (i.price * i.quantity));
     try {
-      final res = await _repo.validateCoupon(
-        code: code,
-        subtotal: subtotal,
-      );
+      final res = await _repo.validateCoupon(code: code, subtotal: subtotal);
       if (!mounted) return;
       setState(() {
         _couponValid = res.valid;
@@ -126,8 +191,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           _couponMessage = 'Coupon applied successfully!';
         } else {
           _discountAmount = 0;
-          _couponMessage =
-              res.message.isNotEmpty ? res.message : 'Invalid coupon';
+          _couponMessage = res.message.isNotEmpty
+              ? res.message
+              : 'Invalid coupon';
         }
       });
     } catch (e) {
@@ -148,14 +214,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     // ── Guard: ensure email is verified before placing order ──────────
     final authState = context.read<AuthCubit>().state;
-    final user =
-        authState is AuthAuthenticated ? authState.user : null;
+    final user = authState is AuthAuthenticated ? authState.user : null;
     final userEmail = user?.email.trim() ?? '';
     final isPersistedVerified = userEmail.isNotEmpty
         ? await _repo.isEmailVerified(userEmail)
         : false;
 
-    final emailVerified = _emailVerifiedInSession ||
+    final emailVerified =
+        _emailVerifiedInSession ||
         (user?.isEmailVerified ?? false) ||
         isPersistedVerified;
 
@@ -169,8 +235,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     if (!emailVerified) {
       if (!mounted) return;
-      final targetEmail =
-          userEmail.isNotEmpty ? userEmail : _phoneCtrl.text.trim();
+      final targetEmail = userEmail.isNotEmpty
+          ? userEmail
+          : _phoneCtrl.text.trim();
       final verified = await OtpVerificationDialog.show(
         context,
         email: targetEmail,
@@ -217,8 +284,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       );
     }).toList();
 
-    final orderEmail =
-        userEmail.isNotEmpty ? userEmail : 'buyer@softstore.pk';
+    final orderEmail = userEmail.isNotEmpty ? userEmail : 'buyer@softstore.pk';
 
     final request = OrderRequest(
       items: repoItems,
@@ -227,8 +293,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       customerPhone: _phoneCtrl.text.trim(),
       customerEmail: orderEmail,
       notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
-      couponCode:
-          _couponCtrl.text.trim().isEmpty ? null : _couponCtrl.text.trim(),
+      couponCode: _couponCtrl.text.trim().isEmpty
+          ? null
+          : _couponCtrl.text.trim(),
     );
 
     final now = DateTime.now();
@@ -255,8 +322,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         setState(() {
           _isSubmitting = false;
         });
-        final targetEmail =
-            userEmail.isNotEmpty ? userEmail : _phoneCtrl.text.trim();
+        final targetEmail = userEmail.isNotEmpty
+            ? userEmail
+            : _phoneCtrl.text.trim();
         final verified = await OtpVerificationDialog.show(
           context,
           email: targetEmail,
@@ -285,7 +353,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         );
       }
     } catch (e) {
-      errorMsg = 'Failed to place order. Please check your connection and try again.';
+      errorMsg =
+          'Failed to place order. Please check your connection and try again.';
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -315,8 +384,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
 
     final firstItem = items.isNotEmpty ? items.first : null;
-    final subtotal =
-        items.fold(0.0, (sum, i) => sum + (i.price * i.quantity));
+    final subtotal = items.fold(0.0, (sum, i) => sum + (i.price * i.quantity));
 
     final placedOrder = order_models.Order(
       id: invoice,
@@ -326,13 +394,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           ? order_models.OrderStatus.confirmed
           : order_models.OrderStatus.pending,
       items: items
-          .map((i) => order_models.OrderItem(
-                id: i.id,
-                name: i.name,
-                quantity: i.quantity,
-                unitPrice: i.price.toDouble(),
-                sku: 'SKU-${i.id}',
-              ))
+          .map(
+            (i) => order_models.OrderItem(
+              id: i.id,
+              name: i.name,
+              quantity: i.quantity,
+              unitPrice: i.price.toDouble(),
+              sku: 'SKU-${i.id}',
+            ),
+          )
           .toList(),
       deliveryAddress: order_models.OrderAddress(
         name: _nameCtrl.text.trim(),
@@ -402,98 +472,108 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   Widget build(BuildContext context) {
     final cartState = context.watch<CartCubit>().state;
     final items = _selectedItems(cartState);
-    final subtotal =
-        items.fold(0.0, (sum, i) => sum + (i.price * i.quantity));
-    final total = (subtotal + _deliveryFee - _discountAmount)
-        .clamp(0.0, double.infinity);
+    final subtotal = items.fold(0.0, (sum, i) => sum + (i.price * i.quantity));
+    final total = (subtotal + _deliveryFee - _discountAmount).clamp(
+      0.0,
+      double.infinity,
+    );
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF9FAFB),
-      appBar: AppBar(
-        centerTitle: true,
-        title: const Text(
-          'Checkout',
-          style: TextStyle(
-            color: Color(0xFF111827),
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
+    return BlocListener<AddressCubit, AddressState>(
+      listener: (context, state) {
+        final addresses = _addressesFromState(state);
+        if (addresses == null) return;
+        _applyDefaultAddress(addresses);
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF9FAFB),
+        appBar: AppBar(
+          centerTitle: true,
+          title: const Text(
+            'Checkout',
+            style: TextStyle(
+              color: Color(0xFF111827),
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
           ),
-        ),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        leading: Padding(
-          padding: const EdgeInsets.only(left: 14, top: 8, bottom: 8),
-          child: InkWell(
-            onTap: () {
-              if (Navigator.of(context).canPop()) {
-                Navigator.of(context).pop();
-              } else {
-                context.go(AppRoutes.cart);
-              }
-            },
-            borderRadius: BorderRadius.circular(20),
-            child: Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFFF3F4F6),
-                border:
-                    Border.all(color: const Color(0xFFE5E7EB), width: 0.8),
-              ),
-              child: const Icon(
-                Icons.chevron_left_rounded,
-                color: Color(0xFF1F2937),
-                size: 24,
+          backgroundColor: Colors.white,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          leading: Padding(
+            padding: const EdgeInsets.only(left: 14, top: 8, bottom: 8),
+            child: InkWell(
+              onTap: () {
+                if (Navigator.of(context).canPop()) {
+                  Navigator.of(context).pop();
+                } else {
+                  context.go(AppRoutes.cart);
+                }
+              },
+              borderRadius: BorderRadius.circular(20),
+              child: Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFFF3F4F6),
+                  border: Border.all(
+                    color: const Color(0xFFE5E7EB),
+                    width: 0.8,
+                  ),
+                ),
+                child: const Icon(
+                  Icons.chevron_left_rounded,
+                  color: Color(0xFF1F2937),
+                  size: 24,
+                ),
               ),
             ),
           ),
         ),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ── 1. Delivery Address Card ─────────────────────────────────
-              DeliveryAddressSection(
-                nameController: _nameCtrl,
-                phoneController: _phoneCtrl,
-                addressController: _addressCtrl,
-              ),
-              const SizedBox(height: 16),
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── 1. Delivery Address Card ─────────────────────────────────
+                DeliveryAddressSection(
+                  nameController: _nameCtrl,
+                  phoneController: _phoneCtrl,
+                  addressController: _addressCtrl,
+                ),
+                const SizedBox(height: 16),
 
-              // ── 2. Order Notes Card ──────────────────────────────────────
-              OrderNotesSection(notesController: _notesCtrl),
-              const SizedBox(height: 16),
+                // ── 2. Order Notes Card ──────────────────────────────────────
+                OrderNotesSection(notesController: _notesCtrl),
+                const SizedBox(height: 16),
 
-              // ── 3. Coupon Code Card ──────────────────────────────────────
-              CouponCodeSection(
-                couponController: _couponCtrl,
-                isValidating: _isValidatingCoupon,
-                message: _couponMessage,
-                isValid: _couponValid,
-                onApply: _applyCoupon,
-              ),
-              const SizedBox(height: 20),
+                // ── 3. Coupon Code Card ──────────────────────────────────────
+                CouponCodeSection(
+                  couponController: _couponCtrl,
+                  isValidating: _isValidatingCoupon,
+                  message: _couponMessage,
+                  isValid: _couponValid,
+                  onApply: _applyCoupon,
+                ),
+                const SizedBox(height: 20),
 
-              // ── 4. Order Summary Card ────────────────────────────────────
-              OrderSummarySection(
-                subtotal: subtotal,
-                deliveryFee: _deliveryFee,
-                discountAmount: _discountAmount,
-                total: total,
-                isSubmitting: _isSubmitting,
-                onSubmit: _submitOrder,
-              ),
-            ],
+                // ── 4. Order Summary Card ────────────────────────────────────
+                OrderSummarySection(
+                  subtotal: subtotal,
+                  deliveryFee: _deliveryFee,
+                  discountAmount: _discountAmount,
+                  total: total,
+                  isSubmitting: _isSubmitting,
+                  onSubmit: _submitOrder,
+                ),
+              ],
+            ),
           ),
         ),
+        bottomNavigationBar: const AppBottomNavBar(currentIndex: 3),
       ),
-      bottomNavigationBar: const AppBottomNavBar(currentIndex: 3),
     );
   }
 }
