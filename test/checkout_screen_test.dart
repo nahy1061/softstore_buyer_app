@@ -5,6 +5,7 @@ import 'package:softstore_buyer_app/features/auth/cubit/auth_cubit.dart';
 import 'package:softstore_buyer_app/features/cart/cubit/cart_cubit.dart';
 import 'package:softstore_buyer_app/features/cart/models/cart_models.dart';
 import 'package:softstore_buyer_app/features/checkout/screens/checkout_screen.dart';
+import 'package:softstore_buyer_app/features/profile/cubit/address_cubit.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -36,6 +37,7 @@ void main() {
           providers: [
             BlocProvider<CartCubit>.value(value: cartCubit),
             BlocProvider<AuthCubit>.value(value: authCubit),
+            BlocProvider<AddressCubit>(create: (_) => AddressCubit()),
           ],
           child: const CheckoutScreen(),
         ),
@@ -106,6 +108,7 @@ void main() {
           providers: [
             BlocProvider<CartCubit>.value(value: cartCubit),
             BlocProvider<AuthCubit>.value(value: authCubit),
+            BlocProvider<AddressCubit>(create: (_) => AddressCubit()),
           ],
           child: const CheckoutScreen(),
         ),
