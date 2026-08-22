@@ -830,10 +830,45 @@ class MessagesRepository {
     return clean;
   }
 
-  static DateTime _parseRelativeTime(String? text) {
-    if (text == null || text.isEmpty) return DateTime.now();
+  static const Map<String, int> _monthMap = {
+    'jan': 1, 'january': 1,
+    'feb': 2, 'february': 2,
+    'mar': 3, 'march': 3,
+    'apr': 4, 'april': 4,
+    'may': 5,
+    'jun': 6, 'june': 6,
+    'jul': 7, 'july': 7,
+    'aug': 8, 'august': 8,
+    'sep': 9, 'september': 9,
+    'oct': 10, 'october': 10,
+    'nov': 11, 'november': 11,
+    'dec': 12, 'december': 12,
+  };
 
-    final lower = text.toLowerCase().trim();
+  /// Parses diverse timestamp formats from HTML meta tags, including:
+  /// - "Naheed · 21 Aug 2026, 02:52 PM"
+  /// - "21 Aug 2026, 05:03 PM"
+  /// - "21 Aug, 04:54 PM"
+  /// - "21 Aug 2026 14:30"
+  /// - "02:52 PM" / "14:52"
+  /// - "5 mins ago", "2 hours ago", "yesterday at 3:00 PM"
+  /// - ISO 8601 strings
+  static DateTime parseTimestamp(String? text) {
+    if (text == null || text.trim().isEmpty) return DateTime.now();
+
+    var raw = text.trim();
+    // Strip sender prefix if present (e.g. "Naheed · 21 Aug 2026, 02:52 PM")
+    if (raw.contains('·')) {
+      final parts = raw.split('·');
+      raw = parts.last.trim();
+    } else if (raw.contains(' - ') && !RegExp(r'^\d{4}-\d{2}-\d{2}').hasMatch(raw)) {
+      final parts = raw.split(' - ');
+      raw = parts.last.trim();
+    }
+
+    final lower = raw.toLowerCase().trim();
+
+    // 1. Relative time keywords
     if (lower.contains('just now') || lower.contains('moments ago')) {
       return DateTime.now();
     }
@@ -850,12 +885,87 @@ class MessagesRepository {
       return DateTime.now().subtract(Duration(hours: hrs));
     }
 
-    final dayMatch = RegExp(r'(\d+)\s*(?:day|d)').firstMatch(lower);
+    final dayMatch = RegExp(r'(\d+)\s*(?:day|d)\b').firstMatch(lower);
     if (dayMatch != null) {
       final days = int.tryParse(dayMatch.group(1)!) ?? 0;
       return DateTime.now().subtract(Duration(days: days));
     }
 
-    return DateTime.tryParse(text) ?? DateTime.now();
+    if (lower.contains('yesterday')) {
+      final base = DateTime.now().subtract(const Duration(days: 1));
+      final timeMatch = RegExp(r'(\d{1,2}):(\d{2})(?:\s*(am|pm))?').firstMatch(lower);
+      if (timeMatch != null) {
+        int hour = int.tryParse(timeMatch.group(1)!) ?? 12;
+        final min = int.tryParse(timeMatch.group(2)!) ?? 0;
+        final ampm = timeMatch.group(3);
+        if (ampm == 'pm' && hour < 12) hour += 12;
+        if (ampm == 'am' && hour == 12) hour = 0;
+        return DateTime(base.year, base.month, base.day, hour, min);
+      }
+      return base;
+    }
+
+    // 2. Standard ISO DateTime (e.g. 2026-08-21 17:03:00 or 2026-08-21T17:03:00)
+    final isoParsed = DateTime.tryParse(raw);
+    if (isoParsed != null) return isoParsed;
+
+    // 3. Match Date + Time with textual month:
+    // e.g. "21 Aug 2026, 02:52 PM", "21 August 2026 14:30", "21 Aug, 04:54 PM"
+    final dateTextMonthRegex = RegExp(
+      r'(\d{1,2})\s+([A-Za-z]+)(?:\s+(\d{4}))?,?\s*(?:at\s+)?(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM|am|pm)?',
+      caseSensitive: false,
+    );
+    final textMonthMatch = dateTextMonthRegex.firstMatch(raw);
+    if (textMonthMatch != null) {
+      final day = int.tryParse(textMonthMatch.group(1)!) ?? 1;
+      final monthStr = textMonthMatch.group(2)!.toLowerCase();
+      final month = _monthMap[monthStr] ?? 1;
+      final year = int.tryParse(textMonthMatch.group(3) ?? '') ?? DateTime.now().year;
+      int hour = int.tryParse(textMonthMatch.group(4)!) ?? 0;
+      final minute = int.tryParse(textMonthMatch.group(5)!) ?? 0;
+      final ampm = textMonthMatch.group(7)?.toUpperCase();
+
+      if (ampm == 'PM' && hour < 12) hour += 12;
+      if (ampm == 'AM' && hour == 12) hour = 0;
+
+      return DateTime(year, month, day, hour, minute);
+    }
+
+    // 4. Match Date without time: "21 Aug 2026" or "21 August"
+    final dateOnlyRegex = RegExp(
+      r'(\d{1,2})\s+([A-Za-z]+)(?:\s+(\d{4}))?',
+      caseSensitive: false,
+    );
+    final dateOnlyMatch = dateOnlyRegex.firstMatch(raw);
+    if (dateOnlyMatch != null) {
+      final day = int.tryParse(dateOnlyMatch.group(1)!) ?? 1;
+      final monthStr = dateOnlyMatch.group(2)!.toLowerCase();
+      if (_monthMap.containsKey(monthStr)) {
+        final month = _monthMap[monthStr]!;
+        final year = int.tryParse(dateOnlyMatch.group(3) ?? '') ?? DateTime.now().year;
+        return DateTime(year, month, day, 12, 0);
+      }
+    }
+
+    // 5. Match Time only: "02:52 PM" or "14:52"
+    final timeOnlyRegex = RegExp(
+      r'\b(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM|am|pm)?\b',
+    );
+    final timeOnlyMatch = timeOnlyRegex.firstMatch(raw);
+    if (timeOnlyMatch != null) {
+      final now = DateTime.now();
+      int hour = int.tryParse(timeOnlyMatch.group(1)!) ?? 0;
+      final minute = int.tryParse(timeOnlyMatch.group(2)!) ?? 0;
+      final ampm = timeOnlyMatch.group(4)?.toUpperCase();
+
+      if (ampm == 'PM' && hour < 12) hour += 12;
+      if (ampm == 'AM' && hour == 12) hour = 0;
+
+      return DateTime(now.year, now.month, now.day, hour, minute);
+    }
+
+    return DateTime.now();
   }
+
+  static DateTime _parseRelativeTime(String? text) => parseTimestamp(text);
 }

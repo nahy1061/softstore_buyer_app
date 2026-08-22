@@ -300,5 +300,31 @@ void main() {
       expect(results[1].lastMessage, 'delivery charges?');
       expect(results[1].isUnread, isTrue);
     });
+
+    test('parseTimestamp parses diverse dates correctly and does not default to current time', () {
+      final t1 = MessagesRepository.parseTimestamp('Naheed · 21 Aug 2026, 02:52 PM');
+      expect(t1.year, 2026);
+      expect(t1.month, 8);
+      expect(t1.day, 21);
+      expect(t1.hour, 14);
+      expect(t1.minute, 52);
+
+      final t2 = MessagesRepository.parseTimestamp('Store Seller · 21 Aug 2026, 02:54 PM');
+      expect(t2.hour, 14);
+      expect(t2.minute, 54);
+
+      final t3 = MessagesRepository.parseTimestamp('20 Aug 2026, 03:33 PM');
+      expect(t3.year, 2026);
+      expect(t3.month, 8);
+      expect(t3.day, 20);
+      expect(t3.hour, 15);
+      expect(t3.minute, 33);
+
+      final t4 = MessagesRepository.parseTimestamp('21 Aug, 05:03 AM');
+      expect(t4.month, 8);
+      expect(t4.day, 21);
+      expect(t4.hour, 5);
+      expect(t4.minute, 3);
+    });
   });
 }
